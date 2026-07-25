@@ -1,0 +1,1 @@
+export default function PageHero({ icon:Icon, eyebrow, title, text, actions }) { return <section className="page-hero"><div className="page-icon"><Icon/></div><div className="eyebrow">{eyebrow}</div><h1 dangerouslySetInnerHTML={{__html:title}}/><p>{text}</p><div className="hero-actions">{actions}</div></section>; }

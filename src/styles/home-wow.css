@@ -1,0 +1,696 @@
+/* HOME WOW EXPERIENCE — scoped additions */
+
+.home-hero-wow {
+  --mouse-x: 0px;
+  --mouse-y: 0px;
+  --mouse-rx: 0deg;
+  --mouse-ry: 0deg;
+  isolation: isolate;
+}
+
+.hero-noise {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.18;
+  z-index: 1;
+  background-image:
+    radial-gradient(circle at 20% 20%, rgba(255,255,255,.05) 0 1px, transparent 1px),
+    radial-gradient(circle at 80% 60%, rgba(255,255,255,.04) 0 1px, transparent 1px);
+  background-size: 28px 28px, 36px 36px;
+  animation: noiseDrift 14s linear infinite;
+}
+
+.home-hero-wow .hero-grid-lines {
+  animation: gridDrift 18s linear infinite;
+}
+
+.home-hero-wow .hero-orb {
+  mix-blend-mode: screen;
+  will-change: transform;
+}
+
+.home-hero-wow .hero-orb-one {
+  animation: orbOne 11s ease-in-out infinite;
+}
+
+.home-hero-wow .hero-orb-two {
+  animation: orbTwo 13s ease-in-out infinite;
+}
+
+.hero-orb-three {
+  width: 280px;
+  height: 280px;
+  right: 24%;
+  top: 18%;
+  background: rgba(88, 198, 255, 0.08);
+  animation: orbThree 10s ease-in-out infinite;
+}
+
+.wow-hero-copy {
+  transform: translate3d(
+    calc(var(--mouse-x) * -0.18),
+    calc(var(--mouse-y) * -0.18),
+    0
+  );
+  transition: transform .18s ease-out;
+}
+
+.wow-hero-copy .badge {
+  animation: badgeBreath 3.4s ease-in-out infinite;
+}
+
+.wow-hero-copy h1 {
+  animation: heroTitleIn .9s cubic-bezier(.2,.75,.2,1) both;
+}
+
+.wow-hero-copy .hero-description {
+  animation: heroCopyIn .9s .18s cubic-bezier(.2,.75,.2,1) both;
+}
+
+.wow-hero-copy .hero-actions {
+  animation: heroCopyIn .9s .3s cubic-bezier(.2,.75,.2,1) both;
+}
+
+.hero-live-row {
+  margin-top: 24px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  color: #7d8da3;
+  font-size: 11px;
+}
+
+.hero-live-row div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.hero-live-row i,
+.live-pill i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #45df86;
+  box-shadow: 0 0 0 0 rgba(69,223,134,.45);
+  animation: livePulse 1.8s infinite;
+}
+
+.hero-live-row strong {
+  color: #aab6c7;
+  font-weight: 600;
+}
+
+.hero-visual-stage {
+  position: relative;
+  z-index: 3;
+  min-height: 560px;
+  display: grid;
+  place-items: center;
+  transform-style: preserve-3d;
+  transform:
+    translate3d(var(--mouse-x), var(--mouse-y), 0)
+    rotateX(var(--mouse-rx))
+    rotateY(var(--mouse-ry));
+  transition: transform .2s ease-out;
+}
+
+.wow-floating-dashboard {
+  width: min(800px, 100%);
+  animation: dashboardHover 6s ease-in-out infinite;
+}
+
+.wow-floating-dashboard .floating-screen {
+  transform: perspective(1400px) rotateY(-8deg) rotateX(3deg);
+  box-shadow:
+    0 50px 120px rgba(0,0,0,.62),
+    0 0 100px rgba(30,144,255,.16),
+    inset 0 1px 0 rgba(255,255,255,.1);
+  transition: transform .35s ease, box-shadow .35s ease;
+}
+
+.wow-floating-dashboard:hover .floating-screen {
+  transform: perspective(1400px) rotateY(-2deg) rotateX(1deg) scale(1.015);
+  box-shadow:
+    0 60px 150px rgba(0,0,0,.68),
+    0 0 130px rgba(123,47,255,.19),
+    inset 0 1px 0 rgba(255,255,255,.12);
+}
+
+.screen-shine {
+  position: absolute;
+  inset: -80% auto -80% -30%;
+  width: 26%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255,255,255,.08),
+    transparent
+  );
+  transform: rotate(18deg);
+  z-index: 12;
+  pointer-events: none;
+  animation: screenShine 5.5s ease-in-out infinite;
+}
+
+.hero-ring {
+  position: absolute;
+  border: 1px solid rgba(108,184,255,.13);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.hero-ring-one {
+  width: 520px;
+  height: 520px;
+  animation: ringSpin 22s linear infinite;
+}
+
+.hero-ring-two {
+  width: 680px;
+  height: 680px;
+  border-style: dashed;
+  border-color: rgba(183,137,255,.1);
+  animation: ringSpinReverse 30s linear infinite;
+}
+
+.floating-chip {
+  position: absolute;
+  z-index: 8;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 14px;
+  border-radius: 13px;
+  border: 1px solid rgba(255,255,255,.11);
+  background: rgba(8,15,28,.76);
+  backdrop-filter: blur(18px);
+  color: #c6d2e3;
+  font-size: 10px;
+  box-shadow: 0 16px 42px rgba(0,0,0,.35);
+}
+
+.floating-chip svg {
+  color: #6fbbff;
+}
+
+.chip-one {
+  left: -16px;
+  top: 70px;
+  animation: chipFloatOne 5s ease-in-out infinite;
+}
+
+.chip-two {
+  right: -28px;
+  top: 155px;
+  animation: chipFloatTwo 6.5s ease-in-out infinite;
+}
+
+.chip-three {
+  right: 20px;
+  bottom: 48px;
+  animation: chipFloatThree 5.8s ease-in-out infinite;
+}
+
+.floating-kpis > div {
+  animation: kpiFloat 3.4s ease-in-out infinite;
+  animation-delay: var(--delay);
+}
+
+.floating-kpis > div:hover {
+  border-color: rgba(96,185,255,.3);
+  transform: translateY(-3px);
+}
+
+.graph-grid {
+  position: absolute;
+  inset: 34px 14px 14px;
+  opacity: .32;
+  background-image:
+    linear-gradient(rgba(255,255,255,.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.04) 1px, transparent 1px);
+  background-size: 100% 25%, 20% 100%;
+}
+
+.floating-graph {
+  position: relative;
+  overflow: hidden;
+}
+
+.floating-graph .graph-line {
+  position: relative;
+  z-index: 2;
+  animation: graphRise 1.8s .5s cubic-bezier(.15,.75,.25,1) both;
+}
+
+.graph-dot {
+  position: absolute;
+  z-index: 4;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #65b9ff;
+  box-shadow: 0 0 12px rgba(101,185,255,.8);
+  animation: dotPulse 2s ease-in-out infinite;
+}
+
+.graph-dot-one {
+  left: 39%;
+  top: 48%;
+}
+
+.graph-dot-two {
+  left: 69%;
+  top: 27%;
+  animation-delay: .5s;
+}
+
+.graph-dot-three {
+  right: 5%;
+  top: 11%;
+  animation-delay: 1s;
+}
+
+.floating-activity p i {
+  animation: activityBlink 1.8s ease-in-out infinite;
+}
+
+.floating-activity p:nth-child(3) i {
+  animation-delay: .45s;
+}
+
+.floating-activity p:nth-child(4) i {
+  animation-delay: .9s;
+}
+
+.wow-proof-strip {
+  overflow: hidden;
+  justify-content: flex-start;
+}
+
+.proof-track {
+  display: flex;
+  align-items: center;
+  width: max-content;
+  animation: proofMarquee 26s linear infinite;
+}
+
+.proof-track span {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  margin-right: 24px;
+  white-space: nowrap;
+}
+
+.proof-track span i {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #334155;
+}
+
+.wow-section {
+  opacity: 0;
+  transform: translateY(34px);
+  transition:
+    opacity .9s cubic-bezier(.2,.75,.2,1),
+    transform .9s cubic-bezier(.2,.75,.2,1);
+}
+
+.wow-section.is-visible {
+  opacity: 1;
+  transform: none;
+}
+
+.wow-product-card,
+.wow-path-card {
+  transition:
+    transform .35s cubic-bezier(.2,.75,.2,1),
+    border-color .35s ease,
+    box-shadow .35s ease;
+  transform-style: preserve-3d;
+}
+
+.wow-product-card:hover,
+.wow-path-card:hover {
+  transform: translateY(-10px) rotateX(1.8deg) rotateY(-1.5deg);
+  border-color: rgba(102,183,255,.27);
+  box-shadow:
+    0 34px 90px rgba(0,0,0,.42),
+    0 0 65px rgba(30,144,255,.08);
+}
+
+.wow-product-card .product-icon,
+.wow-path-card .path-icon {
+  transition: transform .35s ease, box-shadow .35s ease;
+}
+
+.wow-product-card:hover .product-icon,
+.wow-path-card:hover .path-icon {
+  transform: translateY(-4px) rotate(-4deg) scale(1.06);
+  box-shadow: 0 12px 28px rgba(30,144,255,.18);
+}
+
+.card-light {
+  position: absolute;
+  width: 240px;
+  height: 240px;
+  border-radius: 50%;
+  left: -140px;
+  top: -150px;
+  background: rgba(30,144,255,.12);
+  filter: blur(18px);
+  transition: transform .45s ease;
+  pointer-events: none;
+}
+
+.purple-light {
+  background: rgba(123,47,255,.15);
+}
+
+.wow-product-card:hover .card-light {
+  transform: translate(90px, 70px) scale(1.3);
+}
+
+.path-orbit {
+  position: absolute;
+  width: 260px;
+  height: 260px;
+  right: -90px;
+  bottom: -125px;
+  border-radius: 50%;
+  border: 1px solid rgba(56,168,255,.13);
+  animation: ringSpin 18s linear infinite;
+}
+
+.purple-orbit {
+  border-color: rgba(151,91,255,.16);
+  animation-direction: reverse;
+}
+
+.partner-demo-wow {
+  position: relative;
+}
+
+.partner-demo-aura {
+  position: absolute;
+  inset: 15% 12%;
+  z-index: -1;
+  background: radial-gradient(
+    circle,
+    rgba(61,153,255,.13),
+    transparent 65%
+  );
+  filter: blur(50px);
+  animation: auraBreath 4s ease-in-out infinite;
+}
+
+.live-pill {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #92a2b8;
+  font-size: 10px;
+  padding: 7px 10px;
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 999px;
+  background: rgba(255,255,255,.025);
+}
+
+.partner-demo-wow .profit-result {
+  animation: resultPop .55s cubic-bezier(.2,.8,.2,1);
+}
+
+.partner-demo-wow .plan-switch button {
+  transition:
+    transform .2s ease,
+    background .2s ease,
+    border-color .2s ease,
+    color .2s ease;
+}
+
+.partner-demo-wow .plan-switch button:hover {
+  transform: translateY(-2px);
+}
+
+.partner-demo-wow .monitor-wrap {
+  animation: monitorFloat 5s ease-in-out infinite;
+}
+
+.partner-demo-wow .monitor-screen {
+  transition: box-shadow .35s ease, transform .35s ease;
+}
+
+.partner-demo-wow .monitor-screen:hover {
+  transform: scale(1.012);
+}
+
+.monitor-live-light {
+  position: absolute;
+  z-index: 11;
+  inset: -55% auto -55% -25%;
+  width: 22%;
+  transform: rotate(17deg);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--partner-color) 20%, transparent),
+    transparent
+  );
+  animation: monitorShine 4.6s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.partner-sidebar div {
+  transition:
+    background .3s ease,
+    color .3s ease,
+    border-color .3s ease,
+    transform .3s ease;
+}
+
+.partner-sidebar div.active {
+  transform: translateX(2px);
+}
+
+.partner-kpis > div {
+  animation: miniKpi 2.8s ease-in-out infinite;
+  animation-delay: var(--kpi-delay);
+}
+
+.chart-bars i {
+  transform-origin: bottom;
+  animation: barGrow .8s cubic-bezier(.2,.75,.2,1) both;
+  animation-delay: var(--bar-delay);
+  transition: height .45s ease, filter .25s ease;
+}
+
+.chart-bars i:hover {
+  filter: brightness(1.7);
+}
+
+.partner-popup {
+  animation: popupBreath 3.4s ease-in-out infinite;
+}
+
+.partner-side-widgets > div:first-child header b {
+  animation: onlineBlink 1.7s ease-in-out infinite;
+}
+
+@keyframes noiseDrift {
+  from { transform: translate3d(0,0,0); }
+  to { transform: translate3d(28px,36px,0); }
+}
+
+@keyframes gridDrift {
+  from { background-position: 0 0, 0 0; }
+  to { background-position: 64px 64px, 64px 64px; }
+}
+
+@keyframes orbOne {
+  0%,100% { transform: translate3d(0,0,0) scale(1); }
+  50% { transform: translate3d(55px,35px,0) scale(1.12); }
+}
+
+@keyframes orbTwo {
+  0%,100% { transform: translate3d(0,0,0) scale(1); }
+  50% { transform: translate3d(-45px,-30px,0) scale(1.08); }
+}
+
+@keyframes orbThree {
+  0%,100% { transform: translate3d(0,0,0) scale(.9); opacity: .6; }
+  50% { transform: translate3d(25px,-40px,0) scale(1.18); opacity: 1; }
+}
+
+@keyframes badgeBreath {
+  0%,100% { box-shadow: 0 0 0 rgba(30,144,255,0); }
+  50% { box-shadow: 0 0 28px rgba(30,144,255,.18); }
+}
+
+@keyframes heroTitleIn {
+  from { opacity: 0; transform: translateY(28px); filter: blur(8px); }
+  to { opacity: 1; transform: none; filter: none; }
+}
+
+@keyframes heroCopyIn {
+  from { opacity: 0; transform: translateY(18px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes livePulse {
+  0% { box-shadow: 0 0 0 0 rgba(69,223,134,.42); }
+  70% { box-shadow: 0 0 0 7px rgba(69,223,134,0); }
+  100% { box-shadow: 0 0 0 0 rgba(69,223,134,0); }
+}
+
+@keyframes dashboardHover {
+  0%,100% { transform: translateY(0); }
+  50% { transform: translateY(-14px); }
+}
+
+@keyframes screenShine {
+  0%,20% { left: -35%; opacity: 0; }
+  40% { opacity: 1; }
+  65%,100% { left: 125%; opacity: 0; }
+}
+
+@keyframes ringSpin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes ringSpinReverse {
+  to { transform: rotate(-360deg); }
+}
+
+@keyframes chipFloatOne {
+  0%,100% { transform: translateY(0) rotate(-2deg); }
+  50% { transform: translateY(-13px) rotate(1deg); }
+}
+
+@keyframes chipFloatTwo {
+  0%,100% { transform: translateY(0) rotate(2deg); }
+  50% { transform: translateY(12px) rotate(-1deg); }
+}
+
+@keyframes chipFloatThree {
+  0%,100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+@keyframes kpiFloat {
+  0%,100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+
+@keyframes graphRise {
+  from { opacity: 0; transform: translateY(50px) scaleY(.25); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes dotPulse {
+  0%,100% { transform: scale(.85); opacity: .7; }
+  50% { transform: scale(1.35); opacity: 1; }
+}
+
+@keyframes activityBlink {
+  0%,100% { opacity: .5; transform: scale(.8); }
+  50% { opacity: 1; transform: scale(1.2); }
+}
+
+@keyframes proofMarquee {
+  to { transform: translateX(-50%); }
+}
+
+@keyframes auraBreath {
+  0%,100% { opacity: .55; transform: scale(.95); }
+  50% { opacity: 1; transform: scale(1.08); }
+}
+
+@keyframes resultPop {
+  from { opacity: .3; transform: scale(.94); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes monitorFloat {
+  0%,100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+@keyframes monitorShine {
+  0%,18% { left: -30%; opacity: 0; }
+  38% { opacity: 1; }
+  65%,100% { left: 125%; opacity: 0; }
+}
+
+@keyframes miniKpi {
+  0%,100% { transform: translateY(0); }
+  50% { transform: translateY(-2px); }
+}
+
+@keyframes barGrow {
+  from { transform: scaleY(.08); opacity: .25; }
+  to { transform: scaleY(1); opacity: 1; }
+}
+
+@keyframes popupBreath {
+  0%,100% { box-shadow: 0 0 0 rgba(123,47,255,0); }
+  50% { box-shadow: 0 0 18px color-mix(in srgb, var(--partner-color) 14%, transparent); }
+}
+
+@keyframes onlineBlink {
+  0%,100% { opacity: .58; }
+  50% { opacity: 1; }
+}
+
+@media (max-width: 1100px) {
+  .hero-visual-stage {
+    min-height: 500px;
+  }
+
+  .floating-chip {
+    display: none;
+  }
+}
+
+@media (max-width: 820px) {
+  .hero-ring {
+    display: none;
+  }
+
+  .live-pill {
+    display: none;
+  }
+}
+
+@media (max-width: 620px) {
+  .hero-live-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .wow-proof-strip {
+    display: flex;
+  }
+
+  .proof-track {
+    animation-duration: 18s;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-hero-wow *,
+  .partner-demo-wow *,
+  .proof-track,
+  .wow-section {
+    animation: none !important;
+    transition-duration: .01ms !important;
+  }
+
+  .wow-section {
+    opacity: 1;
+    transform: none;
+  }
+}
