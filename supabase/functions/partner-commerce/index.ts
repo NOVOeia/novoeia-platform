@@ -20,6 +20,28 @@ Deno.serve(async (req) => {
       return json({ clients: data });
     }
 
+    if (action === 'createClient') {
+      if (!payload.name) throw new Error('CLIENT_NAME_REQUIRED');
+      const { data, error } = await supabase.from('partner_clients').insert({
+        partner_id: partnerId,
+        name: payload.name,
+        email: payload.email || null,
+        phone: payload.phone || null,
+        status: 'pending',
+      }).select().single();
+      if (error) throw error;
+
+      await supabase.from('audit_logs').insert({
+        actor_user_id: profile.id,
+        action: 'partner.client_created',
+        entity_type: 'partner_client',
+        entity_id: data.id,
+        metadata: { partnerId, status: 'pending' },
+      });
+
+      return json({ client: data }, 201);
+    }
+
     if (action === 'saveOffer') {
       const { data: product, error: productError } = await supabase.from('catalog_products').select('*').eq('id', payload.productId).single();
       if (productError) throw productError;

@@ -1,16 +1,46 @@
-import { useState } from "react";
+import { useState } from 'react';
 import {
   ArrowLeft,
   ShieldCheck,
   Mail,
   LockKeyhole,
-  LayoutDashboard,
-} from "lucide-react";
-import { Button, Logo, Field } from "../components/ui.jsx";
-import "../styles/site-wow.css";
+  PlugZap,
+} from 'lucide-react';
+import { Button, Logo, Field } from '../components/ui.jsx';
+import { platformApi } from '../lib/platformApi.js';
+import '../styles/site-wow.css';
 
 export default function LoginPage({ go }) {
-  const [role, setRole] = useState("admin");
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  async function loginWithGhl() {
+    try {
+      setBusy(true);
+      setError('');
+      const data = await platformApi.startGhlLogin();
+      if (!data?.authorizationUrl) throw new Error('No se recibió URL de HighLevel.');
+      window.location.href = data.authorizationUrl;
+    } catch (err) {
+      setError(err.message || 'No se pudo iniciar el login con HighLevel.');
+      setBusy(false);
+    }
+  }
+
+  async function loginWithPassword() {
+    try {
+      setBusy(true);
+      setError('');
+      const { profile } = await platformApi.signInWithPassword(email.trim(), password);
+      const dashboard = platformApi.roleToDashboard(profile?.role || 'client');
+      go(`${dashboard}/dashboard`);
+    } catch (err) {
+      setError(err.message || 'Correo o contraseña incorrectos.');
+      setBusy(false);
+    }
+  }
 
   return (
     <div className="wow-auth-page">
@@ -18,10 +48,7 @@ export default function LoginPage({ go }) {
       <div className="wow-auth-orb auth-orb-a" />
       <div className="wow-auth-orb auth-orb-b" />
 
-      <button
-        className="back wow-back"
-        onClick={() => go("home")}
-      >
+      <button className="back wow-back" onClick={() => go('home')}>
         <ArrowLeft />
         Volver
       </button>
@@ -29,38 +56,31 @@ export default function LoginPage({ go }) {
       <div className="auth-card card wow-auth-card wow-login-card">
         <Logo />
 
-        <div className="eyebrow">DEMO DE ACCESO</div>
+        <div className="eyebrow">ACCESO NOVO</div>
 
         <h2>Entra a tu experiencia NOVO</h2>
 
         <p className="auth-intro">
-          Selecciona el panel que deseas explorar.
+          Acceso para partners y Super Admin. Los clientes finales no ingresan aquí.
         </p>
 
         <div className="login-security">
           <ShieldCheck />
-          <span>Acceso seguro y protegido</span>
+          <span>Sesión segura Supabase + OAuth HighLevel</span>
         </div>
 
-        <Field label="Tipo de usuario">
-          <div className="wow-input-wrap wow-select-wrap">
-            <LayoutDashboard />
-
-            <select
-              value={role}
-              onChange={(event) => setRole(event.target.value)}
-            >
-              <option value="admin">NOVO Admin</option>
-              <option value="partner">Partner</option>
-              <option value="client">Cliente</option>
-            </select>
-          </div>
-        </Field>
+        {error && <div className="login-error">{error}</div>}
 
         <Field label="Correo">
           <div className="wow-input-wrap">
             <Mail />
-            <input defaultValue="demo@novoeia.com" />
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="correo@empresa.com"
+              autoComplete="email"
+            />
           </div>
         </Field>
 
@@ -69,17 +89,29 @@ export default function LoginPage({ go }) {
             <LockKeyhole />
             <input
               type="password"
-              defaultValue="123456"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Tu contraseña"
+              autoComplete="current-password"
             />
           </div>
         </Field>
 
-        <Button
-          className="full"
-          onClick={() => go(`${role}-dashboard`)}
-        >
-          Entrar al demo
+        <Button className="full" onClick={loginWithPassword} disabled={busy}>
+          {busy ? 'Entrando…' : 'Entrar con correo'}
         </Button>
+
+        <div className="login-divider"><span>o</span></div>
+
+        <Button className="full ghl-login-btn" variant="ghost" onClick={loginWithGhl} disabled={busy}>
+          <PlugZap size={18} />
+          Continuar con HighLevel
+        </Button>
+
+        <p className="auth-intro" style={{ marginTop: 16 }}>
+          ¿Eres partner?{' '}
+          <button type="button" className="text-link" onClick={() => go('registro-partner')}>Regístrate aquí</button>
+        </p>
       </div>
     </div>
   );

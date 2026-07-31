@@ -40,6 +40,7 @@ export function json(data: unknown, status = 200) {
 
 export function handleError(error: unknown) {
   const message = error instanceof Error ? error.message : 'UNKNOWN_ERROR';
+  console.error('[edge-error]', message, error);
   const status = message === 'UNAUTHORIZED' ? 401 : message === 'FORBIDDEN' ? 403 : 400;
   return json({ error: message }, status);
 }
@@ -57,4 +58,67 @@ export async function ghlRequest(path: string, token: string, init: RequestInit 
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(payload?.message || `GHL_${response.status}`);
   return payload;
+}
+
+export type GhlTokenResponse = {
+  access_token: string;
+  refresh_token?: string;
+  expires_in?: number;
+  scope?: string;
+  userType?: string;
+  companyId?: string;
+  locationId?: string;
+  userId?: string;
+};
+
+export async function exchangeGhlCode(params: {
+  code: string;
+  userType: 'Company' | 'Location';
+  clientId: string;
+  clientSecret: string;
+  redirectUri: string;
+}): Promise<GhlTokenResponse> {
+  const response = await fetch('https://services.leadconnectorhq.com/oauth/token', {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/x-www-form-urlencoded',
+      Version: '2021-07-28',
+    },
+    body: new URLSearchParams({
+      client_id: params.clientId,
+      client_secret: params.clientSecret,
+      grant_type: 'authorization_code',
+      code: params.code,
+      user_type: params.userType,
+      redirect_uri: params.redirectUri,
+    }),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const detail = payload?.message || payload?.error_description
+      || (Array.isArray(payload?.error) ? payload.error.join(', ') : payload?.error)
+      || JSON.stringify(payload);
+    throw new Error(`GHL_TOKEN_${response.status}:${detail}`);
+  }
+  return payload as GhlTokenResponse;
+}
+
+export async function fetchGhlUser(userId: string, token: string) {
+  try {
+    return await ghlRequest(`/users/${encodeURIComponent(userId)}`, token);
+  } catch {
+    return null;
+  }
+}
+
+export function resolveAppRole(email: string | null | undefined, userType?: string) {
+  const allowlist = (Deno.env.get('GHL_SUPER_ADMIN_EMAILS') || '')
+    .split(',')
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean);
+
+  if (email && allowlist.includes(email.toLowerCase())) return 'super_admin';
+  if (userType === 'Company') return 'partner';
+  return 'client';
 }

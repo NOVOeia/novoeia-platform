@@ -1,34 +1,47 @@
-# NOVOeia Platform Demo
+# NOVOeia Platform
 
-Demo visual navegable del ecosistema NOVOeia:
-
-- Landing principal
-- Página para empresas
-- Programa Partner
-- Webs Inteligentes
-- Catálogo
-- Precios
-- Registro cliente y partner
-- Panel NOVO Admin
-- Panel Partner
-- Panel Cliente
+Plataforma multi-tenant NOVOeia (marketing + Super Admin / Partner / Cliente) con login HighLevel OAuth y backend Supabase.
 
 ## Ejecutar en localhost
 
-1. Abre una terminal dentro de esta carpeta.
-2. Ejecuta:
-
 ```bash
+cp .env.example .env
 npm install
 npm run dev
 ```
 
-3. Abre la URL que muestre Vite, normalmente `http://localhost:5173`.
+Abre la URL de Vite (normalmente `http://localhost:5173`).
 
-## Acceso a los paneles demo
+## Login con HighLevel
 
-En la web abre **Ingresar**, selecciona el rol y presiona **Entrar al demo**. No se necesita una contraseña real en esta versión.
+1. Crea una app OAuth en el [Marketplace de HighLevel](https://marketplace.gohighlevel.com/).
+2. Redirect URL debe coincidir exactamente con `GHL_REDIRECT_URI` (ej. `http://localhost:5173/`).
+3. Aplica migraciones y despliega Edge Functions en Supabase.
+4. Configura secrets:
+
+```bash
+supabase db push
+supabase functions deploy ghl-oauth
+supabase secrets set GHL_CLIENT_ID=... GHL_CLIENT_SECRET=... GHL_REDIRECT_URI=http://localhost:5173/ GHL_SCOPES="users.readonly locations.readonly companies.readonly" GHL_SUPER_ADMIN_EMAILS=tu@email.com
+```
+
+5. En `.env` del frontend pon `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY`.
+6. Abre **Ingresar** → **Continuar con HighLevel**.
+
+### Roles al entrar con GHL
+
+- Email en `GHL_SUPER_ADMIN_EMAILS` → `super_admin`
+- Token de tipo Company (agencia) → `partner`
+- Token de tipo Location (subcuenta) → `client`
+
+## Demo local
+
+En login también puedes elegir rol y usar **Entrar al demo** (sin sesión real).
 
 ## Estado actual
 
-Esta entrega es una maqueta funcional de frontend. Los formularios, pagos, usuarios y datos todavía son simulados. La siguiente fase contempla Supabase, Stripe y la API de HighLevel.
+- Marketing navegable
+- Consolas Super Admin / Partner
+- Schema multi-tenant + RLS
+- OAuth HighLevel: authorize + callback + sesión Supabase
+- Conexión de agencia desde Super Admin (requiere sesión `super_admin`)
