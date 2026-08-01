@@ -12,6 +12,21 @@ npm run dev
 
 Abre la URL de Vite (normalmente `http://localhost:5173`).
 
+## Deploy en Netlify
+
+La rama de producción debe ser **`main`**.
+
+1. Netlify → **Site configuration** → **Build & deploy** → **Continuous deployment** → **Configure**.
+2. En **Production branch**, elige **`main`** y guarda.
+3. En **Environment variables**, configura solo el frontend:
+   - `VITE_SUPABASE_URL`
+   - `VITE_SUPABASE_ANON_KEY`
+4. **Deploys** → **Trigger deploy** → **Deploy site** (para publicar `main` de inmediato).
+
+El archivo `netlify.toml` ya define build (`npm run build`), publish (`dist`) y Node 22.
+
+Secrets de GHL y Stripe van en **Supabase Edge Functions**, no en Netlify.
+
 ## Login con HighLevel
 
 1. Crea una app OAuth en el [Marketplace de HighLevel](https://marketplace.gohighlevel.com/).
