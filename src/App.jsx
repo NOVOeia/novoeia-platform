@@ -9,6 +9,7 @@ import RegistrationPage from './pages/RegistrationPage.jsx';
 import LoginPage from './pages/LoginPage.jsx';
 import GhlCallbackPage from './pages/GhlCallbackPage.jsx';
 import ClientInterestPage from './pages/ClientInterestPage.jsx';
+import CheckoutPage from './pages/CheckoutPage.jsx';
 import AppShell from './dashboards/AppShell.jsx';
 import { platformApi } from './lib/platformApi.js';
 
@@ -110,6 +111,9 @@ export default function App() {
     if (page === 'registro-cliente') return <ClientInterestPage go={go} />;
     if (page === 'registro-partner') return <RegistrationPage go={go} />;
     if (page === 'login') return <LoginPage go={go} />;
+    if (page === 'checkout') {
+      return <CheckoutPage go={go} status={section === 'cancel' ? 'cancel' : 'success'} />;
+    }
     if (page === 'admin-dashboard') return <AppShell role="admin" section={section} go={go} />;
     if (page === 'partner-dashboard') return <AppShell role="partner" section={section} go={go} />;
     if (page === 'client-dashboard') return <AppShell role="client" section={section} go={go} />;

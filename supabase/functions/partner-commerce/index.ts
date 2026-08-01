@@ -58,22 +58,6 @@ Deno.serve(async (req) => {
       return json({ offer: data });
     }
 
-    if (action === 'generateCheckoutLink') {
-      const { data: offer, error } = await supabase.from('partner_offers')
-        .select('*, catalog_products(*)')
-        .eq('partner_id', partnerId)
-        .eq('product_id', payload.productId)
-        .single();
-      if (error) throw error;
-
-      const baseUrl = Deno.env.get('PUBLIC_APP_URL');
-      if (!baseUrl) throw new Error('PUBLIC_APP_URL_NOT_CONFIGURED');
-      const checkoutUrl = `${baseUrl}/checkout?offer=${offer.id}`;
-
-      await supabase.from('partner_offers').update({ checkout_url: checkoutUrl }).eq('id', offer.id);
-      return json({ checkoutUrl, offerId: offer.id });
-    }
-
     if (action === 'saveBranding') {
       const allowed = {
         name: payload.name,

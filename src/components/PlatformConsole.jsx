@@ -36,11 +36,14 @@ export function SuperAdminConsole({ section = 'dashboard' }) {
   const [settings, setSettings] = useState(defaults);
   const [partners, setPartners] = useState([]);
   const [partnersError, setPartnersError] = useState('');
+  const [catalogProducts, setCatalogProducts] = useState([]);
+  const [catalogError, setCatalogError] = useState('');
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState(null);
 
   useEffect(() => {
     if (tab === 'partners') loadPartners();
+    if (tab === 'catalog') loadCatalogProducts();
   }, [tab]);
 
   async function loadPartners() {
@@ -60,6 +63,27 @@ export function SuperAdminConsole({ section = 'dashboard' }) {
 
   function partnerContact(partner) {
     return partner?.branding?.contactEmail || partner?.branding?.contact_email || '—';
+  }
+
+  function intervalLabel(interval) {
+    if (interval === 'month') return 'Mensual';
+    if (interval === 'year') return 'Anual';
+    return interval || '—';
+  }
+
+  async function loadCatalogProducts() {
+    try {
+      setBusy(true);
+      setCatalogError('');
+      const data = await platformApi.listCatalogProducts();
+      setCatalogProducts(data?.products || []);
+    } catch (error) {
+      setCatalogProducts([]);
+      setCatalogError(error.message);
+      setNotice({ type: 'error', text: error.message });
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function saveSettings() {
@@ -196,8 +220,42 @@ export function SuperAdminConsole({ section = 'dashboard' }) {
 
       {tab === 'catalog' && (
         <section className="pc-card">
-          <div className="pc-card-title"><div><span>PRODUCTOS</span><h3>Catálogo central</h3></div><Package size={20} /></div>
-          <div className="pc-empty">Gestión de productos desde el catálogo central en construcción.</div>
+          <div className="pc-card-title">
+            <div><span>PRODUCTOS</span><h3>Catálogo central ({catalogProducts.length})</h3></div>
+            <button className="pc-secondary" onClick={loadCatalogProducts} disabled={busy}>
+              <RefreshCw size={15} /> Actualizar
+            </button>
+          </div>
+          {catalogError && !busy && (
+            <div className="pc-empty" style={{ color: '#ff8a8a', marginBottom: 12 }}>{catalogError}</div>
+          )}
+          <div className="pc-table">
+            <div className="pc-row pc-head">
+              <span>Producto</span>
+              <span>Intervalo</span>
+              <span>Mayorista</span>
+              <span>Stripe Product</span>
+              <span>Estado</span>
+            </div>
+            {busy && <div className="pc-empty">Cargando catálogo...</div>}
+            {!busy && !catalogError && catalogProducts.length === 0 && (
+              <div className="pc-empty">
+                No hay productos. Aplica la migración <code>20260801_stripe_catalog.sql</code> en Supabase.
+              </div>
+            )}
+            {!busy && catalogProducts.map(product => (
+              <div className="pc-row" key={product.id}>
+                <span><Package size={15} /> {product.name}</span>
+                <span>{intervalLabel(product.interval)}</span>
+                <span>${Number(product.wholesale_price || 0).toFixed(2)}</span>
+                <span>{product.stripe_product_id || '—'}</span>
+                <span>{product.active ? 'Activo' : 'Inactivo'}</span>
+              </div>
+            ))}
+          </div>
+          <p className="pc-help">
+            Los partners ven estos productos en su panel y pueden fijar un precio de venta mayor al mayorista para generar links de checkout.
+          </p>
         </section>
       )}
 
@@ -262,10 +320,12 @@ export function PartnerConsole({ section = 'dashboard' }) {
     try {
       if (!selected || !price) throw new Error('Selecciona un producto y define el precio de venta.');
       setBusy(true);
-      await platformApi.savePartnerOffer({ productId: selected.id, retailPrice: Number(price) });
-      const data = await platformApi.generateCheckoutLink({ productId: selected.id, retailPrice: Number(price) });
+      const data = await platformApi.generateCheckoutLink({
+        productId: selected.id,
+        retailPrice: Number(price),
+      });
       setCheckout(data.checkoutUrl);
-      setNotice({ type: 'success', text: 'Link de venta generado correctamente.' });
+      setNotice({ type: 'success', text: 'Link de pago Stripe generado. Compártelo con tu cliente.' });
     } catch (error) {
       setNotice({ type: 'error', text: error.message });
     } finally {
@@ -286,9 +346,9 @@ export function PartnerConsole({ section = 'dashboard' }) {
           <div className="pc-card-title"><div><span>CATÁLOGO NOVO</span><h3>Crear oferta y link de venta</h3></div><Package size={20} /></div>
           <div className="pc-product-grid">
             {catalog.length === 0 && <div className="pc-empty">El catálogo aparecerá cuando el Super Admin publique productos.</div>}
-            {catalog.map(product => <button key={product.id} className={`pc-product ${selected?.id === product.id ? 'active' : ''}`} onClick={() => { setSelected(product); setPrice(String(product.suggested_price || '')); }}>
+            {catalog.map(product => <button key={product.id} className={`pc-product ${selected?.id === product.id ? 'active' : ''}`} onClick={() => { setSelected(product); setPrice(String(product.suggested_price || product.wholesale_price || '')); }}>
               <strong>{product.name}</strong>
-              <span>Costo: ${product.wholesale_price || 0}</span>
+              <span>{product.interval === 'year' ? 'Anual' : 'Mensual'} · Costo: ${product.wholesale_price || 0}</span>
             </button>)}
           </div>
 
@@ -296,7 +356,7 @@ export function PartnerConsole({ section = 'dashboard' }) {
             <div><label>Producto seleccionado</label><strong>{selected?.name || 'Selecciona uno'}</strong></div>
             <Field label="Precio de venta" type="number" value={price} onChange={setPrice} />
             <div><label>Ganancia estimada</label><strong className="pc-profit">${margin.toFixed(2)}</strong></div>
-            <button className="pc-primary" onClick={generateLink} disabled={busy}><Link2 size={16} /> Generar link</button>
+            <button className="pc-primary" onClick={generateLink} disabled={busy}><Link2 size={16} /> Generar link Stripe</button>
           </div>
 
           {checkout && <div className="pc-link-box"><span>{checkout}</span><button onClick={() => navigator.clipboard.writeText(checkout)}><Copy size={15} /> Copiar</button><a href={checkout} target="_blank" rel="noreferrer"><ExternalLink size={15} /></a></div>}

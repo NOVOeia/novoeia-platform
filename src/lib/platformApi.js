@@ -36,10 +36,20 @@ const ERROR_HINTS = {
   USER_RESOLVE_FAILED: 'No se pudo crear ni encontrar el usuario en Supabase.',
   FORBIDDEN: 'No tienes permisos de Super Admin para ver partners.',
   PROFILE_NOT_FOUND: 'Perfil de usuario no encontrado. Vuelve a iniciar sesión.',
+  STRIPE_NOT_CONFIGURED: 'Falta STRIPE_SECRET_KEY en Supabase → Edge Functions → Secrets.',
+  PUBLIC_APP_URL_NOT_CONFIGURED: 'Falta PUBLIC_APP_URL en Supabase secrets (URL de Netlify o localhost).',
+  STRIPE_PRODUCT_NOT_CONFIGURED: 'El producto no tiene stripe_product_id. Aplica la migración del catálogo.',
+  PRICE_BELOW_WHOLESALE: 'El precio de venta no puede ser menor al costo mayorista.',
+  INVALID_CHECKOUT_PAYLOAD: 'Selecciona producto y define un precio de venta válido.',
+  PRODUCT_NOT_FOUND: 'Producto no encontrado en el catálogo.',
+  PARTNER_NOT_ASSIGNED: 'Tu cuenta partner no está vinculada a un partner.',
 };
 
 async function parseFunctionError(error, data) {
   if (data?.error) {
+    const raw = String(data.error);
+    if (raw.startsWith('STRIPE_CHECKOUT:')) return `Stripe: ${raw.replace('STRIPE_CHECKOUT:', '')}`;
+    if (raw.startsWith('STRIPE_PAYMENT_LINK:')) return `Stripe: ${raw.replace('STRIPE_PAYMENT_LINK:', '')}`;
     const msg = ERROR_HINTS[data.error] || data.error;
     if (String(msg).includes('invalid_request')) {
       return 'El código OAuth ya fue usado o expiró. Vuelve a Ingresar → Continuar con HighLevel.';
@@ -63,10 +73,14 @@ async function parseFunctionError(error, data) {
   }
 
   if (error?.message === 'Edge Function returned a non-2xx status code') {
-    return 'La Edge Function ghl-oauth falló. Revisa Supabase → Edge Functions → ghl-oauth → Logs.';
+    return 'La Edge Function falló. Revisa Supabase → Edge Functions → Logs.';
   }
 
-  return error?.message || 'Error de conexión';
+  const raw = error?.message || '';
+  if (raw.startsWith('STRIPE_CHECKOUT:')) return raw.replace('STRIPE_CHECKOUT:', 'Stripe: ');
+  if (raw.startsWith('STRIPE_PAYMENT_LINK:')) return raw.replace('STRIPE_PAYMENT_LINK:', 'Stripe: ');
+
+  return raw || 'Error de conexión';
 }
 
 async function invoke(functionName, body = {}) {
@@ -189,12 +203,63 @@ export const platformApi = {
     return invoke('partner-commerce', { action: 'listCatalog' });
   },
 
+  async listCatalogProducts() {
+    const profile = await this.getMyProfile();
+    if (profile?.role !== 'super_admin') throw new Error('FORBIDDEN');
+
+    const { data, error } = await supabase
+      .from('catalog_products')
+      .select('*')
+      .order('name');
+
+    if (error) throw error;
+    return { products: data || [] };
+  },
+
+  async saveCatalogProduct(payload) {
+    const profile = await this.getMyProfile();
+    if (profile?.role !== 'super_admin') throw new Error('FORBIDDEN');
+
+    const row = {
+      name: payload.name,
+      description: payload.description || null,
+      wholesale_price: Number(payload.wholesalePrice),
+      suggested_price: payload.suggestedPrice != null ? Number(payload.suggestedPrice) : null,
+      currency: payload.currency || 'USD',
+      billing_type: 'recurring',
+      interval: payload.interval,
+      stripe_product_id: payload.stripeProductId || null,
+      stripe_price_id: payload.stripePriceId || null,
+      active: payload.active !== false,
+      metadata: payload.metadata || {},
+    };
+
+    if (payload.id) {
+      const { data, error } = await supabase
+        .from('catalog_products')
+        .update(row)
+        .eq('id', payload.id)
+        .select()
+        .single();
+      if (error) throw error;
+      return { product: data };
+    }
+
+    const { data, error } = await supabase
+      .from('catalog_products')
+      .insert(row)
+      .select()
+      .single();
+    if (error) throw error;
+    return { product: data };
+  },
+
   savePartnerOffer(payload) {
     return invoke('partner-commerce', { action: 'saveOffer', payload });
   },
 
   generateCheckoutLink(payload) {
-    return invoke('partner-commerce', { action: 'generateCheckoutLink', payload });
+    return invoke('stripe-checkout', { action: 'createSession', payload });
   },
 
   listPartnerClients() {
