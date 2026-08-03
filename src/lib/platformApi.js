@@ -2,6 +2,19 @@ import { supabase } from './supabase.js';
 
 const GHL_OAUTH_STATE_KEY = 'novoeia_ghl_oauth_state';
 
+const RESOURCE_BUCKET = 'partner-resources';
+const MAX_RESOURCE_FILE_SIZE = 100 * 1024 * 1024;
+
+const ALLOWED_RESOURCE_MIME_TYPES = new Set([
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+  'image/gif',
+  'video/mp4',
+  'video/webm',
+  'video/quicktime',
+]);
+
 function readStoredGhlState() {
   try {
     const raw = sessionStorage.getItem(GHL_OAUTH_STATE_KEY);
@@ -15,103 +28,332 @@ function clearStoredGhlState() {
   sessionStorage.removeItem(GHL_OAUTH_STATE_KEY);
 }
 
+function sanitizeStorageFileName(fileName = 'resource') {
+  const cleaned = String(fileName)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9._-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+
+  return cleaned || 'resource';
+}
+
+function createStoragePath(userId, folder, fileName) {
+  const safeFolder =
+    folder === 'thumbnails'
+      ? 'thumbnails'
+      : 'media';
+
+  const safeFileName =
+    sanitizeStorageFileName(fileName);
+
+  const randomId =
+    globalThis.crypto?.randomUUID?.() ||
+    `${Date.now()}-${Math.random()
+      .toString(36)
+      .slice(2)}`;
+
+  return `${userId}/${safeFolder}/${randomId}-${safeFileName}`;
+}
+
 const ERROR_HINTS = {
-  INVALID_OR_EXPIRED_STATE: 'La sesión OAuth expiró o falta la tabla oauth_states. Vuelve a iniciar con HighLevel.',
-  MISSING_CODE_OR_STATE: 'Faltan datos OAuth. Intenta de nuevo desde el login.',
-  GHL_OAUTH_NOT_CONFIGURED: 'Faltan secrets GHL en Supabase → Edge Functions → Secrets.',
-  GHL_TOKEN_EXCHANGE_FAILED: 'HighLevel rechazó el intercambio del código. Instala la app Private desde GHL y vuelve a intentar.',
-  GHL_ACCESS_TOKEN_MISSING: 'HighLevel no devolvió access_token.',
-  GHL_CONNECTION_SAVE: 'No se pudo guardar la conexión GHL en la base de datos.',
-  INTEGRATION_SAVE: 'No se pudo actualizar platform_integrations.',
-  PROFILE_UPSERT: 'No se pudo guardar el perfil del usuario.',
-  SESSION_LINK: 'No se pudo generar la sesión Supabase.',
-  GHL_USER_MISSING: 'HighLevel no devolvió userId. Agrega el scope users.readonly.',
-  SESSION_TOKEN_MISSING: 'No se pudo crear la sesión en Supabase Auth.',
-  EMAIL_ALREADY_REGISTERED: 'Este correo ya está registrado. Si fue un registro incompleto, usa la misma contraseña para completarlo, o inicia sesión.',
-  INVALID_CREDENTIALS: 'Correo inválido o contraseña muy corta (mínimo 8 caracteres).',
-  MISSING_REQUIRED_FIELDS: 'Completa empresa y responsable.',
-  PARTNER_REGISTRATION_ONLY: 'Solo partners pueden registrarse en la plataforma.',
-  CLIENTS_NO_PLATFORM_ACCESS: 'Los clientes finales no tienen acceso. Ingresa con una cuenta de partner o Super Admin.',
-  CLIENT_NAME_REQUIRED: 'El nombre del cliente es obligatorio.',
-  USER_RESOLVE_FAILED: 'No se pudo crear ni encontrar el usuario en Supabase.',
-  FORBIDDEN: 'No tienes permisos de Super Admin para ver partners.',
-  PROFILE_NOT_FOUND: 'Perfil de usuario no encontrado. Vuelve a iniciar sesión.',
-  STRIPE_NOT_CONFIGURED: 'Falta STRIPE_SECRET_KEY en Supabase → Edge Functions → Secrets.',
-  PUBLIC_APP_URL_NOT_CONFIGURED: 'Falta PUBLIC_APP_URL en Supabase secrets (URL de Netlify o localhost).',
-  STRIPE_PRODUCT_NOT_CONFIGURED: 'El producto no tiene stripe_product_id. Aplica la migración del catálogo.',
-  PRICE_BELOW_WHOLESALE: 'El precio de venta no puede ser menor al costo mayorista.',
-  INVALID_CHECKOUT_PAYLOAD: 'Selecciona producto y define un precio de venta válido.',
-  PRODUCT_NOT_FOUND: 'Producto no encontrado en el catálogo.',
-  PARTNER_NOT_ASSIGNED: 'Tu cuenta partner no está vinculada a un partner.',
+  INVALID_OR_EXPIRED_STATE:
+    'La sesión OAuth expiró o falta la tabla oauth_states. Vuelve a iniciar con HighLevel.',
+
+  MISSING_CODE_OR_STATE:
+    'Faltan datos OAuth. Intenta de nuevo desde el login.',
+
+  GHL_OAUTH_NOT_CONFIGURED:
+    'Faltan secrets GHL en Supabase → Edge Functions → Secrets.',
+
+  GHL_TOKEN_EXCHANGE_FAILED:
+    'HighLevel rechazó el intercambio del código. Instala la app Private desde GHL y vuelve a intentar.',
+
+  GHL_ACCESS_TOKEN_MISSING:
+    'HighLevel no devolvió access_token.',
+
+  GHL_CONNECTION_SAVE:
+    'No se pudo guardar la conexión GHL en la base de datos.',
+
+  INTEGRATION_SAVE:
+    'No se pudo actualizar platform_integrations.',
+
+  PROFILE_UPSERT:
+    'No se pudo guardar el perfil del usuario.',
+
+  SESSION_LINK:
+    'No se pudo generar la sesión Supabase.',
+
+  GHL_USER_MISSING:
+    'HighLevel no devolvió userId. Agrega el scope users.readonly.',
+
+  SESSION_TOKEN_MISSING:
+    'No se pudo crear la sesión en Supabase Auth.',
+
+  EMAIL_ALREADY_REGISTERED:
+    'Este correo ya está registrado. Si fue un registro incompleto, usa la misma contraseña para completarlo, o inicia sesión.',
+
+  INVALID_CREDENTIALS:
+    'Correo inválido o contraseña muy corta (mínimo 8 caracteres).',
+
+  MISSING_REQUIRED_FIELDS:
+    'Completa empresa y responsable.',
+
+  PARTNER_REGISTRATION_ONLY:
+    'Solo partners pueden registrarse en la plataforma.',
+
+  CLIENTS_NO_PLATFORM_ACCESS:
+    'Los clientes finales no tienen acceso. Ingresa con una cuenta de partner o Super Admin.',
+
+  CLIENT_NAME_REQUIRED:
+    'El nombre del cliente es obligatorio.',
+
+  CLIENT_REQUIRED:
+    'Selecciona un cliente antes de generar el link de venta.',
+
+  CLIENT_NOT_FOUND:
+    'El cliente seleccionado no existe o no está disponible.',
+
+  CLIENT_DOES_NOT_BELONG_TO_PARTNER:
+    'El cliente seleccionado no pertenece a este Partner.',
+
+  USER_RESOLVE_FAILED:
+    'No se pudo crear ni encontrar el usuario en Supabase.',
+
+  FORBIDDEN:
+    'No tienes permisos para realizar esta acción.',
+
+  PROFILE_NOT_FOUND:
+    'Perfil de usuario no encontrado. Vuelve a iniciar sesión.',
+
+  STRIPE_NOT_CONFIGURED:
+    'Falta STRIPE_SECRET_KEY en Supabase → Edge Functions → Secrets.',
+
+  PUBLIC_APP_URL_NOT_CONFIGURED:
+    'Falta PUBLIC_APP_URL en Supabase Secrets.',
+
+  STRIPE_PRODUCT_NOT_CONFIGURED:
+    'El producto no tiene stripe_product_id.',
+
+  PRICE_BELOW_WHOLESALE:
+    'El precio de venta no puede ser menor al costo mayorista.',
+
+  INVALID_CHECKOUT_PAYLOAD:
+    'Selecciona producto, cliente y define un precio de venta válido.',
+
+  PRODUCT_NOT_FOUND:
+    'Producto no encontrado en el catálogo.',
+
+  PARTNER_NOT_ASSIGNED:
+    'La cuenta no está vinculada a un Partner.',
+
+  OFFER_NOT_FOUND:
+    'La oferta no fue encontrada.',
+
+  OFFER_DOES_NOT_BELONG_TO_PARTNER:
+    'La oferta no pertenece a este Partner.',
+
+  OFFER_PRODUCT_MISMATCH:
+    'La oferta y el producto seleccionados no coinciden.',
+
+  INVALID_SALES_LINK_STATUS:
+    'El estado solicitado para el link no es válido.',
+
+  SALES_LINK_NOT_FOUND:
+    'El link de venta no fue encontrado.',
+
+  SALES_LINK_RELATIONS_IMMUTABLE:
+    'No se puede cambiar el Partner, cliente, oferta o producto de un link ya creado.',
+
+  RESOURCE_TITLE_REQUIRED:
+    'El título del recurso es obligatorio.',
+
+  RESOURCE_MEDIA_REQUIRED:
+    'Debes subir un archivo o agregar una URL para el recurso.',
+
+  RESOURCE_NOT_FOUND:
+    'El recurso no fue encontrado.',
+
+  INVALID_RESOURCE_TYPE:
+    'El tipo de recurso debe ser imagen o video.',
+
+  INVALID_RESOURCE_SOURCE:
+    'El origen del recurso debe ser archivo subido o enlace externo.',
+
+  INVALID_RESOURCE_STATUS:
+    'El estado del recurso no es válido.',
+
+  RESOURCE_FILE_REQUIRED:
+    'Selecciona un archivo antes de subirlo.',
+
+  RESOURCE_FILE_TOO_LARGE:
+    'El archivo supera el tamaño máximo permitido de 100 MB.',
+
+  RESOURCE_FILE_TYPE_NOT_ALLOWED:
+    'El formato del archivo no está permitido.',
+
+  RESOURCE_THUMBNAIL_IMAGE_REQUIRED:
+    'La portada del recurso debe ser una imagen.',
+
+  RESOURCE_UPLOAD_FAILED:
+    'No se pudo subir el archivo del recurso.',
+
+  RESOURCE_SAVE_FAILED:
+    'No se pudo guardar el recurso.',
+
+  RESOURCE_DELETE_FAILED:
+    'No se pudo eliminar el recurso.',
 };
+
+function translateKnownError(rawError) {
+  const raw = String(rawError || '');
+
+  if (!raw) {
+    return 'Error de conexión';
+  }
+
+  if (ERROR_HINTS[raw]) {
+    return ERROR_HINTS[raw];
+  }
+
+  const prefixedErrors = [
+    ['STRIPE_CHECKOUT:', 'Stripe: '],
+    ['STRIPE_PAYMENT_LINK:', 'Stripe: '],
+    ['OFFER_SAVE:', 'No se pudo guardar la oferta: '],
+    ['OFFER_UPDATE:', 'No se pudo actualizar la oferta: '],
+    ['SALES_LINK_CREATE:', 'No se pudo registrar el link de venta: '],
+    ['SALES_LINK_UPDATE:', 'No se pudo actualizar el link de venta: '],
+    ['RESOURCE_UPLOAD:', 'No se pudo subir el recurso: '],
+    ['RESOURCE_SAVE:', 'No se pudo guardar el recurso: '],
+    ['RESOURCE_DELETE:', 'No se pudo eliminar el recurso: '],
+    ['RESOURCE_STATUS:', 'No se pudo actualizar el recurso: '],
+  ];
+
+  for (const [prefix, message] of prefixedErrors) {
+    if (raw.startsWith(prefix)) {
+      return `${message}${raw.slice(prefix.length)}`;
+    }
+  }
+
+  if (raw.includes('invalid_request')) {
+    return 'El código OAuth ya fue usado o expiró. Vuelve a Ingresar → Continuar con HighLevel.';
+  }
+
+  return raw;
+}
 
 async function parseFunctionError(error, data) {
   if (data?.error) {
-    const raw = String(data.error);
-    if (raw.startsWith('STRIPE_CHECKOUT:')) return `Stripe: ${raw.replace('STRIPE_CHECKOUT:', '')}`;
-    if (raw.startsWith('STRIPE_PAYMENT_LINK:')) return `Stripe: ${raw.replace('STRIPE_PAYMENT_LINK:', '')}`;
-    const msg = ERROR_HINTS[data.error] || data.error;
-    if (String(msg).includes('invalid_request')) {
-      return 'El código OAuth ya fue usado o expiró. Vuelve a Ingresar → Continuar con HighLevel.';
-    }
-    return msg;
+    return translateKnownError(data.error);
   }
 
-  if (error?.context && typeof error.context.json === 'function') {
+  if (
+    error?.context &&
+    typeof error.context.json === 'function'
+  ) {
     try {
       const payload = await error.context.json();
+
       if (payload?.error) {
-        const msg = ERROR_HINTS[payload.error] || payload.error;
-        if (String(msg).includes('invalid_request')) {
-          return 'El código OAuth ya fue usado o expiró. Vuelve a Ingresar → Continuar con HighLevel.';
-        }
-        return msg;
+        return translateKnownError(payload.error);
       }
     } catch {
-      // ignore parse errors
+      // No fue posible leer el cuerpo del error.
     }
   }
 
-  if (error?.message === 'Edge Function returned a non-2xx status code') {
+  if (
+    error?.message ===
+    'Edge Function returned a non-2xx status code'
+  ) {
     return 'La Edge Function falló. Revisa Supabase → Edge Functions → Logs.';
   }
 
-  const raw = error?.message || '';
-  if (raw.startsWith('STRIPE_CHECKOUT:')) return raw.replace('STRIPE_CHECKOUT:', 'Stripe: ');
-  if (raw.startsWith('STRIPE_PAYMENT_LINK:')) return raw.replace('STRIPE_PAYMENT_LINK:', 'Stripe: ');
-
-  return raw || 'Error de conexión';
+  return translateKnownError(error?.message);
 }
 
 async function invoke(functionName, body = {}) {
-  const { data, error } = await supabase.functions.invoke(functionName, { body });
-  if (error) throw new Error(await parseFunctionError(error, data));
-  if (data?.error) throw new Error(ERROR_HINTS[data.error] || data.error);
+  const { data, error } =
+    await supabase.functions.invoke(functionName, {
+      body,
+    });
+
+  if (error) {
+    throw new Error(
+      await parseFunctionError(error, data),
+    );
+  }
+
+  if (data?.error) {
+    throw new Error(
+      translateKnownError(data.error),
+    );
+  }
+
   return data;
 }
 
 function roleToDashboard(role) {
-  if (role === 'super_admin') return 'admin-dashboard';
-  if (role === 'partner') return 'partner-dashboard';
+  if (role === 'super_admin') {
+    return 'admin-dashboard';
+  }
+
+  if (role === 'partner') {
+    return 'partner-dashboard';
+  }
+
   return 'client-dashboard';
 }
 
 export const platformApi = {
   getSession: () => supabase.auth.getSession(),
+
   signOut: () => supabase.auth.signOut(),
+
   roleToDashboard,
 
   async getMyProfile() {
-    const { data: sessionData } = await supabase.auth.getSession();
-    const userId = sessionData.session?.user?.id;
-    if (!userId) return null;
+    const { data: sessionData } =
+      await supabase.auth.getSession();
+
+    const userId =
+      sessionData.session?.user?.id;
+
+    if (!userId) {
+      return null;
+    }
+
     const { data, error } = await supabase
       .from('profiles')
       .select('*')
       .eq('id', userId)
       .maybeSingle();
-    if (error) throw error;
+
+    if (error) {
+      throw error;
+    }
+
     return data;
+  },
+
+  async requireSuperAdmin() {
+    const profile =
+      await this.getMyProfile();
+
+    if (!profile) {
+      throw new Error(
+        ERROR_HINTS.PROFILE_NOT_FOUND,
+      );
+    }
+
+    if (profile.role !== 'super_admin') {
+      throw new Error(
+        ERROR_HINTS.FORBIDDEN,
+      );
+    }
+
+    return profile;
   },
 
   async getPlatformSettings() {
@@ -119,119 +361,239 @@ export const platformApi = {
       .from('platform_settings_public')
       .select('*')
       .maybeSingle();
-    if (error) throw error;
+
+    if (error) {
+      throw error;
+    }
+
     return data;
   },
 
   saveIntegrationSettings(payload) {
-    return invoke('platform-admin', { action: 'saveIntegrationSettings', payload });
+    return invoke('platform-admin', {
+      action: 'saveIntegrationSettings',
+      payload,
+    });
   },
 
   testIntegration(provider) {
-    return invoke('platform-admin', { action: 'testIntegration', provider });
+    return invoke('platform-admin', {
+      action: 'testIntegration',
+      provider,
+    });
   },
 
-  startGhlOAuth(purpose = 'connect', userType) {
+  startGhlOAuth(
+    purpose = 'connect',
+    userType,
+  ) {
     return invoke('ghl-oauth', {
       action: 'authorize',
       purpose,
-      userType: userType || (purpose === 'connect' ? 'Company' : 'Location'),
+      userType:
+        userType ||
+        (
+          purpose === 'connect'
+            ? 'Company'
+            : 'Location'
+        ),
     }).then((data) => {
       if (data?.state) {
-        sessionStorage.setItem(GHL_OAUTH_STATE_KEY, JSON.stringify({
-          state: data.state,
-          purpose: data.purpose || purpose,
-        }));
+        sessionStorage.setItem(
+          GHL_OAUTH_STATE_KEY,
+          JSON.stringify({
+            state: data.state,
+            purpose:
+              data.purpose || purpose,
+          }),
+        );
       }
+
       return data;
     });
   },
 
   startGhlLogin() {
-    return this.startGhlOAuth('login', 'Company');
+    return this.startGhlOAuth(
+      'login',
+      'Company',
+    );
   },
 
   readPendingGhlOAuth() {
-    const params = new URLSearchParams(window.location.search);
+    const params =
+      new URLSearchParams(
+        window.location.search,
+      );
+
     const code = params.get('code');
-    if (!code) return null;
-    const state = params.get('state') || readStoredGhlState()?.state || null;
-    return { code, state };
+
+    if (!code) {
+      return null;
+    }
+
+    const state =
+      params.get('state') ||
+      readStoredGhlState()?.state ||
+      null;
+
+    return {
+      code,
+      state,
+    };
   },
 
   completeGhlOAuth({ code, state }) {
-    return invoke('ghl-oauth', { action: 'callback', code, state }).finally(clearStoredGhlState);
+    return invoke('ghl-oauth', {
+      action: 'callback',
+      code,
+      state,
+    }).finally(clearStoredGhlState);
   },
 
   async establishGhlSession(tokenHash) {
-    const { data, error } = await supabase.auth.verifyOtp({
-      token_hash: tokenHash,
-      type: 'magiclink',
-    });
-    if (error) throw error;
+    const { data, error } =
+      await supabase.auth.verifyOtp({
+        token_hash: tokenHash,
+        type: 'magiclink',
+      });
+
+    if (error) {
+      throw error;
+    }
+
     return data;
   },
 
   syncGhlLocations() {
-    return invoke('ghl-proxy', { action: 'syncLocations' });
+    return invoke('ghl-proxy', {
+      action: 'syncLocations',
+    });
   },
 
   async listPartners() {
-    const profile = await this.getMyProfile();
+    const profile =
+      await this.getMyProfile();
+
     if (profile?.role !== 'super_admin') {
-      throw new Error('FORBIDDEN');
+      throw new Error(
+        ERROR_HINTS.FORBIDDEN,
+      );
     }
 
     const { data, error } = await supabase
       .from('partners')
-      .select('id, name, slug, status, plan_name, ghl_location_id, branding, created_at, owner_user_id')
-      .order('created_at', { ascending: false });
+      .select(`
+        id,
+        name,
+        slug,
+        status,
+        plan_name,
+        ghl_location_id,
+        branding,
+        created_at,
+        owner_user_id
+      `)
+      .order('created_at', {
+        ascending: false,
+      });
 
-    if (error) throw error;
-    return { partners: data || [] };
+    if (error) {
+      throw error;
+    }
+
+    return {
+      partners: data || [],
+    };
   },
 
   createPartner(payload) {
-    return invoke('platform-admin', { action: 'createPartner', payload });
+    return invoke('platform-admin', {
+      action: 'createPartner',
+      payload,
+    });
   },
 
   updatePartner(payload) {
-    return invoke('platform-admin', { action: 'updatePartner', payload });
+    return invoke('platform-admin', {
+      action: 'updatePartner',
+      payload,
+    });
   },
 
   listCatalog() {
-    return invoke('partner-commerce', { action: 'listCatalog' });
+    return invoke('partner-commerce', {
+      action: 'listCatalog',
+    });
   },
 
   async listCatalogProducts() {
-    const profile = await this.getMyProfile();
-    if (profile?.role !== 'super_admin') throw new Error('FORBIDDEN');
+    const profile =
+      await this.getMyProfile();
+
+    if (profile?.role !== 'super_admin') {
+      throw new Error(
+        ERROR_HINTS.FORBIDDEN,
+      );
+    }
 
     const { data, error } = await supabase
       .from('catalog_products')
       .select('*')
       .order('name');
 
-    if (error) throw error;
-    return { products: data || [] };
+    if (error) {
+      throw error;
+    }
+
+    return {
+      products: data || [],
+    };
   },
 
   async saveCatalogProduct(payload) {
-    const profile = await this.getMyProfile();
-    if (profile?.role !== 'super_admin') throw new Error('FORBIDDEN');
+    const profile =
+      await this.getMyProfile();
+
+    if (profile?.role !== 'super_admin') {
+      throw new Error(
+        ERROR_HINTS.FORBIDDEN,
+      );
+    }
 
     const row = {
       name: payload.name,
-      description: payload.description || null,
-      wholesale_price: Number(payload.wholesalePrice),
-      suggested_price: payload.suggestedPrice != null ? Number(payload.suggestedPrice) : null,
-      currency: payload.currency || 'USD',
-      billing_type: 'recurring',
-      interval: payload.interval,
-      stripe_product_id: payload.stripeProductId || null,
-      stripe_price_id: payload.stripePriceId || null,
-      active: payload.active !== false,
-      metadata: payload.metadata || {},
+      description:
+        payload.description || null,
+
+      wholesale_price:
+        Number(payload.wholesalePrice),
+
+      suggested_price:
+        payload.suggestedPrice != null
+          ? Number(payload.suggestedPrice)
+          : null,
+
+      currency:
+        payload.currency || 'USD',
+
+      billing_type:
+        payload.billingType || 'recurring',
+
+      interval:
+        payload.interval || null,
+
+      stripe_product_id:
+        payload.stripeProductId || null,
+
+      stripe_price_id:
+        payload.stripePriceId || null,
+
+      active:
+        payload.active !== false,
+
+      metadata:
+        payload.metadata || {},
     };
 
     if (payload.id) {
@@ -241,8 +603,14 @@ export const platformApi = {
         .eq('id', payload.id)
         .select()
         .single();
-      if (error) throw error;
-      return { product: data };
+
+      if (error) {
+        throw error;
+      }
+
+      return {
+        product: data,
+      };
     }
 
     const { data, error } = await supabase
@@ -250,45 +618,874 @@ export const platformApi = {
       .insert(row)
       .select()
       .single();
-    if (error) throw error;
-    return { product: data };
+
+    if (error) {
+      throw error;
+    }
+
+    return {
+      product: data,
+    };
   },
 
   savePartnerOffer(payload) {
-    return invoke('partner-commerce', { action: 'saveOffer', payload });
+    return invoke('partner-commerce', {
+      action: 'saveOffer',
+      payload,
+    });
   },
 
   generateCheckoutLink(payload) {
-    return invoke('stripe-checkout', { action: 'createSession', payload });
+    return invoke('stripe-checkout', {
+      action: 'createSession',
+      payload,
+    });
   },
 
-  listPartnerClients() {
-    return invoke('partner-commerce', { action: 'listClients' });
-  },
-
-  async signInWithPassword(email, password) {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) throw error;
-
-    try {
-      await invoke('auth-register', { action: 'syncRole' });
-    } catch {
-      // syncRole is optional; ignore if edge function is unavailable
-    }
-
-    const profile = await this.getMyProfile();
-    return { session: data.session, profile };
-  },
-
-  registerAccount(payload) {
-    return invoke('auth-register', { action: 'register', payload });
+  listPartnerClients(partnerId = null) {
+    return invoke('partner-commerce', {
+      action: 'listClients',
+      payload:
+        partnerId
+          ? { partnerId }
+          : {},
+    });
   },
 
   createPartnerClient(payload) {
-    return invoke('partner-commerce', { action: 'createClient', payload });
+    return invoke('partner-commerce', {
+      action: 'createClient',
+      payload,
+    });
+  },
+
+  async listSalesLinks({
+    partnerId = null,
+    clientId = null,
+    productId = null,
+    status = null,
+  } = {}) {
+    const profile =
+      await this.getMyProfile();
+
+    if (!profile) {
+      throw new Error(
+        ERROR_HINTS.PROFILE_NOT_FOUND,
+      );
+    }
+
+    let query = supabase
+      .from('sales_links')
+      .select(`
+        id,
+        public_token,
+
+        partner_id,
+        partner_name,
+
+        client_id,
+        client_name,
+        client_email,
+
+        offer_id,
+
+        product_id,
+        product_name,
+
+        billing_type,
+        billing_interval,
+        currency,
+
+        wholesale_price,
+        sale_price,
+        partner_margin,
+
+        checkout_url,
+        stripe_product_id,
+        stripe_price_id,
+        stripe_checkout_session_id,
+        stripe_payment_link_id,
+
+        status,
+
+        created_by,
+        created_by_role,
+
+        activated_at,
+        disabled_at,
+        expires_at,
+
+        failure_reason,
+        metadata,
+
+        created_at,
+        updated_at
+      `)
+      .order('created_at', {
+        ascending: false,
+      });
+
+    if (
+      profile.role === 'super_admin' &&
+      partnerId
+    ) {
+      query = query.eq(
+        'partner_id',
+        partnerId,
+      );
+    }
+
+    if (clientId) {
+      query = query.eq(
+        'client_id',
+        clientId,
+      );
+    }
+
+    if (productId) {
+      query = query.eq(
+        'product_id',
+        productId,
+      );
+    }
+
+    if (status) {
+      query = query.eq(
+        'status',
+        status,
+      );
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      throw error;
+    }
+
+    return {
+      links: data || [],
+    };
+  },
+
+  async getSalesLink(linkId) {
+    if (!linkId) {
+      throw new Error(
+        ERROR_HINTS.SALES_LINK_NOT_FOUND,
+      );
+    }
+
+    const { data, error } = await supabase
+      .from('sales_links')
+      .select('*')
+      .eq('id', linkId)
+      .maybeSingle();
+
+    if (error) {
+      throw error;
+    }
+
+    if (!data) {
+      throw new Error(
+        ERROR_HINTS.SALES_LINK_NOT_FOUND,
+      );
+    }
+
+    return {
+      link: data,
+    };
+  },
+
+  async updateSalesLinkStatus(
+    linkId,
+    status,
+  ) {
+    const allowedStatuses = [
+      'active',
+      'disabled',
+      'expired',
+      'archived',
+    ];
+
+    if (!linkId) {
+      throw new Error(
+        ERROR_HINTS.SALES_LINK_NOT_FOUND,
+      );
+    }
+
+    if (
+      !allowedStatuses.includes(status)
+    ) {
+      throw new Error(
+        ERROR_HINTS.INVALID_SALES_LINK_STATUS,
+      );
+    }
+
+    const { data, error } = await supabase
+      .from('sales_links')
+      .update({ status })
+      .eq('id', linkId)
+      .select()
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
+    return {
+      link: data,
+    };
+  },
+
+  async listPartnerResources({
+    status = null,
+    resourceType = null,
+    category = null,
+    featured = null,
+  } = {}) {
+    const profile =
+      await this.getMyProfile();
+
+    if (!profile) {
+      throw new Error(
+        ERROR_HINTS.PROFILE_NOT_FOUND,
+      );
+    }
+
+    if (
+      profile.role !== 'super_admin' &&
+      profile.role !== 'partner'
+    ) {
+      throw new Error(
+        ERROR_HINTS.FORBIDDEN,
+      );
+    }
+
+    let query = supabase
+      .from('partner_resources')
+      .select(`
+        id,
+        title,
+        description,
+        resource_type,
+        source_type,
+        category,
+        media_url,
+        thumbnail_url,
+        share_text,
+        status,
+        is_featured,
+        sort_order,
+        created_by,
+        published_at,
+        created_at,
+        updated_at,
+        metadata
+      `)
+      .order('is_featured', {
+        ascending: false,
+      })
+      .order('sort_order', {
+        ascending: true,
+      })
+      .order('created_at', {
+        ascending: false,
+      });
+
+    if (profile.role === 'partner') {
+      query = query.eq(
+        'status',
+        'published',
+      );
+    }
+
+    if (
+      profile.role === 'super_admin' &&
+      status &&
+      status !== 'all'
+    ) {
+      query = query.eq(
+        'status',
+        status,
+      );
+    }
+
+    if (
+      resourceType &&
+      resourceType !== 'all'
+    ) {
+      query = query.eq(
+        'resource_type',
+        resourceType,
+      );
+    }
+
+    if (
+      category &&
+      category !== 'all'
+    ) {
+      query = query.eq(
+        'category',
+        category,
+      );
+    }
+
+    if (typeof featured === 'boolean') {
+      query = query.eq(
+        'is_featured',
+        featured,
+      );
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      throw error;
+    }
+
+    return {
+      resources: data || [],
+    };
+  },
+
+  async getPartnerResource(resourceId) {
+    const profile =
+      await this.getMyProfile();
+
+    if (!profile) {
+      throw new Error(
+        ERROR_HINTS.PROFILE_NOT_FOUND,
+      );
+    }
+
+    if (!resourceId) {
+      throw new Error(
+        ERROR_HINTS.RESOURCE_NOT_FOUND,
+      );
+    }
+
+    const { data, error } = await supabase
+      .from('partner_resources')
+      .select('*')
+      .eq('id', resourceId)
+      .maybeSingle();
+
+    if (error) {
+      throw error;
+    }
+
+    if (!data) {
+      throw new Error(
+        ERROR_HINTS.RESOURCE_NOT_FOUND,
+      );
+    }
+
+    return {
+      resource: data,
+    };
+  },
+
+  async uploadPartnerResource(
+    file,
+    {
+      folder = 'media',
+    } = {},
+  ) {
+    const profile =
+      await this.requireSuperAdmin();
+
+    if (!file) {
+      throw new Error(
+        ERROR_HINTS.RESOURCE_FILE_REQUIRED,
+      );
+    }
+
+    if (
+      typeof file.size !== 'number' ||
+      file.size <= 0
+    ) {
+      throw new Error(
+        ERROR_HINTS.RESOURCE_FILE_REQUIRED,
+      );
+    }
+
+    if (
+      file.size >
+      MAX_RESOURCE_FILE_SIZE
+    ) {
+      throw new Error(
+        ERROR_HINTS.RESOURCE_FILE_TOO_LARGE,
+      );
+    }
+
+    const mimeType =
+      String(file.type || '').toLowerCase();
+
+    if (
+      !ALLOWED_RESOURCE_MIME_TYPES.has(
+        mimeType,
+      )
+    ) {
+      throw new Error(
+        ERROR_HINTS.RESOURCE_FILE_TYPE_NOT_ALLOWED,
+      );
+    }
+
+    if (
+      folder === 'thumbnails' &&
+      !mimeType.startsWith('image/')
+    ) {
+      throw new Error(
+        ERROR_HINTS.RESOURCE_THUMBNAIL_IMAGE_REQUIRED,
+      );
+    }
+
+    const storagePath =
+      createStoragePath(
+        profile.id,
+        folder,
+        file.name || 'resource',
+      );
+
+    const uploadOptions = {
+      cacheControl: '3600',
+      upsert: false,
+      contentType: mimeType,
+    };
+
+    const { error: uploadError } =
+      await supabase.storage
+        .from(RESOURCE_BUCKET)
+        .upload(
+          storagePath,
+          file,
+          uploadOptions,
+        );
+
+    if (uploadError) {
+      throw new Error(
+        `RESOURCE_UPLOAD:${uploadError.message}`,
+      );
+    }
+
+    const { data: publicUrlData } =
+      supabase.storage
+        .from(RESOURCE_BUCKET)
+        .getPublicUrl(storagePath);
+
+    const publicUrl =
+      publicUrlData?.publicUrl;
+
+    if (!publicUrl) {
+      await supabase.storage
+        .from(RESOURCE_BUCKET)
+        .remove([storagePath]);
+
+      throw new Error(
+        ERROR_HINTS.RESOURCE_UPLOAD_FAILED,
+      );
+    }
+
+    return {
+      bucket: RESOURCE_BUCKET,
+      path: storagePath,
+      url: publicUrl,
+      mimeType,
+      fileName:
+        file.name || 'resource',
+      size: file.size,
+    };
+  },
+
+  async savePartnerResource(payload) {
+    const profile =
+      await this.requireSuperAdmin();
+
+    const title =
+      String(payload?.title || '').trim();
+
+    if (!title) {
+      throw new Error(
+        ERROR_HINTS.RESOURCE_TITLE_REQUIRED,
+      );
+    }
+
+    const resourceType =
+      payload.resourceType ||
+      payload.resource_type;
+
+    if (
+      !['image', 'video'].includes(
+        resourceType,
+      )
+    ) {
+      throw new Error(
+        ERROR_HINTS.INVALID_RESOURCE_TYPE,
+      );
+    }
+
+    const sourceType =
+      payload.sourceType ||
+      payload.source_type ||
+      'upload';
+
+    if (
+      !['upload', 'external'].includes(
+        sourceType,
+      )
+    ) {
+      throw new Error(
+        ERROR_HINTS.INVALID_RESOURCE_SOURCE,
+      );
+    }
+
+    const status =
+      payload.status || 'draft';
+
+    if (
+      ![
+        'draft',
+        'published',
+        'archived',
+      ].includes(status)
+    ) {
+      throw new Error(
+        ERROR_HINTS.INVALID_RESOURCE_STATUS,
+      );
+    }
+
+    const mediaUrl =
+      String(
+        payload.mediaUrl ||
+        payload.media_url ||
+        '',
+      ).trim();
+
+    if (!mediaUrl) {
+      throw new Error(
+        ERROR_HINTS.RESOURCE_MEDIA_REQUIRED,
+      );
+    }
+
+    const thumbnailUrl =
+      String(
+        payload.thumbnailUrl ||
+        payload.thumbnail_url ||
+        '',
+      ).trim() || null;
+
+    const metadata =
+      payload.metadata &&
+      typeof payload.metadata === 'object'
+        ? payload.metadata
+        : {};
+
+    const row = {
+      title,
+
+      description:
+        String(
+          payload.description || '',
+        ).trim() || null,
+
+      resource_type:
+        resourceType,
+
+      source_type:
+        sourceType,
+
+      category:
+        String(
+          payload.category || '',
+        ).trim() || null,
+
+      media_url:
+        mediaUrl,
+
+      thumbnail_url:
+        thumbnailUrl,
+
+      share_text:
+        String(
+          payload.shareText ||
+          payload.share_text ||
+          '',
+        ).trim() || null,
+
+      status,
+
+      is_featured:
+        Boolean(
+          payload.isFeatured ??
+          payload.is_featured ??
+          false,
+        ),
+
+      sort_order:
+        Number.isFinite(
+          Number(
+            payload.sortOrder ??
+            payload.sort_order,
+          ),
+        )
+          ? Number(
+              payload.sortOrder ??
+              payload.sort_order,
+            )
+          : 0,
+
+      published_at:
+        status === 'published'
+          ? (
+              payload.publishedAt ||
+              payload.published_at ||
+              new Date().toISOString()
+            )
+          : null,
+
+      metadata,
+    };
+
+    const resourceId =
+      payload.id || null;
+
+    if (resourceId) {
+      const { data, error } = await supabase
+        .from('partner_resources')
+        .update(row)
+        .eq('id', resourceId)
+        .select()
+        .single();
+
+      if (error) {
+        throw new Error(
+          `RESOURCE_SAVE:${error.message}`,
+        );
+      }
+
+      return {
+        resource: data,
+      };
+    }
+
+    const { data, error } = await supabase
+      .from('partner_resources')
+      .insert({
+        ...row,
+        created_by: profile.id,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      throw new Error(
+        `RESOURCE_SAVE:${error.message}`,
+      );
+    }
+
+    return {
+      resource: data,
+    };
+  },
+
+  async updatePartnerResourceStatus(
+    resourceId,
+    status,
+  ) {
+    await this.requireSuperAdmin();
+
+    if (!resourceId) {
+      throw new Error(
+        ERROR_HINTS.RESOURCE_NOT_FOUND,
+      );
+    }
+
+    if (
+      ![
+        'draft',
+        'published',
+        'archived',
+      ].includes(status)
+    ) {
+      throw new Error(
+        ERROR_HINTS.INVALID_RESOURCE_STATUS,
+      );
+    }
+
+    const updates = {
+      status,
+      published_at:
+        status === 'published'
+          ? new Date().toISOString()
+          : null,
+    };
+
+    const { data, error } = await supabase
+      .from('partner_resources')
+      .update(updates)
+      .eq('id', resourceId)
+      .select()
+      .single();
+
+    if (error) {
+      throw new Error(
+        `RESOURCE_STATUS:${error.message}`,
+      );
+    }
+
+    return {
+      resource: data,
+    };
+  },
+
+  async deletePartnerResource(
+    resourceId,
+  ) {
+    await this.requireSuperAdmin();
+
+    if (!resourceId) {
+      throw new Error(
+        ERROR_HINTS.RESOURCE_NOT_FOUND,
+      );
+    }
+
+    const { data: resource, error: findError } =
+      await supabase
+        .from('partner_resources')
+        .select('*')
+        .eq('id', resourceId)
+        .maybeSingle();
+
+    if (findError) {
+      throw new Error(
+        `RESOURCE_DELETE:${findError.message}`,
+      );
+    }
+
+    if (!resource) {
+      throw new Error(
+        ERROR_HINTS.RESOURCE_NOT_FOUND,
+      );
+    }
+
+    const metadata =
+      resource.metadata &&
+      typeof resource.metadata === 'object'
+        ? resource.metadata
+        : {};
+
+    const storagePaths = [
+      metadata.storage_path,
+      metadata.media_storage_path,
+      metadata.mediaStoragePath,
+      metadata.thumbnail_storage_path,
+      metadata.thumbnailStoragePath,
+    ].filter(Boolean);
+
+    const uniqueStoragePaths = [
+      ...new Set(storagePaths),
+    ];
+
+    if (uniqueStoragePaths.length > 0) {
+      const { error: storageError } =
+        await supabase.storage
+          .from(RESOURCE_BUCKET)
+          .remove(uniqueStoragePaths);
+
+      if (storageError) {
+        throw new Error(
+          `RESOURCE_DELETE:${storageError.message}`,
+        );
+      }
+    }
+
+    const { error: deleteError } =
+      await supabase
+        .from('partner_resources')
+        .delete()
+        .eq('id', resourceId);
+
+    if (deleteError) {
+      throw new Error(
+        `RESOURCE_DELETE:${deleteError.message}`,
+      );
+    }
+
+    return {
+      deleted: true,
+      resourceId,
+    };
+  },
+
+  async deletePartnerResourceFile(
+    storagePath,
+  ) {
+    await this.requireSuperAdmin();
+
+    if (!storagePath) {
+      return {
+        deleted: false,
+      };
+    }
+
+    const { error } =
+      await supabase.storage
+        .from(RESOURCE_BUCKET)
+        .remove([storagePath]);
+
+    if (error) {
+      throw new Error(
+        `RESOURCE_DELETE:${error.message}`,
+      );
+    }
+
+    return {
+      deleted: true,
+      path: storagePath,
+    };
+  },
+
+  async signInWithPassword(
+    email,
+    password,
+  ) {
+    const { data, error } =
+      await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+    if (error) {
+      throw error;
+    }
+
+    try {
+      await invoke('auth-register', {
+        action: 'syncRole',
+      });
+    } catch {
+      // La sincronización es opcional.
+    }
+
+    const profile =
+      await this.getMyProfile();
+
+    return {
+      session: data.session,
+      profile,
+    };
+  },
+
+  registerAccount(payload) {
+    return invoke('auth-register', {
+      action: 'register',
+      payload,
+    });
   },
 
   savePartnerBranding(payload) {
-    return invoke('partner-commerce', { action: 'saveBranding', payload });
+    return invoke('partner-commerce', {
+      action: 'saveBranding',
+      payload,
+    });
   },
 };

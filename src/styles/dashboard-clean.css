@@ -1,197 +1,394 @@
-/* ================================
-   NOVO SHELL — DESIGN SYSTEM
-   ================================ */
+/* =========================================================
+   NOVO DASHBOARD DESIGN SYSTEM
+   Light por defecto + Dark opcional
+   Archivo completo para reemplazar dashboard-clean.css
+========================================================= */
 
-:root {
-  --novo-bg: #06090f;
-  --novo-sidebar-bg: #080d16;
-  --novo-border: rgba(255,255,255,.06);
-  --novo-blue: #2563EB;
-  --novo-purple: #7C3AED;
-  --novo-gradient: linear-gradient(135deg, #2563EB, #7C3AED);
-  --novo-text: #e2eaf4;
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+/* =========================================================
+   THEME TOKENS — LIGHT DEFAULT
+========================================================= */
+
+.novo-shell,
+.novo-shell[data-theme="light"] {
+  color-scheme: light;
+
+  --novo-bg: #f4f7fb;
+  --novo-sidebar-bg: #ffffff;
+  --novo-topbar-bg: rgba(255, 255, 255, 0.94);
+
+  --novo-blue: #2563eb;
+  --novo-purple: #7c3aed;
+  --novo-gradient: linear-gradient(135deg, #2563eb 0%, #7c3aed 100%);
+  --novo-gradient-soft: linear-gradient(135deg, rgba(37, 99, 235, 0.10) 0%, rgba(124, 58, 237, 0.10) 100%);
+
+  --novo-heading: #0f172a;
+  --novo-text: #334155;
   --novo-muted: #64748b;
-  --novo-card: rgba(255,255,255,.03);
-  --novo-card-border: rgba(255,255,255,.07);
-  --novo-success: #10b981;
-  --novo-warning: #f59e0b;
-  --novo-danger: #ef4444;
+  --novo-placeholder: #94a3b8;
+  --novo-on-accent: #ffffff;
+
+  --novo-border: #dbe3ee;
+  --novo-border-strong: #c8d3e1;
+  --novo-divider: #e5eaf1;
+
+  --novo-card: #ffffff;
+  --novo-card-hover: #f8fafc;
+  --novo-surface-soft: #f8fafc;
+  --novo-card-border: #dbe3ee;
+  --novo-field-bg: #ffffff;
+  --novo-row-hover: #f8fafc;
+
+  --novo-secondary-bg: #f1f5f9;
+  --novo-secondary-hover: #e8eef6;
+  --novo-ghost-hover: #eff6ff;
+
+  --novo-success: #047857;
+  --novo-success-soft: #ecfdf5;
+  --novo-success-border: #a7f3d0;
+
+  --novo-warning: #92400e;
+  --novo-warning-soft: #fffbeb;
+  --novo-warning-border: #fde68a;
+
+  --novo-danger: #b91c1c;
+  --novo-danger-soft: #fff1f2;
+  --novo-danger-border: #fecdd3;
+
+  --novo-info: #1d4ed8;
+  --novo-info-soft: #eff6ff;
+  --novo-info-border: #bfdbfe;
+
+  --novo-scrollbar: #cbd5e1;
+  --novo-shadow-sm: 0 4px 16px rgba(15, 23, 42, 0.05);
+  --novo-shadow-md: 0 10px 30px rgba(15, 23, 42, 0.08);
+  --novo-shadow-lg: 0 18px 50px rgba(15, 23, 42, 0.14);
+
+  --novo-main-background:
+    radial-gradient(ellipse at 80% 0%, rgba(37, 99, 235, 0.07) 0%, transparent 48%),
+    radial-gradient(ellipse at 20% 100%, rgba(124, 58, 237, 0.05) 0%, transparent 48%),
+    var(--novo-bg);
+
+  --novo-nav-active-text: #1d4ed8;
+  --novo-nav-active-icon: #2563eb;
+  --novo-link-action-hover-text: #1d4ed8;
 }
 
-/* SELECT FIX */
-.wow-select-wrap select {
-  appearance: none;
-  -webkit-appearance: none;
-  width: 100%;
-  color: #e8f1fb !important;
-  background: transparent !important;
-  cursor: pointer;
-}
-.wow-select-wrap select option {
-  color: #111827 !important;
-  background: #ffffff !important;
+/* =========================================================
+   THEME TOKENS — DARK
+========================================================= */
+
+.novo-shell[data-theme="dark"] {
+  color-scheme: dark;
+
+  --novo-bg: #050810;
+  --novo-sidebar-bg: #07090f;
+  --novo-topbar-bg: rgba(5, 8, 16, 0.88);
+
+  --novo-heading: #f8fafc;
+  --novo-text: #e2e8f0;
+  --novo-muted: #94a3b8;
+  --novo-placeholder: #718096;
+
+  --novo-border: rgba(255, 255, 255, 0.08);
+  --novo-border-strong: rgba(255, 255, 255, 0.15);
+  --novo-divider: rgba(255, 255, 255, 0.06);
+
+  --novo-card: rgba(255, 255, 255, 0.025);
+  --novo-card-hover: rgba(255, 255, 255, 0.045);
+  --novo-surface-soft: rgba(255, 255, 255, 0.03);
+  --novo-card-border: rgba(255, 255, 255, 0.08);
+  --novo-field-bg: rgba(255, 255, 255, 0.04);
+  --novo-row-hover: rgba(255, 255, 255, 0.025);
+
+  --novo-secondary-bg: rgba(255, 255, 255, 0.06);
+  --novo-secondary-hover: rgba(255, 255, 255, 0.10);
+  --novo-ghost-hover: rgba(255, 255, 255, 0.05);
+
+  --novo-success: #34d399;
+  --novo-success-soft: rgba(16, 185, 129, 0.10);
+  --novo-success-border: rgba(16, 185, 129, 0.24);
+
+  --novo-warning: #fbbf24;
+  --novo-warning-soft: rgba(245, 158, 11, 0.10);
+  --novo-warning-border: rgba(245, 158, 11, 0.24);
+
+  --novo-danger: #f87171;
+  --novo-danger-soft: rgba(239, 68, 68, 0.10);
+  --novo-danger-border: rgba(239, 68, 68, 0.24);
+
+  --novo-info: #60a5fa;
+  --novo-info-soft: rgba(37, 99, 235, 0.12);
+  --novo-info-border: rgba(37, 99, 235, 0.28);
+
+  --novo-scrollbar: rgba(255, 255, 255, 0.12);
+  --novo-shadow-sm: 0 4px 16px rgba(0, 0, 0, 0.18);
+  --novo-shadow-md: 0 10px 34px rgba(0, 0, 0, 0.28);
+  --novo-shadow-lg: 0 18px 55px rgba(0, 0, 0, 0.42);
+
+  --novo-main-background:
+    radial-gradient(ellipse at 80% 0%, rgba(37, 99, 235, 0.08) 0%, transparent 50%),
+    radial-gradient(ellipse at 20% 100%, rgba(124, 58, 237, 0.06) 0%, transparent 50%),
+    var(--novo-bg);
+
+  --novo-nav-active-text: #ffffff;
+  --novo-nav-active-icon: #a5b4fc;
+  --novo-link-action-hover-text: #ffffff;
 }
 
-/* ================================
+/* =========================================================
+   RESET SCOPED TO DASHBOARD
+========================================================= */
+
+.novo-shell,
+.novo-shell * {
+  box-sizing: border-box;
+}
+
+.novo-shell button,
+.novo-shell input,
+.novo-shell select,
+.novo-shell textarea {
+  font: inherit;
+}
+
+.novo-shell button,
+.novo-shell a,
+.novo-shell input,
+.novo-shell select,
+.novo-shell textarea {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* =========================================================
    SHELL LAYOUT
-   ================================ */
+========================================================= */
 
 .novo-shell {
   display: flex;
+  width: 100%;
   height: 100vh;
+  min-height: 100vh;
   overflow: hidden;
   background: var(--novo-bg);
   color: var(--novo-text);
-  font-family: 'Inter', system-ui, sans-serif;
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  transition: background-color 0.25s ease, color 0.25s ease;
 }
 
 .novo-main {
+  min-width: 0;
   flex: 1;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  background: var(--novo-main-background);
+  color: var(--novo-text);
 }
 
 .novo-content {
   flex: 1;
+  min-width: 0;
   overflow-y: auto;
-  padding: 28px 32px;
+  padding: 32px 36px;
+  color: var(--novo-text);
+  scrollbar-width: thin;
+  scrollbar-color: var(--novo-scrollbar) transparent;
 }
 
-/* ================================
+.novo-content::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.novo-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.novo-content::-webkit-scrollbar-thumb {
+  background: var(--novo-scrollbar);
+  border-radius: 999px;
+}
+
+/* =========================================================
    SIDEBAR
-   ================================ */
+========================================================= */
 
 .novo-sidebar {
-  width: 220px;
+  width: 230px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
+  position: relative;
+  padding: 20px 14px;
   background: var(--novo-sidebar-bg);
   border-right: 1px solid var(--novo-border);
-  padding: 20px 12px;
+  box-shadow: var(--novo-shadow-sm);
+}
+
+.novo-sidebar::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 1px;
+  height: 100%;
+  pointer-events: none;
+  background: linear-gradient(to bottom, transparent, rgba(124, 58, 237, 0.28), transparent);
 }
 
 .novo-sidebar-brand {
-  padding: 4px 8px 20px;
+  padding: 4px 8px 22px;
+  margin-bottom: 18px;
   border-bottom: 1px solid var(--novo-border);
-  margin-bottom: 16px;
 }
 
 .novo-role-badge {
+  padding: 0 8px;
+  margin-bottom: 10px;
+  color: var(--novo-muted);
   font-size: 9px;
   font-weight: 700;
-  letter-spacing: .12em;
-  color: var(--novo-muted);
-  padding: 0 8px;
-  margin-bottom: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
 }
 
 .novo-nav {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
   flex: 1;
+  flex-direction: column;
+  gap: 3px;
 }
 
 .novo-nav-item {
+  width: 100%;
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 9px 10px;
-  border-radius: 8px;
-  border: none;
+  position: relative;
+  padding: 10px 12px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--novo-muted);
+  font-size: 13px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
+}
+
+.novo-nav-item:hover {
+  background: var(--novo-card-hover);
+  color: var(--novo-heading);
+  border-color: var(--novo-border);
+}
+
+.novo-nav-item.active {
+  background: var(--novo-gradient-soft);
+  color: var(--novo-nav-active-text);
+  border-color: rgba(124, 58, 237, 0.30);
+  font-weight: 600;
+}
+
+.novo-nav-item.active .novo-nav-icon,
+.novo-nav-item.active .novo-nav-arrow {
+  color: var(--novo-nav-active-icon);
+}
+
+.novo-nav-icon,
+.novo-nav-label,
+.novo-nav-arrow {
+  color: inherit;
+}
+
+.novo-nav-arrow {
+  margin-left: auto;
+  opacity: 0.65;
+}
+
+.novo-logout {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  margin-top: 8px;
+  border: 1px solid var(--novo-border);
+  border-radius: 10px;
   background: transparent;
   color: var(--novo-muted);
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition: all .18s ease;
-  width: 100%;
-  text-align: left;
-  position: relative;
-}
-
-.novo-nav-item:hover {
-  background: rgba(255,255,255,.05);
-  color: var(--novo-text);
-}
-
-.novo-nav-item.active {
-  background: linear-gradient(135deg, rgba(37,99,235,.18), rgba(124,58,237,.18));
-  color: #fff;
-  border: 1px solid rgba(124,58,237,.25);
-}
-
-.novo-nav-item.active .novo-nav-icon {
-  color: #818cf8;
-}
-
-.novo-nav-arrow {
-  margin-left: auto;
-  opacity: .5;
-}
-
-.novo-logout {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 9px 10px;
-  border-radius: 8px;
-  border: 1px solid var(--novo-border);
-  background: transparent;
-  color: var(--novo-muted);
-  font-size: 13px;
-  cursor: pointer;
-  transition: all .18s;
-  width: 100%;
-  margin-top: 8px;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
 }
 
 .novo-logout:hover {
-  background: rgba(239,68,68,.08);
-  color: #ef4444;
-  border-color: rgba(239,68,68,.2);
+  background: var(--novo-danger-soft);
+  color: var(--novo-danger);
+  border-color: var(--novo-danger-border);
 }
 
-/* ================================
+/* =========================================================
    TOPBAR
-   ================================ */
+========================================================= */
 
 .novo-topbar {
+  height: 58px;
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 32px;
-  height: 56px;
+  padding: 0 36px;
+  background: var(--novo-topbar-bg);
   border-bottom: 1px solid var(--novo-border);
-  background: rgba(6,9,15,.8);
-  backdrop-filter: blur(12px);
-  flex-shrink: 0;
+  box-shadow: var(--novo-shadow-sm);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
 }
 
 .novo-search {
+  width: 280px;
   display: flex;
   align-items: center;
-  gap: 8px;
-  background: rgba(255,255,255,.04);
+  gap: 9px;
+  padding: 8px 14px;
   border: 1px solid var(--novo-border);
-  border-radius: 8px;
-  padding: 7px 14px;
+  border-radius: 10px;
+  background: var(--novo-field-bg);
   color: var(--novo-muted);
-  width: 260px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+}
+
+.novo-search:focus-within {
+  border-color: var(--novo-blue);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.novo-search svg {
+  flex-shrink: 0;
+  color: var(--novo-muted);
 }
 
 .novo-search input {
-  background: transparent;
+  width: 100%;
+  min-width: 0;
+  padding: 0;
   border: none;
   outline: none;
-  color: var(--novo-text);
+  background: transparent;
+  color: var(--novo-heading);
   font-size: 13px;
-  width: 100%;
 }
 
-.novo-search input::placeholder { color: var(--novo-muted); }
+.novo-search input::placeholder {
+  color: var(--novo-placeholder);
+  opacity: 1;
+}
 
 .novo-topbar-right {
   display: flex;
@@ -199,408 +396,1114 @@
   gap: 10px;
 }
 
-.novo-bell {
-  width: 34px;
-  height: 34px;
-  border-radius: 8px;
+.novo-bell,
+.novo-theme-toggle {
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
   border: 1px solid var(--novo-border);
-  background: transparent;
+  border-radius: 10px;
+  background: var(--novo-card);
   color: var(--novo-muted);
-  display: grid;
-  place-items: center;
   cursor: pointer;
-  transition: all .18s;
+  transition: transform 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
 }
 
-.novo-bell:hover {
-  background: rgba(255,255,255,.05);
-  color: var(--novo-text);
+.novo-bell:hover,
+.novo-theme-toggle:hover {
+  transform: translateY(-1px);
+  background: var(--novo-ghost-hover);
+  color: var(--novo-info);
+  border-color: var(--novo-info-border);
+}
+
+.novo-bell:focus-visible,
+.novo-theme-toggle:focus-visible,
+.novo-nav-item:focus-visible,
+.novo-logout:focus-visible,
+.novo-btn:focus-visible,
+.pc-primary:focus-visible,
+.pc-secondary:focus-visible,
+.pc-tabs button:focus-visible {
+  outline: 3px solid rgba(37, 99, 235, 0.20);
+  outline-offset: 2px;
 }
 
 .novo-avatar {
-  width: 34px;
-  height: 34px;
-  border-radius: 8px;
-  background: var(--novo-gradient);
+  width: 36px;
+  height: 36px;
   display: grid;
   place-items: center;
+  border-radius: 10px;
+  background: var(--novo-gradient);
+  color: var(--novo-on-accent);
   font-size: 13px;
   font-weight: 700;
-  color: #fff;
+  box-shadow: 0 0 16px rgba(124, 58, 237, 0.30);
 }
 
-/* ================================
-   PAGE BASE
-   ================================ */
+/* =========================================================
+   PAGE
+========================================================= */
 
-.novo-page {
+.novo-page,
+.platform-console {
+  width: 100%;
   max-width: 1200px;
+  color: var(--novo-text);
+  animation: novoFadeIn 0.25s ease;
 }
 
-.novo-page-header {
+@keyframes novoFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.novo-page-header,
+.pc-header {
   margin-bottom: 28px;
 }
 
-.novo-page-header .kicker {
+.novo-page-header .kicker,
+.pc-kicker {
+  display: block;
+  margin-bottom: 6px;
+  background: var(--novo-gradient);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
   font-size: 10px;
   font-weight: 700;
-  letter-spacing: .12em;
-  color: #818cf8;
-  margin-bottom: 6px;
-  display: block;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
 }
 
-.novo-page-header h1 {
-  font-size: 26px;
-  font-weight: 700;
-  color: #fff;
-  margin-bottom: 4px;
+.novo-page-header h1,
+.pc-header h1 {
+  margin: 0 0 6px;
+  color: var(--novo-heading);
+  font-size: 28px;
+  font-weight: 800;
+  line-height: 1.2;
 }
 
-.novo-page-header p {
+.novo-page-header p,
+.pc-header p {
+  margin: 0;
   color: var(--novo-muted);
   font-size: 14px;
 }
 
-.novo-page-actions {
+.pc-header {
   display: flex;
-  gap: 10px;
-  margin-top: 16px;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
 }
 
-/* ================================
+.pc-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* =========================================================
    STAT CARDS
-   ================================ */
+========================================================= */
 
 .novo-stats {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 16px;
   margin-bottom: 24px;
 }
 
 .novo-stat {
-  background: var(--novo-card);
-  border: 1px solid var(--novo-card-border);
-  border-radius: 12px;
-  padding: 20px;
   position: relative;
   overflow: hidden;
-  transition: border-color .2s;
+  padding: 22px;
+  border: 1px solid var(--novo-card-border);
+  border-radius: 14px;
+  background: var(--novo-card);
+  color: var(--novo-text);
+  box-shadow: var(--novo-shadow-sm);
+  cursor: default;
+  transition: transform 0.25s ease, border-color 0.25s ease, background-color 0.25s ease, box-shadow 0.25s ease;
 }
-
-.novo-stat:hover { border-color: rgba(124,58,237,.3); }
 
 .novo-stat::before {
   content: '';
   position: absolute;
-  top: -30px; right: -30px;
-  width: 90px; height: 90px;
+  top: -40px;
+  right: -40px;
+  width: 110px;
+  height: 110px;
   border-radius: 50%;
-  background: rgba(37,99,235,.06);
+  background: rgba(37, 99, 235, 0.06);
+  transition: background-color 0.3s ease;
+}
+
+.novo-stat:hover {
+  transform: translateY(-2px);
+  border-color: rgba(124, 58, 237, 0.30);
+  background: var(--novo-card-hover);
+  box-shadow: var(--novo-shadow-md);
+}
+
+.novo-stat:hover::before {
+  background: rgba(124, 58, 237, 0.09);
 }
 
 .novo-stat-icon {
-  width: 36px; height: 36px;
-  border-radius: 9px;
+  width: 38px;
+  height: 38px;
   display: grid;
   place-items: center;
-  margin-bottom: 14px;
-  font-size: 16px;
+  margin-bottom: 16px;
+  border-radius: 10px;
 }
 
-.novo-stat-icon.blue { background: rgba(37,99,235,.12); color: #60a5fa; }
-.novo-stat-icon.purple { background: rgba(124,58,237,.12); color: #a78bfa; }
-.novo-stat-icon.green { background: rgba(16,185,129,.12); color: #34d399; }
-.novo-stat-icon.orange { background: rgba(245,158,11,.12); color: #fbbf24; }
-.novo-stat-icon.red { background: rgba(239,68,68,.12); color: #f87171; }
+.novo-stat-icon.blue {
+  background: var(--novo-info-soft);
+  color: var(--novo-info);
+}
+
+.novo-stat-icon.purple {
+  background: rgba(124, 58, 237, 0.12);
+  color: var(--novo-purple);
+}
+
+.novo-stat-icon.green {
+  background: var(--novo-success-soft);
+  color: var(--novo-success);
+}
+
+.novo-stat-icon.orange {
+  background: var(--novo-warning-soft);
+  color: var(--novo-warning);
+}
+
+.novo-stat-icon.red {
+  background: var(--novo-danger-soft);
+  color: var(--novo-danger);
+}
 
 .novo-stat-label {
-  font-size: 11px;
-  color: var(--novo-muted);
-  font-weight: 500;
-  margin-bottom: 6px;
   display: block;
+  margin-bottom: 6px;
+  color: var(--novo-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 .novo-stat-value {
-  font-size: 26px;
-  font-weight: 700;
-  color: #fff;
   display: block;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
+  color: var(--novo-heading);
+  font-size: 30px;
+  font-weight: 800;
+  line-height: 1;
 }
 
 .novo-stat-sub {
-  font-size: 11px;
+  display: flex;
+  align-items: center;
+  gap: 3px;
   color: var(--novo-muted);
+  font-size: 11px;
 }
 
-.novo-stat-sub.up { color: var(--novo-success); }
-.novo-stat-sub.down { color: var(--novo-danger); }
+.novo-stat-sub.up {
+  color: var(--novo-success);
+}
 
-/* ================================
-   CARDS
-   ================================ */
+.novo-stat-sub.down {
+  color: var(--novo-danger);
+}
+
+/* =========================================================
+   CARDS AND PANELS
+========================================================= */
+
+.novo-card,
+.pc-card,
+.pc-panel,
+.pc-kpi,
+.pc-stat,
+.pc-table-wrap,
+.pc-form,
+.pc-inline-form,
+.pc-summary,
+.pc-widget,
+.pc-client-card,
+.pc-product-card,
+.pc-offer-card,
+.pc-link-card {
+  border: 1px solid var(--novo-card-border);
+  border-radius: 14px;
+  background: var(--novo-card);
+  color: var(--novo-text);
+  box-shadow: var(--novo-shadow-sm);
+}
+
+.novo-card,
+.pc-card {
+  padding: 24px;
+}
 
 .novo-card {
-  background: var(--novo-card);
-  border: 1px solid var(--novo-card-border);
-  border-radius: 12px;
-  padding: 22px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
 }
 
-.novo-card-header {
+.novo-card:hover {
+  border-color: var(--novo-border-strong);
+  box-shadow: var(--novo-shadow-md);
+}
+
+.novo-card-header,
+.pc-card-title {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 18px;
+  gap: 16px;
+  margin-bottom: 20px;
 }
 
-.novo-card-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: #fff;
+.novo-card-title,
+.pc-card-title h3 {
+  margin: 0;
+  color: var(--novo-heading);
+  font-size: 15px;
+  font-weight: 700;
 }
 
 .novo-card-sub {
-  font-size: 12px;
+  margin-top: 3px;
   color: var(--novo-muted);
-  margin-top: 2px;
+  font-size: 12px;
+}
+
+.pc-card-title span {
+  display: block;
+  margin-bottom: 2px;
+  background: var(--novo-gradient);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+}
+
+.novo-grid-2,
+.pc-grid,
+.pc-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
 }
 
 .novo-grid-2 {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
   margin-bottom: 16px;
 }
 
 .novo-grid-3 {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
   margin-bottom: 16px;
 }
 
-/* ================================
-   TABLE
-   ================================ */
+.pc-span-2 {
+  grid-column: span 2;
+}
+
+/* =========================================================
+   TABLES
+========================================================= */
 
 .novo-table {
   width: 100%;
   border-collapse: collapse;
+  color: var(--novo-text);
+  background: transparent;
 }
 
 .novo-table th {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--novo-muted);
-  text-align: left;
-  padding: 8px 12px;
+  padding: 10px 14px;
   border-bottom: 1px solid var(--novo-border);
-  letter-spacing: .06em;
+  background: var(--novo-surface-soft);
+  color: var(--novo-muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.10em;
+  text-align: left;
+  text-transform: uppercase;
 }
 
 .novo-table td {
-  padding: 12px 12px;
-  font-size: 13px;
+  padding: 14px;
+  border-bottom: 1px solid var(--novo-divider);
   color: var(--novo-text);
-  border-bottom: 1px solid rgba(255,255,255,.03);
+  font-size: 13px;
+  vertical-align: middle;
 }
 
-.novo-table tr:last-child td { border-bottom: none; }
+.novo-table td strong {
+  color: var(--novo-heading);
+}
 
-.novo-table tr:hover td { background: rgba(255,255,255,.02); }
+.novo-table tr:last-child td {
+  border-bottom: none;
+}
 
-/* ================================
-   BADGE
-   ================================ */
+.novo-table tbody tr {
+  transition: background-color 0.15s ease;
+}
 
-.novo-badge {
+.novo-table tbody tr:hover td {
+  background: var(--novo-row-hover);
+}
+
+.pc-table {
+  width: 100%;
+}
+
+.pc-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 4px;
+  border-bottom: 1px solid var(--novo-divider);
+  color: var(--novo-text);
+  font-size: 13px;
+}
+
+.pc-head {
+  color: var(--novo-muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+}
+
+/* =========================================================
+   BADGES AND STATUS
+========================================================= */
+
+.novo-badge,
+.pc-status,
+.pc-badge,
+.pc-tag {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 3px 8px;
-  border-radius: 20px;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 999px;
   font-size: 11px;
   font-weight: 600;
+  letter-spacing: 0.03em;
 }
 
-.novo-badge.active { background: rgba(16,185,129,.12); color: #34d399; }
-.novo-badge.pending { background: rgba(245,158,11,.12); color: #fbbf24; }
-.novo-badge.inactive { background: rgba(239,68,68,.12); color: #f87171; }
+.novo-badge.active,
+.pc-success,
+.pc-status-success,
+.pc-badge-success {
+  border: 1px solid var(--novo-success-border);
+  background: var(--novo-success-soft);
+  color: var(--novo-success);
+}
 
-/* ================================
+.novo-badge.pending,
+.pc-status,
+.pc-warning,
+.pc-status-warning,
+.pc-badge-warning {
+  border: 1px solid var(--novo-warning-border);
+  background: var(--novo-warning-soft);
+  color: var(--novo-warning);
+}
+
+.novo-badge.inactive,
+.pc-error,
+.pc-status-danger,
+.pc-badge-danger {
+  border: 1px solid var(--novo-danger-border);
+  background: var(--novo-danger-soft);
+  color: var(--novo-danger);
+}
+
+.pc-info,
+.pc-status-info,
+.pc-badge-info {
+  border: 1px solid var(--novo-info-border);
+  background: var(--novo-info-soft);
+  color: var(--novo-info);
+}
+
+/* =========================================================
    BUTTONS
-   ================================ */
+========================================================= */
 
-.novo-btn {
+.novo-btn,
+.pc-primary,
+.pc-secondary,
+.pc-btn-primary,
+.pc-btn-secondary,
+.pc-ghost,
+.pc-action,
+.pc-icon-btn,
+.pc-close {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 16px;
-  border-radius: 8px;
+  justify-content: center;
+  gap: 7px;
+  min-height: 36px;
+  padding: 9px 18px;
+  border-radius: 10px;
   font-size: 13px;
   font-weight: 600;
+  white-space: nowrap;
   cursor: pointer;
+  transition: transform 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.novo-btn {
   border: none;
-  transition: all .18s;
 }
 
-.novo-btn-primary {
+.novo-btn:disabled,
+.pc-primary:disabled,
+.pc-secondary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.novo-btn-primary,
+.pc-primary,
+.pc-btn-primary {
+  border: 1px solid transparent;
   background: var(--novo-gradient);
-  color: #fff;
+  color: var(--novo-on-accent);
+  box-shadow: 0 4px 14px rgba(124, 58, 237, 0.28);
 }
 
-.novo-btn-primary:hover { opacity: .88; }
+.novo-btn-primary:hover:not(:disabled),
+.pc-primary:hover:not(:disabled),
+.pc-btn-primary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 7px 22px rgba(124, 58, 237, 0.38);
+}
 
-.novo-btn-secondary {
-  background: rgba(255,255,255,.05);
-  color: var(--novo-text);
+.novo-btn-secondary,
+.pc-secondary,
+.pc-btn-secondary {
   border: 1px solid var(--novo-border);
+  background: var(--novo-secondary-bg);
+  color: var(--novo-heading);
 }
 
-.novo-btn-secondary:hover {
-  background: rgba(255,255,255,.08);
+.novo-btn-secondary:hover:not(:disabled),
+.pc-secondary:hover:not(:disabled),
+.pc-btn-secondary:hover:not(:disabled) {
+  border-color: var(--novo-border-strong);
+  background: var(--novo-secondary-hover);
 }
 
-.novo-btn-ghost {
+.novo-btn-ghost,
+.pc-ghost,
+.pc-action,
+.pc-icon-btn,
+.pc-close {
+  border: 1px solid var(--novo-border);
   background: transparent;
-  color: var(--novo-muted);
-  border: 1px solid var(--novo-border);
-}
-
-.novo-btn-ghost:hover {
   color: var(--novo-text);
-  background: rgba(255,255,255,.04);
 }
 
-/* ================================
-   FORM
-   ================================ */
+.novo-btn-ghost:hover:not(:disabled),
+.pc-ghost:hover:not(:disabled),
+.pc-action:hover:not(:disabled),
+.pc-icon-btn:hover:not(:disabled),
+.pc-close:hover:not(:disabled) {
+  border-color: var(--novo-info-border);
+  background: var(--novo-ghost-hover);
+  color: var(--novo-info);
+}
 
-.novo-field {
+.pc-danger,
+.pc-btn-danger {
+  border: 1px solid var(--novo-danger);
+  background: var(--novo-danger);
+  color: var(--novo-on-accent);
+}
+
+/* =========================================================
+   FORMS
+========================================================= */
+
+.novo-field,
+.pc-field {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  margin-bottom: 14px;
+  gap: 7px;
 }
 
-.novo-field label {
-  font-size: 12px;
-  font-weight: 500;
+.novo-field label,
+.pc-field span,
+.pc-offer-builder label {
   color: var(--novo-muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
 }
 
 .novo-field input,
 .novo-field select,
-.novo-field textarea {
-  background: rgba(255,255,255,.04);
-  border: 1px solid var(--novo-border);
-  border-radius: 8px;
-  padding: 9px 12px;
-  color: var(--novo-text);
-  font-size: 13px;
-  outline: none;
-  transition: border-color .18s;
+.novo-field textarea,
+.pc-field input,
+.pc-field select,
+.pc-field textarea {
   width: 100%;
+  min-height: 40px;
+  padding: 10px 14px;
+  border: 1px solid var(--novo-border);
+  border-radius: 10px;
+  outline: none;
+  background: var(--novo-field-bg);
+  color: var(--novo-heading);
+  font-size: 13px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+}
+
+.novo-field textarea,
+.pc-field textarea {
+  resize: vertical;
+}
+
+.novo-field input::placeholder,
+.novo-field textarea::placeholder,
+.pc-field input::placeholder,
+.pc-field textarea::placeholder {
+  color: var(--novo-placeholder);
+  opacity: 1;
+}
+
+.novo-field input:hover,
+.novo-field select:hover,
+.novo-field textarea:hover,
+.pc-field input:hover,
+.pc-field select:hover,
+.pc-field textarea:hover {
+  border-color: var(--novo-border-strong);
 }
 
 .novo-field input:focus,
 .novo-field select:focus,
-.novo-field textarea:focus {
-  border-color: rgba(124,58,237,.4);
+.novo-field textarea:focus,
+.pc-field input:focus,
+.pc-field select:focus,
+.pc-field textarea:focus {
+  border-color: var(--novo-blue);
+  background: var(--novo-field-bg);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
 }
 
-/* ================================
-   NOTICE
-   ================================ */
+.novo-field input:disabled,
+.novo-field select:disabled,
+.novo-field textarea:disabled,
+.pc-field input:disabled,
+.pc-field select:disabled,
+.pc-field textarea:disabled {
+  border-color: var(--novo-divider);
+  background: var(--novo-surface-soft);
+  color: var(--novo-muted);
+  opacity: 1;
+  cursor: not-allowed;
+}
 
-.novo-notice {
+.novo-field select option,
+.pc-field select option,
+.wow-select-wrap select option {
+  background: var(--novo-card);
+  color: var(--novo-heading);
+}
+
+.wow-select-wrap select {
+  width: 100%;
+  appearance: none;
+  -webkit-appearance: none;
+  background: var(--novo-field-bg);
+  color: var(--novo-heading);
+  cursor: pointer;
+}
+
+/* =========================================================
+   NOTICES, ALERTS AND EMPTY STATES
+========================================================= */
+
+.novo-notice,
+.pc-notice,
+.pc-notification,
+.pc-toast,
+.pc-alert {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 12px 16px;
-  border-radius: 8px;
+  padding: 13px 18px;
+  border-radius: 12px;
   font-size: 13px;
-  margin-bottom: 18px;
+  font-weight: 500;
 }
 
-.novo-notice.success {
-  background: rgba(16,185,129,.08);
-  border: 1px solid rgba(16,185,129,.2);
-  color: #34d399;
+.pc-notice {
+  margin-bottom: 16px;
 }
 
-.novo-notice.error {
-  background: rgba(239,68,68,.08);
-  border: 1px solid rgba(239,68,68,.2);
-  color: #f87171;
+.novo-notice.success,
+.pc-notice.success {
+  border: 1px solid var(--novo-success-border);
+  background: var(--novo-success-soft);
+  color: var(--novo-success);
 }
 
-/* ================================
-   EMPTY STATE
-   ================================ */
+.novo-notice.error,
+.pc-notice.error {
+  border: 1px solid var(--novo-danger-border);
+  background: var(--novo-danger-soft);
+  color: var(--novo-danger);
+}
 
-.novo-empty {
-  text-align: center;
+.novo-empty,
+.pc-empty {
   padding: 48px 24px;
   color: var(--novo-muted);
   font-size: 13px;
+  text-align: center;
 }
 
-/* ================================
-   PLATFORM CONSOLE (legacy compat)
-   ================================ */
+.novo-empty p,
+.pc-empty p {
+  color: inherit;
+}
 
-.platform-console { max-width: 1200px; }
-.pc-header { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:28px; }
-.pc-kicker { font-size:10px; font-weight:700; letter-spacing:.12em; color:#818cf8; display:block; margin-bottom:4px; }
-.pc-header h1 { font-size:26px; font-weight:700; color:#fff; margin-bottom:4px; }
-.pc-header p { color:var(--novo-muted); font-size:14px; }
-.pc-actions { display:flex; gap:10px; }
-.pc-primary { display:inline-flex; align-items:center; gap:6px; padding:8px 16px; border-radius:8px; background:var(--novo-gradient); color:#fff; font-size:13px; font-weight:600; cursor:pointer; border:none; transition:opacity .18s; }
-.pc-primary:hover { opacity:.88; }
-.pc-secondary { display:inline-flex; align-items:center; gap:6px; padding:8px 16px; border-radius:8px; background:rgba(255,255,255,.05); color:var(--novo-text); border:1px solid var(--novo-border); font-size:13px; font-weight:600; cursor:pointer; }
-.pc-tabs { display:flex; gap:4px; margin-bottom:24px; background:rgba(255,255,255,.03); padding:4px; border-radius:10px; width:fit-content; }
-.pc-tabs button { padding:7px 16px; border-radius:7px; border:none; background:transparent; color:var(--novo-muted); font-size:13px; font-weight:500; cursor:pointer; display:flex; align-items:center; gap:6px; transition:all .18s; }
-.pc-tabs button.active { background:rgba(124,58,237,.2); color:#fff; }
-.pc-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
-.pc-span-2 { grid-column:span 2; }
-.pc-card { background:var(--novo-card); border:1px solid var(--novo-card-border); border-radius:12px; padding:22px; }
-.pc-card-title { display:flex; align-items:center; justify-content:space-between; margin-bottom:18px; }
-.pc-card-title span { font-size:10px; color:#818cf8; font-weight:700; letter-spacing:.1em; display:block; margin-bottom:2px; }
-.pc-card-title h3 { font-size:15px; font-weight:600; color:#fff; }
-.pc-form-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
-.pc-field { display:flex; flex-direction:column; gap:5px; }
-.pc-field span { font-size:11px; color:var(--novo-muted); font-weight:500; }
-.pc-field input { background:rgba(255,255,255,.04); border:1px solid var(--novo-border); border-radius:7px; padding:8px 11px; color:var(--novo-text); font-size:13px; outline:none; }
-.pc-field input:focus { border-color:rgba(124,58,237,.4); }
-.pc-help { font-size:11px; color:var(--novo-muted); margin-top:10px; }
-.pc-provider { display:flex; align-items:center; gap:8px; margin-bottom:14px; color:var(--novo-text); font-size:14px; }
-.pc-status { margin-left:auto; font-size:10px; font-weight:700; padding:3px 8px; border-radius:20px; background:rgba(245,158,11,.1); color:#fbbf24; }
-.pc-table { width:100%; }
-.pc-row { display:grid; grid-template-columns:2fr 1fr 1fr 1fr; gap:12px; padding:10px 4px; border-bottom:1px solid rgba(255,255,255,.04); font-size:13px; align-items:center; }
-.pc-head { font-size:11px; color:var(--novo-muted); font-weight:600; letter-spacing:.06em; }
-.pc-empty { text-align:center; padding:40px; color:var(--novo-muted); font-size:13px; }
-.pc-notice { display:flex; align-items:center; gap:8px; padding:11px 14px; border-radius:8px; font-size:13px; margin-bottom:16px; }
-.pc-notice.success { background:rgba(16,185,129,.08); border:1px solid rgba(16,185,129,.2); color:#34d399; }
-.pc-notice.error { background:rgba(239,68,68,.08); border:1px solid rgba(239,68,68,.2); color:#f87171; }
-.pc-security-item { display:flex; align-items:center; gap:10px; padding:10px 0; border-bottom:1px solid rgba(255,255,255,.04); font-size:13px; color:var(--novo-text); }
-.pc-product-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:18px; }
-.pc-product { background:rgba(255,255,255,.03); border:1px solid var(--novo-border); border-radius:8px; padding:14px; text-align:left; cursor:pointer; transition:all .18s; color:var(--novo-text); }
-.pc-product:hover { border-color:rgba(124,58,237,.3); }
-.pc-product.active { border-color:#7C3AED; background:rgba(124,58,237,.08); }
-.pc-product strong { display:block; font-size:13px; margin-bottom:4px; }
-.pc-product span { font-size:11px; color:var(--novo-muted); }
-.pc-offer-builder { display:grid; grid-template-columns:1fr 1fr 1fr auto; gap:12px; align-items:end; padding:16px; background:rgba(255,255,255,.02); border-radius:8px; border:1px solid var(--novo-border); margin-bottom:14px; }
-.pc-offer-builder label { font-size:11px; color:var(--novo-muted); display:block; margin-bottom:4px; }
-.pc-offer-builder strong { font-size:14px; color:#fff; display:block; }
-.pc-profit { color:#34d399 !important; font-size:18px !important; }
-.pc-link-box { display:flex; align-items:center; gap:8px; background:rgba(16,185,129,.06); border:1px solid rgba(16,185,129,.15); border-radius:8px; padding:12px 14px; }
-.pc-link-box span { flex:1; font-size:12px; color:#34d399; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.pc-link-box button,.pc-link-box a { display:flex; align-items:center; gap:4px; font-size:12px; color:var(--novo-muted); background:transparent; border:none; cursor:pointer; padding:4px 8px; border-radius:5px; transition:all .15s; }
-.pc-link-box button:hover,.pc-link-box a:hover { color:#fff; background:rgba(255,255,255,.06); }
-.pc-mini-row { display:flex; align-items:center; justify-content:space-between; padding:8px 4px; border-bottom:1px solid rgba(255,255,255,.04); font-size:13px; }
-.pc-mini-row small { color:var(--novo-muted); font-size:11px; }
+/* =========================================================
+   STATUS ROWS
+========================================================= */
+
+.status-row,
+.pc-security-item,
+.pc-mini-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--novo-divider);
+  color: var(--novo-text);
+  font-size: 13px;
+}
+
+.status-row:last-child,
+.pc-security-item:last-child,
+.pc-mini-row:last-child {
+  border-bottom: none;
+}
+
+.status-row .novo-badge {
+  margin-left: auto;
+}
+
+.pc-mini-row {
+  justify-content: space-between;
+}
+
+.pc-mini-row small {
+  color: var(--novo-muted);
+  font-size: 11px;
+}
+
+/* =========================================================
+   TABS
+========================================================= */
+
+.pc-tabs {
+  width: fit-content;
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--novo-border);
+  border-radius: 12px;
+  background: var(--novo-surface-soft);
+}
+
+.pc-tabs button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 18px;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--novo-muted);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.pc-tabs button:hover {
+  background: var(--novo-card-hover);
+  color: var(--novo-heading);
+}
+
+.pc-tabs button.active {
+  background: var(--novo-gradient);
+  color: var(--novo-on-accent);
+  font-weight: 600;
+  box-shadow: 0 2px 10px rgba(124, 58, 237, 0.28);
+}
+
+/* =========================================================
+   PLATFORM CONSOLE COMPATIBILITY
+========================================================= */
+
+.pc-help {
+  margin-top: 10px;
+  color: var(--novo-muted);
+  font-size: 11px;
+}
+
+.pc-provider {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+  color: var(--novo-text);
+  font-size: 14px;
+}
+
+.pc-provider .pc-status {
+  margin-left: auto;
+}
+
+.pc-product-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.pc-product {
+  padding: 16px;
+  border: 1px solid var(--novo-border);
+  border-radius: 12px;
+  background: var(--novo-surface-soft);
+  color: var(--novo-text);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.pc-product:hover {
+  transform: translateY(-1px);
+  border-color: rgba(124, 58, 237, 0.34);
+  background: var(--novo-card-hover);
+}
+
+.pc-product.active {
+  border-color: var(--novo-purple);
+  background: var(--novo-gradient-soft);
+  box-shadow: 0 0 20px rgba(124, 58, 237, 0.14);
+}
+
+.pc-product strong {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--novo-heading);
+  font-size: 13px;
+}
+
+.pc-product span {
+  color: var(--novo-muted);
+  font-size: 11px;
+}
+
+.pc-offer-builder {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr auto;
+  align-items: end;
+  gap: 14px;
+  padding: 18px;
+  margin-bottom: 14px;
+  border: 1px solid var(--novo-border);
+  border-radius: 12px;
+  background: var(--novo-surface-soft);
+}
+
+.pc-offer-builder label {
+  display: block;
+  margin-bottom: 5px;
+}
+
+.pc-offer-builder strong {
+  display: block;
+  color: var(--novo-heading);
+  font-size: 14px;
+}
+
+.pc-profit {
+  color: var(--novo-success) !important;
+  font-size: 20px !important;
+  font-weight: 800 !important;
+}
+
+.pc-link-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 18px;
+  border: 1px solid var(--novo-success-border);
+  border-radius: 12px;
+  background: var(--novo-success-soft);
+}
+
+.pc-link-box span {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  color: var(--novo-success);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pc-link-box button,
+.pc-link-box a {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--novo-text);
+  font-size: 12px;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.pc-link-box button:hover,
+.pc-link-box a:hover {
+  background: var(--novo-card-hover);
+  color: var(--novo-link-action-hover-text);
+}
+
+/* =========================================================
+   MODALS, MENUS AND OVERLAYS
+========================================================= */
+
+.pc-dropdown,
+.pc-menu,
+.pc-modal,
+.pc-dialog {
+  border: 1px solid var(--novo-border);
+  background: var(--novo-card);
+  color: var(--novo-text);
+  box-shadow: var(--novo-shadow-lg);
+}
+
+.pc-modal-overlay,
+.pc-overlay {
+  background: rgba(15, 23, 42, 0.42);
+}
+
+/* =========================================================
+   PROGRESS, DIVIDERS AND LINKS
+========================================================= */
+
+.novo-shell hr,
+.pc-divider {
+  border: 0;
+  border-top: 1px solid var(--novo-divider);
+}
+
+.pc-progress,
+.pc-progress-track {
+  background: var(--novo-divider);
+}
+
+.pc-chart-grid,
+.pc-chart-line,
+.pc-grid-line {
+  border-color: var(--novo-divider);
+}
+
+.novo-content a:not(.novo-btn):not(.pc-primary):not(.pc-secondary) {
+  color: var(--novo-info);
+}
+
+.novo-content a:not(.novo-btn):not(.pc-primary):not(.pc-secondary):hover {
+  color: var(--novo-purple);
+}
+
+/* =========================================================
+   DASHBOARD LEGACY COMPATIBILITY
+========================================================= */
+
+.dashboard-clean,
+.dashboard-clean .dashboard-main {
+  background: var(--novo-bg);
+  color: var(--novo-text);
+}
+
+.dashboard-sidebar {
+  background: var(--novo-sidebar-bg);
+  border-right: 1px solid var(--novo-border);
+}
+
+/* =========================================================
+   RESPONSIVE
+========================================================= */
+
+@media (max-width: 1100px) {
+  .novo-content {
+    padding: 28px 24px;
+  }
+
+  .novo-topbar {
+    padding: 0 24px;
+  }
+
+  .novo-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .pc-product-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .pc-offer-builder {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 820px) {
+  .novo-sidebar {
+    width: 78px;
+    padding-inline: 10px;
+  }
+
+  .novo-sidebar-brand {
+    padding-inline: 4px;
+  }
+
+  .novo-role-badge,
+  .novo-nav-label,
+  .novo-nav-arrow,
+  .novo-logout span {
+    display: none;
+  }
+
+  .novo-nav-item,
+  .novo-logout {
+    justify-content: center;
+    padding-inline: 10px;
+  }
+
+  .novo-search {
+    width: min(280px, 48vw);
+  }
+
+  .novo-grid-3 {
+    grid-template-columns: 1fr;
+  }
+
+  .pc-header {
+    flex-direction: column;
+  }
+
+  .pc-actions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 640px) {
+  .novo-content {
+    padding: 22px 16px;
+  }
+
+  .novo-topbar {
+    padding: 0 16px;
+  }
+
+  .novo-search {
+    width: auto;
+    min-width: 0;
+    flex: 1;
+  }
+
+  .novo-stats,
+  .novo-grid-2,
+  .novo-grid-3,
+  .pc-grid,
+  .pc-form-grid,
+  .pc-product-grid,
+  .pc-offer-builder {
+    grid-template-columns: 1fr;
+  }
+
+  .pc-span-2 {
+    grid-column: span 1;
+  }
+
+  .novo-page-header h1,
+  .pc-header h1 {
+    font-size: 24px;
+  }
+
+  .novo-card,
+  .pc-card {
+    padding: 18px;
+  }
+
+  .novo-table {
+    min-width: 680px;
+  }
+
+  .novo-card:has(.novo-table) {
+    overflow-x: auto;
+  }
+
+  .pc-tabs {
+    width: 100%;
+    overflow-x: auto;
+  }
+
+  .pc-tabs button {
+    flex: 0 0 auto;
+  }
+
+  .pc-link-box {
+    align-items: stretch;
+    flex-wrap: wrap;
+  }
+
+  .pc-link-box span {
+    flex-basis: 100%;
+  }
+}
