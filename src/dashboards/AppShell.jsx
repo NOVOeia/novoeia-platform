@@ -1,110 +1,89 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import {
-  LayoutDashboard, Settings, Users, Building2, Package, Link2,
-  CreditCard, Palette, LifeBuoy, LogOut, Bell, Search
+  LayoutDashboard, Settings, Users, Building2, Package,
+  CreditCard, LogOut, Bell, Search, ChevronRight
 } from 'lucide-react';
 import { Logo } from '../components/ui.jsx';
 import { SuperAdminConsole, PartnerConsole } from '../components/PlatformConsole.jsx';
-import { platformApi } from '../lib/platformApi.js';
 import '../styles/dashboard-clean.css';
 
-const menus = {
-  admin: [
-    ['dashboard', 'Control Center', LayoutDashboard],
-    ['partners', 'Partners', Users],
-    ['clients', 'Clientes', Building2],
-    ['catalog', 'Productos', Package],
-    ['payments', 'Pagos', CreditCard],
-    ['settings', 'Configuración', Settings],
-  ],
-  partner: [
-    ['dashboard', 'Mi negocio', LayoutDashboard],
-    ['clients', 'Mis clientes', Users],
-    ['offers', 'Productos y ofertas', Package],
-    ['links', 'Links de venta', Link2],
-    ['brand', 'Marca y redes', Palette],
-    ['support', 'Soporte', LifeBuoy],
-  ],
-  client: [
-    ['dashboard', 'Resumen', LayoutDashboard],
-    ['company', 'Mi empresa', Building2],
-    ['plan', 'Mi plan', CreditCard],
-    ['support', 'Soporte', LifeBuoy],
-  ],
-};
+const adminMenu = [
+  ['dashboard', 'Dashboard', LayoutDashboard],
+  ['partners', 'Partners', Users],
+  ['clients', 'Clientes', Building2],
+  ['products', 'Productos', Package],
+  ['payments', 'Pagos', CreditCard],
+  ['settings', 'Configuración', Settings],
+];
 
-function dashboardBase(role) {
-  if (role === 'admin') return 'admin-dashboard';
-  if (role === 'partner') return 'partner-dashboard';
-  return 'client-dashboard';
-}
+const partnerMenu = [
+  ['dashboard', 'Mi negocio', LayoutDashboard],
+  ['clients', 'Mis clientes', Users],
+  ['offers', 'Productos y ofertas', Package],
+  ['links', 'Links de venta', CreditCard],
+  ['brand', 'Marca y redes', Settings],
+  ['support', 'Soporte', Bell],
+];
 
-export default function AppShell({ role, section = 'dashboard', go }) {
-  const [active, setActive] = useState(section);
-  const menu = menus[role] || menus.client;
-
-  useEffect(() => {
-    setActive(section || 'dashboard');
-  }, [section]);
-
-  function navigate(id) {
-    setActive(id);
-    go(`${dashboardBase(role)}/${id}`);
-  }
+export default function AppShell({ role, go }) {
+  const [active, setActive] = useState('dashboard');
+  const menu = role === 'admin' ? adminMenu : partnerMenu;
+  const roleLabel = role === 'admin' ? 'SUPER ADMIN' : 'PARTNER NOVO';
+  const initial = role === 'admin' ? 'N' : 'P';
 
   return (
-    <div className={`app-shell dashboard-clean app-shell-${role}`}>
-      <aside className="dashboard-sidebar">
-        <div className="aside-brand"><Logo small /></div>
-        <div className="role-label">{role === 'admin' ? 'SUPER ADMIN NOVO' : role === 'partner' ? 'PARTNER NOVO' : 'CLIENTE NOVO'}</div>
-        <nav>
+    <div className="novo-shell">
+      <aside className="novo-sidebar">
+        <div className="novo-sidebar-brand">
+          <Logo small />
+        </div>
+        <div className="novo-role-badge">{roleLabel}</div>
+        <nav className="novo-nav">
           {menu.map(([id, label, Icon]) => (
-            <button key={id} type="button" className={active === id ? 'active' : ''} onClick={() => navigate(id)}>
-              <Icon size={18} /><span>{label}</span>
+            <button
+              key={id}
+              type="button"
+              className={`novo-nav-item ${active === id ? 'active' : ''}`}
+              onClick={() => setActive(id)}
+            >
+              <span className="novo-nav-icon"><Icon size={17} /></span>
+              <span className="novo-nav-label">{label}</span>
+              {active === id && <ChevronRight size={14} className="novo-nav-arrow" />}
             </button>
           ))}
         </nav>
-        <button
-          type="button"
-          className="logout"
-          onClick={async () => {
-            try { await platformApi.signOut(); } catch {}
-            go('login');
-          }}
-        >
-          <LogOut size={18} /><span>Salir</span>
+        <button type="button" className="novo-logout" onClick={() => go('home')}>
+          <LogOut size={16} /><span>Salir</span>
         </button>
       </aside>
 
-      <main className="dashboard-main">
-        <div className="topbar">
-          <div className="search"><Search size={17} /><input placeholder="Buscar en NOVO..." /></div>
-          <div className="top-actions"><button type="button"><Bell size={18} /></button><div className="avatar">{role === 'admin' ? 'N' : role === 'partner' ? 'P' : 'C'}</div></div>
-        </div>
+      <div className="novo-main">
+        <header className="novo-topbar">
+          <div className="novo-search">
+            <Search size={15} />
+            <input placeholder="Buscar en NOVO..." />
+          </div>
+          <div className="novo-topbar-right">
+            <button type="button" className="novo-bell"><Bell size={17} /></button>
+            <div className="novo-avatar">{initial}</div>
+          </div>
+        </header>
 
-        {role === 'admin' && <SuperAdminConsole section={active} />}
-        {role === 'partner' && <PartnerConsole section={active} />}
-        {role === 'client' && <ClientPlaceholder section={active} />}
-      </main>
+        <div className="novo-content">
+          {role === 'admin' && <SuperAdminConsole section={active} />}
+          {role === 'partner' && <PartnerConsole section={active} />}
+          {role === 'client' && <ClientPlaceholder />}
+        </div>
+      </div>
     </div>
   );
 }
 
-function ClientPlaceholder({ section }) {
-  const titles = {
-    dashboard: 'Resumen',
-    company: 'Mi empresa',
-    plan: 'Mi plan',
-    support: 'Soporte',
-  };
+function ClientPlaceholder() {
   return (
-    <div className="dash-page">
-      <div className="dash-heading">
-        <div>
-          <h1>Panel Cliente — {titles[section] || 'Resumen'}</h1>
-          <p>El acceso del cliente se conectará a su subcuenta, plan y servicios asignados.</p>
-        </div>
-      </div>
+    <div className="novo-page">
+      <h1>Panel Cliente</h1>
+      <p>Próximamente disponible.</p>
     </div>
   );
 }

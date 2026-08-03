@@ -1,429 +1,788 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import {
-  Settings, ShieldCheck, PlugZap, CreditCard, KeyRound, Webhook,
-  RefreshCw, Save, ExternalLink, Package, Link2, Copy, Users,
-  Building2, Palette, CheckCircle2, AlertCircle, Plus, LifeBuoy
+  Settings, ShieldCheck, PlugZap, CreditCard, RefreshCw, Save,
+  Users, Building2, Package, CheckCircle2, AlertCircle, Plus,
+  DollarSign, Activity, Link2, Copy, ExternalLink, Palette,
+  Eye, Edit2, X, ArrowUpRight, Zap, Search, BarChart2,
+  LifeBuoy, KeyRound, Webhook
 } from 'lucide-react';
 import { platformApi } from '../lib/platformApi.js';
 import '../styles/platform-console.css';
 
-const providers = [
-  { id: 'ghl', label: 'HighLevel OAuth', icon: PlugZap },
-  { id: 'stripe', label: 'Stripe', icon: CreditCard },
-  { id: 'supabase', label: 'Supabase', icon: ShieldCheck },
-  { id: 'mcp', label: 'MCP / SSO', icon: KeyRound },
-  { id: 'webhooks', label: 'Webhooks', icon: Webhook },
-];
+export function SuperAdminConsole({ section }) {
+  if (section === 'dashboard') return <AdminDashboard />;
+  if (section === 'partners')  return <AdminPartners />;
+  if (section === 'clients')   return <AdminClients />;
+  if (section === 'products')  return <AdminProducts />;
+  if (section === 'payments')  return <AdminPayments />;
+  if (section === 'settings')  return <AdminSettings />;
+  return <AdminDashboard />;
+}
 
-const defaults = {
-  ghlClientId: '', ghlClientSecret: '', ghlRedirectUri: '', ghlScopes: '',
-  stripeSecretKey: '', stripeWebhookSecret: '', stripePriceMode: 'platform',
-  supabaseServiceRoleKey: '',
-  oidcIssuer: '', oidcClientId: '', oidcClientSecret: '', mcpEndpoint: '',
-  webhookBaseUrl: '', metaPixelId: '',
-};
-
-export function SuperAdminConsole({ section = 'dashboard' }) {
-  const tab = {
-    dashboard: 'integrations',
-    partners: 'partners',
-    settings: 'security',
-    clients: 'clients',
-    catalog: 'catalog',
-    payments: 'payments',
-  }[section] || 'integrations';
-
-  const [settings, setSettings] = useState(defaults);
+function AdminDashboard() {
   const [partners, setPartners] = useState([]);
-  const [partnersError, setPartnersError] = useState('');
-  const [catalogProducts, setCatalogProducts] = useState([]);
-  const [catalogError, setCatalogError] = useState('');
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const [pd, cd] = await Promise.all([
+          platformApi.listPartners().catch(() => ({ partners: [] })),
+          platformApi.listCatalogProducts().catch(() => ({ products: [] })),
+        ]);
+        setPartners(pd?.partners || []);
+        setProducts(cd?.products || []);
+      } finally { setLoading(false); }
+    }
+    load();
+  }, []);
+
+  const active = partners.filter(p => p.status === 'active').length;
+
+  return (
+    <div className="novo-page">
+      <div className="novo-page-header">
+        <span className="kicker">NOVO CONTROL CENTER</span>
+        <h1>Dashboard General</h1>
+        <p>Vista ejecutiva del ecosistema NOVOeia Partners.</p>
+      </div>
+
+      <div className="novo-stats">
+        {[
+          { label: 'Partners registrados', value: loading ? '…' : partners.length, icon: Users, color: 'blue', sub: `${active} activos`, up: true },
+          { label: 'Clientes en plataforma', value: '—', icon: Building2, color: 'purple', sub: 'Módulo en construcción' },
+          { label: 'Productos en catálogo', value: loading ? '…' : products.length, icon: Package, color: 'green', sub: 'Publicados para partners', up: true },
+          { label: 'MRR estimado', value: '$—', icon: DollarSign, color: 'orange', sub: 'Conectar Stripe' },
+        ].map(({ label, value, icon: Icon, color, sub, up }) => (
+          <div className="novo-stat" key={label}>
+            <div className={`novo-stat-icon ${color}`}><Icon size={17} /></div>
+            <span className="novo-stat-label">{label}</span>
+            <span className="novo-stat-value">{value}</span>
+            <span className={`novo-stat-sub ${up ? 'up' : ''}`}>{up && <ArrowUpRight size={11} />}{sub}</span>
+          </div>
+        ))}
+      </div>
+
+      <div className="novo-grid-2">
+        <div className="novo-card">
+          <div className="novo-card-header">
+            <div><div className="novo-card-title">Partners recientes</div><div className="novo-card-sub">Últimos registrados</div></div>
+            <BarChart2 size={18} style={{ color: 'var(--novo-muted)' }} />
+          </div>
+          {loading && <div className="novo-empty">Cargando…</div>}
+          {!loading && partners.length === 0 && <div className="novo-empty">No hay partners aún.</div>}
+          {!loading && partners.length > 0 && (
+            <table className="novo-table">
+              <thead><tr><th>Partner</th><th>Plan</th><th>Estado</th></tr></thead>
+              <tbody>
+                {partners.slice(0, 6).map(p => (
+                  <tr key={p.id}>
+                    <td><strong style={{ color: '#fff' }}>{p.name}</strong><br /><small style={{ color: 'var(--novo-muted)' }}>/{p.slug}</small></td>
+                    <td>{p.plan_name || 'Partner'}</td>
+                    <td><Badge status={p.status || 'pending'} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        <div className="novo-card">
+          <div className="novo-card-header">
+            <div><div className="novo-card-title">Estado del sistema</div><div className="novo-card-sub">Integraciones activas</div></div>
+            <Activity size={18} style={{ color: 'var(--novo-muted)' }} />
+          </div>
+          {[
+            ['Supabase Auth + RLS', true],
+            ['Edge Functions', true],
+            ['Catálogo de productos', products.length > 0],
+            ['Partners registrados', partners.length > 0],
+            ['GHL OAuth', false],
+            ['Stripe Checkout', false],
+          ].map(([label, ok]) => (
+            <div key={label} className="status-row">
+              <span>{label}</span>
+              <Badge status={ok ? 'active' : 'pending'} label={ok ? 'Activo' : 'Pendiente'} />
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AdminPartners() {
+  const [partners, setPartners] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState(null);
+  const [showForm, setShowForm] = useState(false);
+  const [editMode, setEditMode] = useState(false);
+  const [form, setForm] = useState({ name: '', slug: '', plan_name: 'partner', status: 'pending' });
+  const [notice, setNotice] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [search, setSearch] = useState('');
+
+  const load = useCallback(async () => {
+    try {
+      setLoading(true);
+      const data = await platformApi.listPartners();
+      setPartners(data?.partners || []);
+    } catch (e) { setNotice({ type: 'error', text: e.message }); }
+    finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function savePartner() {
+    try {
+      setBusy(true);
+      if (editMode && selected) {
+        await platformApi.updatePartner({ ...form, id: selected.id });
+        setNotice({ type: 'success', text: 'Partner actualizado.' });
+      } else {
+        await platformApi.createPartner(form);
+        setNotice({ type: 'success', text: 'Partner creado correctamente.' });
+      }
+      setShowForm(false); setEditMode(false);
+      setForm({ name: '', slug: '', plan_name: 'partner', status: 'pending' });
+      setSelected(null); load();
+    } catch (e) { setNotice({ type: 'error', text: e.message }); }
+    finally { setBusy(false); }
+  }
+
+  function openEdit(p) {
+    setForm({ name: p.name, slug: p.slug, plan_name: p.plan_name || 'partner', status: p.status || 'pending' });
+    setSelected(p); setEditMode(true); setShowForm(true);
+  }
+
+  const filtered = partners.filter(p =>
+    p.name?.toLowerCase().includes(search.toLowerCase()) ||
+    p.slug?.toLowerCase().includes(search.toLowerCase())
+  );
+
+  return (
+    <div className="novo-page">
+      <div className="novo-page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div><span className="kicker">GESTIÓN</span><h1>Partners</h1><p>Administra los partners del ecosistema NOVO.</p></div>
+        <button className="novo-btn novo-btn-primary" onClick={() => { setShowForm(!showForm); setEditMode(false); setForm({ name: '', slug: '', plan_name: 'partner', status: 'pending' }); }}>
+          <Plus size={15} /> Nuevo partner
+        </button>
+      </div>
+
+      {notice && <Notice {...notice} onClose={() => setNotice(null)} />}
+
+      {showForm && (
+        <div className="novo-card" style={{ marginBottom: 20, border: '1px solid rgba(124,58,237,.3)' }}>
+          <div className="novo-card-header">
+            <div className="novo-card-title">{editMode ? `Editando: ${selected?.name}` : 'Crear nuevo partner'}</div>
+            <button className="novo-btn novo-btn-ghost" style={{ padding: '4px 8px' }} onClick={() => setShowForm(false)}><X size={14} /></button>
+          </div>
+          <div className="novo-grid-2">
+            <NField label="Nombre de la empresa" value={form.name} onChange={v => setForm({ ...form, name: v })} />
+            <NField label="Slug (identificador único)" value={form.slug} onChange={v => setForm({ ...form, slug: v.toLowerCase().replace(/\s/g, '-') })} />
+            <div className="novo-field">
+              <label>Plan</label>
+              <select value={form.plan_name} onChange={e => setForm({ ...form, plan_name: e.target.value })}>
+                <option value="partner">Partner</option>
+                <option value="partner_pro">Partner Pro</option>
+                <option value="partner_enterprise">Partner Enterprise</option>
+              </select>
+            </div>
+            <div className="novo-field">
+              <label>Estado</label>
+              <select value={form.status} onChange={e => setForm({ ...form, status: e.target.value })}>
+                <option value="pending">Pendiente</option>
+                <option value="active">Activo</option>
+                <option value="inactive">Inactivo</option>
+              </select>
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button className="novo-btn novo-btn-primary" onClick={savePartner} disabled={busy}><Save size={14} /> {editMode ? 'Actualizar' : 'Crear partner'}</button>
+            <button className="novo-btn novo-btn-ghost" onClick={() => setShowForm(false)}>Cancelar</button>
+          </div>
+        </div>
+      )}
+
+      <div className="novo-card">
+        <div className="novo-card-header">
+          <div className="novo-card-title">Partners registrados ({filtered.length})</div>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+            <div className="novo-search" style={{ width: 200 }}>
+              <Search size={13} /><input placeholder="Buscar…" value={search} onChange={e => setSearch(e.target.value)} />
+            </div>
+            <button className="novo-btn novo-btn-ghost" onClick={load}><RefreshCw size={13} /></button>
+          </div>
+        </div>
+
+        {loading && <div className="novo-empty">Cargando…</div>}
+        {!loading && filtered.length === 0 && <div className="novo-empty">No hay partners que coincidan.</div>}
+        {!loading && filtered.length > 0 && (
+          <table className="novo-table">
+            <thead><tr><th>Partner</th><th>Plan</th><th>GHL</th><th>Estado</th><th>Creado</th><th>Acciones</th></tr></thead>
+            <tbody>
+              {filtered.map(p => (
+                <>
+                  <tr key={p.id}>
+                    <td><strong style={{ color: '#fff' }}>{p.name}</strong><br /><small style={{ color: 'var(--novo-muted)', fontSize: 11 }}>/{p.slug}</small></td>
+                    <td>{p.plan_name || 'Partner'}</td>
+                    <td style={{ fontSize: 12, color: 'var(--novo-muted)' }}>{p.ghl_location_id || 'Sin asignar'}</td>
+                    <td><Badge status={p.status || 'pending'} /></td>
+                    <td style={{ fontSize: 12, color: 'var(--novo-muted)' }}>{new Date(p.created_at).toLocaleDateString()}</td>
+                    <td>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button className="novo-btn novo-btn-ghost" style={{ padding: '4px 10px', fontSize: 11 }} onClick={() => setSelected(selected?.id === p.id ? null : p)}>
+                          <Eye size={12} /> {selected?.id === p.id ? 'Cerrar' : 'Ver'}
+                        </button>
+                        <button className="novo-btn novo-btn-ghost" style={{ padding: '4px 10px', fontSize: 11 }} onClick={() => openEdit(p)}>
+                          <Edit2 size={12} /> Editar
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                  {selected?.id === p.id && (
+                    <tr key={`${p.id}-d`}>
+                      <td colSpan={6} style={{ padding: 0 }}>
+                        <div style={{ background: 'rgba(124,58,237,.05)', border: '1px solid rgba(124,58,237,.15)', borderRadius: 10, margin: '4px 0', padding: '18px 20px' }}>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16, marginBottom: 16 }}>
+                            <Info label="ID" value={p.id.slice(0,8)+'…'} />
+                            <Info label="Owner" value={p.owner_user_id ? p.owner_user_id.slice(0,8)+'…' : 'Sin vincular'} />
+                            <Info label="GHL Location" value={p.ghl_location_id || 'Sin asignar'} />
+                            <Info label="Creado" value={new Date(p.created_at).toLocaleDateString()} />
+                          </div>
+                          <div style={{ display: 'flex', gap: 10 }}>
+                            <button className="novo-btn novo-btn-primary" onClick={() => openEdit(p)}><Edit2 size={13} /> Editar partner</button>
+                            <button className="novo-btn novo-btn-secondary"><Eye size={13} /> Ver panel partner</button>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function AdminClients() {
+  return (
+    <div className="novo-page">
+      <div className="novo-page-header"><span className="kicker">ECOSISTEMA</span><h1>Clientes</h1><p>Lista global de clientes separados por partner.</p></div>
+      <div className="novo-card">
+        <div className="novo-empty" style={{ padding: '60px 24px' }}>
+          <Building2 size={36} style={{ opacity: .2, marginBottom: 14 }} />
+          <p style={{ fontWeight: 600, color: 'var(--novo-text)', marginBottom: 6 }}>Vista global de clientes en construcción</p>
+          <p style={{ fontSize: 13 }}>Los clientes aparecerán aquí agrupados por partner.</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AdminProducts() {
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [editItem, setEditItem] = useState(null);
+  const [notice, setNotice] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [form, setForm] = useState({ name: '', description: '', wholesalePrice: '', suggestedPrice: '', interval: 'month', stripeProductId: '', stripePriceId: '', active: true });
+
+  const load = useCallback(async () => {
+    try { setLoading(true); const data = await platformApi.listCatalogProducts(); setProducts(data?.products || []); }
+    catch (e) { setNotice({ type: 'error', text: e.message }); }
+    finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  function openEdit(p) {
+    setForm({ name: p.name, description: p.description || '', wholesalePrice: p.wholesale_price, suggestedPrice: p.suggested_price || '', interval: p.interval || 'month', stripeProductId: p.stripe_product_id || '', stripePriceId: p.stripe_price_id || '', active: p.active !== false });
+    setEditItem(p); setShowForm(true);
+  }
+
+  function openNew() {
+    setForm({ name: '', description: '', wholesalePrice: '', suggestedPrice: '', interval: 'month', stripeProductId: '', stripePriceId: '', active: true });
+    setEditItem(null); setShowForm(true);
+  }
+
+  async function save() {
+    try {
+      setBusy(true);
+      await platformApi.saveCatalogProduct({ ...form, id: editItem?.id });
+      setNotice({ type: 'success', text: editItem ? 'Producto actualizado.' : 'Producto creado.' });
+      setShowForm(false); setEditItem(null); load();
+    } catch (e) { setNotice({ type: 'error', text: e.message }); }
+    finally { setBusy(false); }
+  }
+
+  return (
+    <div className="novo-page">
+      <div className="novo-page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div><span className="kicker">CATÁLOGO</span><h1>Productos</h1><p>Catálogo central conectado con Stripe. Los partners venden estos productos.</p></div>
+        <button className="novo-btn novo-btn-primary" onClick={openNew}><Plus size={15} /> Nuevo producto</button>
+      </div>
+
+      {notice && <Notice {...notice} onClose={() => setNotice(null)} />}
+
+      {showForm && (
+        <div className="novo-card" style={{ marginBottom: 20, border: '1px solid rgba(124,58,237,.3)' }}>
+          <div className="novo-card-header">
+            <div className="novo-card-title">{editItem ? `Editando: ${editItem.name}` : 'Nuevo producto'}</div>
+            <button className="novo-btn novo-btn-ghost" style={{ padding: '4px 8px' }} onClick={() => setShowForm(false)}><X size={14} /></button>
+          </div>
+          <div className="novo-grid-2">
+            <NField label="Nombre del producto" value={form.name} onChange={v => setForm({ ...form, name: v })} />
+            <NField label="Descripción" value={form.description} onChange={v => setForm({ ...form, description: v })} />
+            <NField label="Costo mayorista (USD)" type="number" value={form.wholesalePrice} onChange={v => setForm({ ...form, wholesalePrice: v })} />
+            <NField label="Precio sugerido de venta (USD)" type="number" value={form.suggestedPrice} onChange={v => setForm({ ...form, suggestedPrice: v })} />
+            <div className="novo-field">
+              <label>Intervalo de facturación</label>
+              <select value={form.interval} onChange={e => setForm({ ...form, interval: e.target.value })}>
+                <option value="month">Mensual</option>
+                <option value="year">Anual</option>
+              </select>
+            </div>
+            <div className="novo-field">
+              <label>Estado</label>
+              <select value={String(form.active)} onChange={e => setForm({ ...form, active: e.target.value === 'true' })}>
+                <option value="true">Activo</option>
+                <option value="false">Inactivo</option>
+              </select>
+            </div>
+            <NField label="Stripe Product ID" value={form.stripeProductId} onChange={v => setForm({ ...form, stripeProductId: v })} />
+            <NField label="Stripe Price ID" value={form.stripePriceId} onChange={v => setForm({ ...form, stripePriceId: v })} />
+          </div>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button className="novo-btn novo-btn-primary" onClick={save} disabled={busy}><Save size={14} /> {editItem ? 'Actualizar producto' : 'Crear producto'}</button>
+            <button className="novo-btn novo-btn-ghost" onClick={() => setShowForm(false)}>Cancelar</button>
+          </div>
+        </div>
+      )}
+
+      <div className="novo-card">
+        <div className="novo-card-header">
+          <div><div className="novo-card-title">Catálogo central ({products.length})</div><div className="novo-card-sub">Los partners ven y venden estos productos.</div></div>
+          <button className="novo-btn novo-btn-ghost" onClick={load}><RefreshCw size={13} /></button>
+        </div>
+        {loading && <div className="novo-empty">Cargando catálogo…</div>}
+        {!loading && products.length === 0 && (
+          <div className="novo-empty" style={{ padding: '48px 24px' }}>
+            <Package size={32} style={{ opacity: .2, marginBottom: 12 }} />
+            <p>No hay productos. Crea el primero con el botón de arriba.</p>
+          </div>
+        )}
+        {!loading && products.length > 0 && (
+          <table className="novo-table">
+            <thead><tr><th>Producto</th><th>Intervalo</th><th>Mayorista</th><th>Sugerido</th><th>Stripe</th><th>Estado</th><th>Acciones</th></tr></thead>
+            <tbody>
+              {products.map(p => (
+                <tr key={p.id}>
+                  <td><strong style={{ color: '#fff' }}>{p.name}</strong>{p.description && <><br /><small style={{ color: 'var(--novo-muted)', fontSize: 11 }}>{p.description}</small></>}</td>
+                  <td style={{ textTransform: 'capitalize' }}>{p.interval}</td>
+                  <td><span style={{ color: '#34d399', fontWeight: 600 }}>${p.wholesale_price}</span></td>
+                  <td><span style={{ color: '#a78bfa' }}>${p.suggested_price || '—'}</span></td>
+                  <td>{p.stripe_product_id ? <span style={{ color: '#34d399', fontSize: 11 }}>✓ Vinculado</span> : <span style={{ color: 'var(--novo-muted)', fontSize: 11 }}>Sin vincular</span>}</td>
+                  <td><Badge status={p.active ? 'active' : 'inactive'} /></td>
+                  <td><button className="novo-btn novo-btn-ghost" style={{ padding: '4px 10px', fontSize: 11 }} onClick={() => openEdit(p)}><Edit2 size={12} /> Editar</button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function AdminPayments() {
+  const [keys, setKeys] = useState({ stripeSecretKey: '', stripeWebhookSecret: '' });
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState(null);
 
-  useEffect(() => {
-    if (tab === 'partners') loadPartners();
-    if (tab === 'catalog') loadCatalogProducts();
-  }, [tab]);
-
-  async function loadPartners() {
-    try {
-      setBusy(true);
-      setPartnersError('');
-      const data = await platformApi.listPartners();
-      setPartners(data?.partners || []);
-    } catch (error) {
-      setPartners([]);
-      setPartnersError(error.message);
-      setNotice({ type: 'error', text: error.message });
-    } finally {
-      setBusy(false);
-    }
+  async function save() {
+    try { setBusy(true); await platformApi.saveIntegrationSettings(keys); setNotice({ type: 'success', text: 'Claves de Stripe guardadas.' }); }
+    catch (e) { setNotice({ type: 'error', text: e.message }); }
+    finally { setBusy(false); }
   }
 
-  function partnerContact(partner) {
-    return partner?.branding?.contactEmail || partner?.branding?.contact_email || '—';
-  }
+  return (
+    <div className="novo-page">
+      <div className="novo-page-header"><span className="kicker">FINANZAS</span><h1>Pagos</h1><p>Administración financiera del ecosistema NOVOeia.</p></div>
+      {notice && <Notice {...notice} onClose={() => setNotice(null)} />}
+      <div className="novo-stats" style={{ gridTemplateColumns: 'repeat(3,1fr)' }}>
+        {[['Ingresos este mes','$—',DollarSign,'green'],['Pagos a partners','$—',Users,'purple'],['Transacciones','—',Activity,'blue']].map(([label,value,Icon,color]) => (
+          <div className="novo-stat" key={label}>
+            <div className={`novo-stat-icon ${color}`}><Icon size={17} /></div>
+            <span className="novo-stat-label">{label}</span>
+            <span className="novo-stat-value">{value}</span>
+            <span className="novo-stat-sub">Conectar Stripe para datos reales</span>
+          </div>
+        ))}
+      </div>
+      <div className="novo-card" style={{ marginTop: 16 }}>
+        <div className="novo-card-header">
+          <div><div className="novo-card-title">Configuración Stripe</div><div className="novo-card-sub">Claves para procesar pagos</div></div>
+          <Badge status="pending" label="Pendiente configurar" />
+        </div>
+        <div className="novo-grid-2">
+          <NField label="Secret key" secret value={keys.stripeSecretKey} onChange={v => setKeys({ ...keys, stripeSecretKey: v })} />
+          <NField label="Webhook secret" secret value={keys.stripeWebhookSecret} onChange={v => setKeys({ ...keys, stripeWebhookSecret: v })} />
+        </div>
+        <button className="novo-btn novo-btn-primary" onClick={save} disabled={busy}><Save size={14} /> Guardar claves Stripe</button>
+      </div>
+      <div className="novo-card" style={{ marginTop: 16 }}>
+        <div className="novo-card-header"><div className="novo-card-title">Historial de transacciones</div></div>
+        <div className="novo-empty" style={{ padding: '48px 24px' }}>
+          <CreditCard size={32} style={{ opacity: .2, marginBottom: 12 }} />
+          <p>Las transacciones aparecerán aquí una vez que Stripe esté conectado.</p>
+        </div>
+      </div>
+    </div>
+  );
+}
 
-  function intervalLabel(interval) {
-    if (interval === 'month') return 'Mensual';
-    if (interval === 'year') return 'Anual';
-    return interval || '—';
-  }
+function AdminSettings() {
+  const [tab, setTab] = useState('ghl');
+  const [settings, setSettings] = useState({ ghlClientId: '', ghlClientSecret: '', ghlRedirectUri: '', ghlScopes: '', stripeSecretKey: '', stripeWebhookSecret: '', supabaseServiceRoleKey: '', webhookBaseUrl: '' });
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState(null);
 
-  async function loadCatalogProducts() {
-    try {
-      setBusy(true);
-      setCatalogError('');
-      const data = await platformApi.listCatalogProducts();
-      setCatalogProducts(data?.products || []);
-    } catch (error) {
-      setCatalogProducts([]);
-      setCatalogError(error.message);
-      setNotice({ type: 'error', text: error.message });
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function saveSettings() {
-    try {
-      setBusy(true);
-      await platformApi.saveIntegrationSettings(settings);
-      setNotice({ type: 'success', text: 'Configuración guardada de forma segura.' });
-    } catch (error) {
-      setNotice({ type: 'error', text: error.message });
-    } finally {
-      setBusy(false);
-    }
+  async function save() {
+    try { setBusy(true); await platformApi.saveIntegrationSettings(settings); setNotice({ type: 'success', text: 'Configuración guardada.' }); }
+    catch (e) { setNotice({ type: 'error', text: e.message }); }
+    finally { setBusy(false); }
   }
 
   async function connectGhl() {
-    try {
-      setBusy(true);
-      const data = await platformApi.startGhlOAuth('connect', 'Company');
-      if (!data?.authorizationUrl) throw new Error('No se recibió URL de autorización.');
-      window.location.href = data.authorizationUrl;
-    } catch (error) {
-      setNotice({ type: 'error', text: error.message });
-      setBusy(false);
-    }
+    try { setBusy(true); const data = await platformApi.startGhlOAuth(); if (!data?.authorizationUrl) throw new Error('No se recibió URL.'); window.location.href = data.authorizationUrl; }
+    catch (e) { setNotice({ type: 'error', text: e.message }); setBusy(false); }
   }
 
-  async function syncLocations() {
-    try {
-      setBusy(true);
-      const data = await platformApi.syncGhlLocations();
-      setNotice({ type: 'success', text: `${data?.count || 0} subcuentas sincronizadas.` });
-    } catch (error) {
-      setNotice({ type: 'error', text: error.message });
-    } finally {
-      setBusy(false);
-    }
-  }
+  const tabs = [['ghl','HighLevel',PlugZap],['stripe','Stripe',CreditCard],['supabase','Supabase',ShieldCheck],['webhooks','Webhooks',Webhook],['security','Seguridad',KeyRound]];
 
   return (
-    <div className="platform-console">
-      <header className="pc-header">
-        <div>
-          <span className="pc-kicker">NOVO CONTROL CENTER</span>
-          <h1>Super Admin</h1>
-          <p>Configuración central, conexiones, partners, productos y seguridad.</p>
+    <div className="novo-page">
+      <div className="novo-page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div><span className="kicker">SISTEMA</span><h1>Configuración</h1><p>Conexiones, integraciones y seguridad de la plataforma.</p></div>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button className="novo-btn novo-btn-secondary" onClick={() => platformApi.syncGhlLocations().catch(()=>{})} disabled={busy}><RefreshCw size={14} /> Sync GHL</button>
+          <button className="novo-btn novo-btn-primary" onClick={save} disabled={busy}><Save size={14} /> Guardar todo</button>
         </div>
-        <div className="pc-actions">
-          <button className="pc-secondary" onClick={syncLocations} disabled={busy}>
-            <RefreshCw size={16} /> Sincronizar GHL
-          </button>
-          <button className="pc-primary" onClick={saveSettings} disabled={busy}>
-            <Save size={16} /> Guardar configuración
-          </button>
+      </div>
+      {notice && <Notice {...notice} onClose={() => setNotice(null)} />}
+      <div className="pc-tabs" style={{ marginBottom: 20 }}>
+        {tabs.map(([id,label,Icon]) => <button key={id} className={tab===id?'active':''} onClick={()=>setTab(id)}><Icon size={13}/> {label}</button>)}
+      </div>
+
+      {tab==='ghl' && (
+        <div className="novo-card">
+          <div className="novo-card-header">
+            <div><div className="novo-card-title">HighLevel OAuth</div><div className="novo-card-sub">Conexión principal con GoHighLevel</div></div>
+            <button className="novo-btn novo-btn-primary" onClick={connectGhl} disabled={busy}><PlugZap size={14}/> Conectar OAuth</button>
+          </div>
+          <div className="novo-grid-2">
+            <NField label="Client ID" value={settings.ghlClientId} onChange={v=>setSettings({...settings,ghlClientId:v})} />
+            <NField label="Client Secret" secret value={settings.ghlClientSecret} onChange={v=>setSettings({...settings,ghlClientSecret:v})} />
+            <NField label="Redirect URI" value={settings.ghlRedirectUri} onChange={v=>setSettings({...settings,ghlRedirectUri:v})} />
+            <NField label="Scopes" value={settings.ghlScopes} onChange={v=>setSettings({...settings,ghlScopes:v})} />
+          </div>
+          <p style={{fontSize:11,color:'var(--novo-muted)',marginTop:8}}>Los secretos se almacenan cifrados en Edge Functions.</p>
         </div>
-      </header>
-
-      {notice && <Notice {...notice} />}
-
-      {tab === 'integrations' && (
-        <div className="pc-grid">
-          <section className="pc-card pc-span-2">
-            <div className="pc-card-title">
-              <div><span>CONEXIÓN PRINCIPAL</span><h3>HighLevel</h3></div>
-              <button className="pc-primary" onClick={connectGhl}><PlugZap size={15} /> Conectar con OAuth</button>
+      )}
+      {tab==='stripe' && (
+        <div className="novo-card">
+          <div className="novo-card-header"><div><div className="novo-card-title">Stripe</div><div className="novo-card-sub">Procesamiento de pagos</div></div><Badge status="pending" label="Pendiente"/></div>
+          <div className="novo-grid-2">
+            <NField label="Secret key" secret value={settings.stripeSecretKey} onChange={v=>setSettings({...settings,stripeSecretKey:v})} />
+            <NField label="Webhook secret" secret value={settings.stripeWebhookSecret} onChange={v=>setSettings({...settings,stripeWebhookSecret:v})} />
+          </div>
+        </div>
+      )}
+      {tab==='supabase' && (
+        <div className="novo-card">
+          <div className="novo-card-header"><div className="novo-card-title">Supabase</div></div>
+          <NField label="Service role key" secret value={settings.supabaseServiceRoleKey} onChange={v=>setSettings({...settings,supabaseServiceRoleKey:v})} />
+        </div>
+      )}
+      {tab==='webhooks' && (
+        <div className="novo-card">
+          <div className="novo-card-header"><div className="novo-card-title">Webhooks</div></div>
+          <NField label="Webhook base URL" value={settings.webhookBaseUrl} onChange={v=>setSettings({...settings,webhookBaseUrl:v})} />
+        </div>
+      )}
+      {tab==='security' && (
+        <div className="novo-card">
+          <div className="novo-card-header"><div className="novo-card-title">Checklist de seguridad</div></div>
+          {[
+            ['Supabase Auth con roles',true],['RLS en todas las tablas',true],['Secretos en Edge Functions',true],
+            ['OAuth con refresh token',true],['Webhooks con firma Ed25519',true],['Auditoría e idempotencia',true],
+            ['Variables de entorno en Netlify',false],['Stripe webhook conectado',false],['GHL OAuth configurado',false],
+          ].map(([label,ok])=>(
+            <div key={label} className="status-row">
+              {ok?<CheckCircle2 size={15} style={{color:'#34d399',flexShrink:0}}/>:<AlertCircle size={15} style={{color:'#fbbf24',flexShrink:0}}/>}
+              <span style={{fontSize:13}}>{label}</span>
+              <Badge status={ok?'active':'pending'} label={ok?'OK':'Pendiente'} />
             </div>
-            <div className="pc-form-grid">
-              <Field label="Client ID" value={settings.ghlClientId} onChange={v => setSettings({ ...settings, ghlClientId: v })} />
-              <Field label="Client Secret" secret value={settings.ghlClientSecret} onChange={v => setSettings({ ...settings, ghlClientSecret: v })} />
-              <Field label="Redirect URI" value={settings.ghlRedirectUri} onChange={v => setSettings({ ...settings, ghlRedirectUri: v })} />
-              <Field label="Scopes" value={settings.ghlScopes} onChange={v => setSettings({ ...settings, ghlScopes: v })} />
-            </div>
-            <p className="pc-help">Los secretos se envían a una Edge Function y se almacenan cifrados. Nunca se guardan en el navegador.</p>
-          </section>
-
-          {providers.slice(1).map(({ id, label, icon: Icon }) => (
-            <section className="pc-card" key={id}>
-              <div className="pc-provider"><Icon size={19} /><strong>{label}</strong><span className="pc-status">Pendiente</span></div>
-              {id === 'stripe' && <>
-                <Field label="Secret key" secret value={settings.stripeSecretKey} onChange={v => setSettings({ ...settings, stripeSecretKey: v })} />
-                <Field label="Webhook secret" secret value={settings.stripeWebhookSecret} onChange={v => setSettings({ ...settings, stripeWebhookSecret: v })} />
-              </>}
-              {id === 'supabase' && <Field label="Service role key" secret value={settings.supabaseServiceRoleKey} onChange={v => setSettings({ ...settings, supabaseServiceRoleKey: v })} />}
-              {id === 'mcp' && <>
-                <Field label="OIDC issuer" value={settings.oidcIssuer} onChange={v => setSettings({ ...settings, oidcIssuer: v })} />
-                <Field label="MCP endpoint" value={settings.mcpEndpoint} onChange={v => setSettings({ ...settings, mcpEndpoint: v })} />
-              </>}
-              {id === 'webhooks' && <Field label="Webhook base URL" value={settings.webhookBaseUrl} onChange={v => setSettings({ ...settings, webhookBaseUrl: v })} />}
-            </section>
           ))}
         </div>
       )}
-
-      {tab === 'partners' && (
-        <section className="pc-card">
-          <div className="pc-card-title">
-            <div><span>GESTIÓN CENTRAL</span><h3>Partners ({partners.length})</h3></div>
-            <div className="pc-actions">
-              <button className="pc-secondary" onClick={loadPartners} disabled={busy}>
-                <RefreshCw size={15} /> Actualizar
-              </button>
-              <button className="pc-primary" type="button"><Plus size={15} /> Nuevo partner</button>
-            </div>
-          </div>
-          {partnersError && !busy && (
-            <div className="pc-empty" style={{ color: '#ff8a8a', marginBottom: 12 }}>
-              {partnersError}
-            </div>
-          )}
-          <div className="pc-table">
-            <div className="pc-row pc-head"><span>Partner</span><span>Contacto</span><span>Plan</span><span>GHL</span><span>Estado</span></div>
-            {busy && <div className="pc-empty">Cargando partners...</div>}
-            {!busy && !partnersError && partners.length === 0 && (
-              <div className="pc-empty">No hay partners registrados todavía. Los nuevos registros aparecerán aquí.</div>
-            )}
-            {!busy && partners.map(partner => <div className="pc-row" key={partner.id}>
-              <span><Building2 size={15} /> {partner.name}</span>
-              <span>{partnerContact(partner)}</span>
-              <span>{partner.plan_name || 'Sin plan'}</span>
-              <span>{partner.ghl_location_id || 'Sin asignar'}</span>
-              <span>{partner.status || 'pending'}</span>
-            </div>)}
-          </div>
-        </section>
-      )}
-
-      {tab === 'security' && <SecurityPanel />}
-
-      {tab === 'clients' && (
-        <section className="pc-card">
-          <div className="pc-card-title"><div><span>CLIENTES</span><h3>Clientes de la plataforma</h3></div><Building2 size={20} /></div>
-          <div className="pc-empty">Vista de clientes globales en construcción.</div>
-        </section>
-      )}
-
-      {tab === 'catalog' && (
-        <section className="pc-card">
-          <div className="pc-card-title">
-            <div><span>PRODUCTOS</span><h3>Catálogo central ({catalogProducts.length})</h3></div>
-            <button className="pc-secondary" onClick={loadCatalogProducts} disabled={busy}>
-              <RefreshCw size={15} /> Actualizar
-            </button>
-          </div>
-          {catalogError && !busy && (
-            <div className="pc-empty" style={{ color: '#ff8a8a', marginBottom: 12 }}>{catalogError}</div>
-          )}
-          <div className="pc-table">
-            <div className="pc-row pc-head">
-              <span>Producto</span>
-              <span>Intervalo</span>
-              <span>Mayorista</span>
-              <span>Stripe Product</span>
-              <span>Estado</span>
-            </div>
-            {busy && <div className="pc-empty">Cargando catálogo...</div>}
-            {!busy && !catalogError && catalogProducts.length === 0 && (
-              <div className="pc-empty">
-                No hay productos. Aplica la migración <code>20260801_stripe_catalog.sql</code> en Supabase.
-              </div>
-            )}
-            {!busy && catalogProducts.map(product => (
-              <div className="pc-row" key={product.id}>
-                <span><Package size={15} /> {product.name}</span>
-                <span>{intervalLabel(product.interval)}</span>
-                <span>${Number(product.wholesale_price || 0).toFixed(2)}</span>
-                <span>{product.stripe_product_id || '—'}</span>
-                <span>{product.active ? 'Activo' : 'Inactivo'}</span>
-              </div>
-            ))}
-          </div>
-          <p className="pc-help">
-            Los partners ven estos productos en su panel y pueden fijar un precio de venta mayor al mayorista para generar links de checkout.
-          </p>
-        </section>
-      )}
-
-      {tab === 'payments' && (
-        <section className="pc-card">
-          <div className="pc-card-title"><div><span>PAGOS</span><h3>Stripe y checkout</h3></div><CreditCard size={20} /></div>
-          <div className="pc-form-grid">
-            <Field label="Secret key" secret value={settings.stripeSecretKey} onChange={v => setSettings({ ...settings, stripeSecretKey: v })} />
-            <Field label="Webhook secret" secret value={settings.stripeWebhookSecret} onChange={v => setSettings({ ...settings, stripeWebhookSecret: v })} />
-          </div>
-        </section>
-      )}
     </div>
   );
 }
 
-export function PartnerConsole({ section = 'dashboard' }) {
-  const [catalog, setCatalog] = useState([]);
-  const [clients, setClients] = useState([]);
-  const [selected, setSelected] = useState(null);
-  const [price, setPrice] = useState('');
-  const [checkout, setCheckout] = useState('');
-  const [notice, setNotice] = useState(null);
-  const [busy, setBusy] = useState(false);
-  const [newClient, setNewClient] = useState({ name: '', email: '', phone: '' });
+/* PARTNER ROUTER */
+export function PartnerConsole({ section }) {
+  if (section==='dashboard') return <PartnerDashboard/>;
+  if (section==='clients')   return <PartnerClients/>;
+  if (section==='offers')    return <PartnerOffers/>;
+  if (section==='links')     return <PartnerLinks/>;
+  if (section==='brand')     return <PartnerBrand/>;
+  if (section==='support')   return <PartnerSupport/>;
+  return <PartnerDashboard/>;
+}
 
-  async function loadClients() {
-    const data = await platformApi.listPartnerClients();
-    setClients(data?.clients || []);
-  }
+function PartnerDashboard() {
+  const [clients,setClients]=useState([]);
+  const [catalog,setCatalog]=useState([]);
+  const [loading,setLoading]=useState(true);
 
-  useEffect(() => {
-    Promise.all([platformApi.listCatalog(), platformApi.listPartnerClients()])
-      .then(([a, b]) => {
-        setCatalog(a?.products || []);
-        setClients(b?.clients || []);
-      })
-      .catch(error => setNotice({ type: 'error', text: error.message }));
-  }, []);
+  useEffect(()=>{
+    Promise.all([
+      platformApi.listPartnerClients().catch(()=>({clients:[]})),
+      platformApi.listCatalog().catch(()=>({products:[]})),
+    ]).then(([cd,ct])=>{setClients(cd?.clients||[]);setCatalog(ct?.products||[]);}).finally(()=>setLoading(false));
+  },[]);
 
-  async function createClient() {
-    try {
-      if (!newClient.name.trim()) throw new Error('El nombre del cliente es obligatorio.');
-      setBusy(true);
-      await platformApi.createPartnerClient(newClient);
-      setNewClient({ name: '', email: '', phone: '' });
-      await loadClients();
-      setNotice({ type: 'success', text: 'Cliente creado. Se sincronizará en GHL cuando el Super Admin lo procese.' });
-    } catch (error) {
-      setNotice({ type: 'error', text: error.message });
-    } finally {
-      setBusy(false);
-    }
-  }
+  return (
+    <div className="novo-page">
+      <div className="novo-page-header"><span className="kicker">PARTNER WORKSPACE</span><h1>Mi negocio</h1><p>Resumen de tu operación en el ecosistema NOVO.</p></div>
+      <div className="novo-stats">
+        {[['Mis clientes',loading?'…':clients.length,Users,'blue'],['Productos disponibles',loading?'…':catalog.length,Package,'purple'],['Links activos','—',Link2,'green'],['MRR estimado','$—',DollarSign,'orange']].map(([label,value,Icon,color])=>(
+          <div className="novo-stat" key={label}>
+            <div className={`novo-stat-icon ${color}`}><Icon size={17}/></div>
+            <span className="novo-stat-label">{label}</span>
+            <span className="novo-stat-value">{value}</span>
+          </div>
+        ))}
+      </div>
+      <div className="novo-grid-2">
+        <div className="novo-card">
+          <div className="novo-card-header"><div className="novo-card-title">Clientes recientes</div></div>
+          {loading&&<div className="novo-empty">Cargando…</div>}
+          {!loading&&clients.length===0&&<div className="novo-empty">No tienes clientes todavía.</div>}
+          {!loading&&clients.length>0&&(
+            <table className="novo-table"><thead><tr><th>Cliente</th><th>Estado</th></tr></thead>
+            <tbody>{clients.slice(0,5).map(c=><tr key={c.id}><td><strong style={{color:'#fff'}}>{c.name}</strong></td><td><Badge status={c.status||'pending'}/></td></tr>)}</tbody></table>
+          )}
+        </div>
+        <div className="novo-card">
+          <div className="novo-card-header"><div className="novo-card-title">Productos disponibles</div></div>
+          {loading&&<div className="novo-empty">Cargando…</div>}
+          {!loading&&catalog.length===0&&<div className="novo-empty">El Super Admin aún no ha publicado productos.</div>}
+          {!loading&&catalog.map(p=>(
+            <div key={p.id} className="status-row">
+              <span style={{color:'#fff',fontWeight:500}}>{p.name}</span>
+              <span style={{color:'#34d399',fontSize:13}}>${p.wholesale_price}/{p.interval}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
 
-  const margin = useMemo(() => {
-    if (!selected || !price) return 0;
-    return Number(price) - Number(selected.wholesale_price || 0);
-  }, [selected, price]);
+function PartnerClients() {
+  const [clients,setClients]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const [showForm,setShowForm]=useState(false);
+  const [form,setForm]=useState({name:'',email:'',phone:''});
+  const [notice,setNotice]=useState(null);
+  const [busy,setBusy]=useState(false);
 
-  async function generateLink() {
-    try {
-      if (!selected || !price) throw new Error('Selecciona un producto y define el precio de venta.');
-      setBusy(true);
-      const data = await platformApi.generateCheckoutLink({
-        productId: selected.id,
-        retailPrice: Number(price),
-      });
-      setCheckout(data.checkoutUrl);
-      setNotice({ type: 'success', text: 'Link de pago Stripe generado. Compártelo con tu cliente.' });
-    } catch (error) {
-      setNotice({ type: 'error', text: error.message });
-    } finally {
-      setBusy(false);
-    }
+  const load=useCallback(async()=>{
+    try{setLoading(true);const data=await platformApi.listPartnerClients();setClients(data?.clients||[]);}
+    catch(e){setNotice({type:'error',text:e.message});}finally{setLoading(false);}
+  },[]);
+
+  useEffect(()=>{load();},[load]);
+
+  async function createClient(){
+    try{if(!form.name)throw new Error('El nombre es obligatorio.');setBusy(true);await platformApi.createPartnerClient(form);setNotice({type:'success',text:'Cliente creado.'});setShowForm(false);setForm({name:'',email:'',phone:''});load();}
+    catch(e){setNotice({type:'error',text:e.message});}finally{setBusy(false);}
   }
 
   return (
-    <div className="platform-console">
-      <header className="pc-header">
-        <div><span className="pc-kicker">PARTNER WORKSPACE</span><h1>Panel Partner</h1><p>Clientes, productos, precios, links de venta y marca.</p></div>
-      </header>
-      {notice && <Notice {...notice} />}
-
-      {(section === 'dashboard' || section === 'offers' || section === 'links') && (
-      <div className="pc-grid">
-        <section className="pc-card pc-span-2">
-          <div className="pc-card-title"><div><span>CATÁLOGO NOVO</span><h3>Crear oferta y link de venta</h3></div><Package size={20} /></div>
-          <div className="pc-product-grid">
-            {catalog.length === 0 && <div className="pc-empty">El catálogo aparecerá cuando el Super Admin publique productos.</div>}
-            {catalog.map(product => <button key={product.id} className={`pc-product ${selected?.id === product.id ? 'active' : ''}`} onClick={() => { setSelected(product); setPrice(String(product.suggested_price || product.wholesale_price || '')); }}>
-              <strong>{product.name}</strong>
-              <span>{product.interval === 'year' ? 'Anual' : 'Mensual'} · Costo: ${product.wholesale_price || 0}</span>
-            </button>)}
-          </div>
-
-          <div className="pc-offer-builder">
-            <div><label>Producto seleccionado</label><strong>{selected?.name || 'Selecciona uno'}</strong></div>
-            <Field label="Precio de venta" type="number" value={price} onChange={setPrice} />
-            <div><label>Ganancia estimada</label><strong className="pc-profit">${margin.toFixed(2)}</strong></div>
-            <button className="pc-primary" onClick={generateLink} disabled={busy}><Link2 size={16} /> Generar link Stripe</button>
-          </div>
-
-          {checkout && <div className="pc-link-box"><span>{checkout}</span><button onClick={() => navigator.clipboard.writeText(checkout)}><Copy size={15} /> Copiar</button><a href={checkout} target="_blank" rel="noreferrer"><ExternalLink size={15} /></a></div>}
-        </section>
+    <div className="novo-page">
+      <div className="novo-page-header" style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}>
+        <div><span className="kicker">CLIENTES</span><h1>Mis clientes</h1><p>Gestiona tu cartera de clientes.</p></div>
+        <button className="novo-btn novo-btn-primary" onClick={()=>setShowForm(!showForm)}><Plus size={15}/> Agregar cliente</button>
       </div>
-      )}
-
-      {section === 'clients' && (
-        <div className="pc-grid">
-          <section className="pc-card">
-            <div className="pc-card-title"><div><span>NUEVO CLIENTE</span><h3>Agregar a tu cartera</h3></div><Users size={20} /></div>
-            <Field label="Nombre" value={newClient.name} onChange={(v) => setNewClient({ ...newClient, name: v })} />
-            <Field label="Correo" value={newClient.email} onChange={(v) => setNewClient({ ...newClient, email: v })} />
-            <Field label="Teléfono" value={newClient.phone} onChange={(v) => setNewClient({ ...newClient, phone: v })} />
-            <button className="pc-primary" onClick={createClient} disabled={busy}><Plus size={15} /> Crear cliente</button>
-            <p className="pc-help">El cliente queda en estado pending hasta crearse en GHL bajo tu subcuenta.</p>
-          </section>
-          <section className="pc-card">
-            <div className="pc-card-title"><div><span>CLIENTES</span><h3>Mis clientes</h3></div><Users size={20} /></div>
-            {clients.length === 0 ? <div className="pc-empty">No hay clientes todavía.</div> : clients.map(c => (
-              <div className="pc-mini-row" key={c.id}>
-                <span>{c.name}</span>
-                <small>{c.status}{c.ghl_sync_status ? ` · GHL: ${c.ghl_sync_status}` : ''}</small>
-              </div>
-            ))}
-          </section>
+      {notice&&<Notice {...notice} onClose={()=>setNotice(null)}/>}
+      {showForm&&(
+        <div className="novo-card" style={{marginBottom:20,border:'1px solid rgba(124,58,237,.3)'}}>
+          <div className="novo-card-header"><div className="novo-card-title">Nuevo cliente</div><button className="novo-btn novo-btn-ghost" style={{padding:'4px 8px'}} onClick={()=>setShowForm(false)}><X size={14}/></button></div>
+          <div className="novo-grid-3">
+            <NField label="Nombre completo *" value={form.name} onChange={v=>setForm({...form,name:v})}/>
+            <NField label="Email" value={form.email} onChange={v=>setForm({...form,email:v})}/>
+            <NField label="Teléfono" value={form.phone} onChange={v=>setForm({...form,phone:v})}/>
+          </div>
+          <div style={{display:'flex',gap:10}}>
+            <button className="novo-btn novo-btn-primary" onClick={createClient} disabled={busy}><Save size={14}/> Crear cliente</button>
+            <button className="novo-btn novo-btn-ghost" onClick={()=>setShowForm(false)}>Cancelar</button>
+          </div>
         </div>
       )}
+      <div className="novo-card">
+        <div className="novo-card-header"><div className="novo-card-title">Clientes ({clients.length})</div><button className="novo-btn novo-btn-ghost" onClick={load}><RefreshCw size={13}/></button></div>
+        {loading&&<div className="novo-empty">Cargando…</div>}
+        {!loading&&clients.length===0&&<div className="novo-empty">No tienes clientes todavía.</div>}
+        {!loading&&clients.length>0&&(
+          <table className="novo-table">
+            <thead><tr><th>Cliente</th><th>Email</th><th>Teléfono</th><th>Estado</th></tr></thead>
+            <tbody>{clients.map(c=><tr key={c.id}><td><strong style={{color:'#fff'}}>{c.name}</strong></td><td style={{color:'var(--novo-muted)'}}>{c.email||'—'}</td><td style={{color:'var(--novo-muted)'}}>{c.phone||'—'}</td><td><Badge status={c.status||'pending'}/></td></tr>)}</tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
+}
 
-      {section === 'brand' && (
-        <section className="pc-card">
-          <div className="pc-card-title"><div><span>MARCA Y TRACKING</span><h3>Configuración permitida</h3></div><Palette size={20} /></div>
-          <Field label="Nombre comercial" value="" onChange={() => {}} />
-          <Field label="Dominio" value="" onChange={() => {}} />
-          <Field label="Meta Pixel ID" value="" onChange={() => {}} />
-          <Field label="Facebook URL" value="" onChange={() => {}} />
-          <button className="pc-primary"><Save size={15} /> Guardar marca</button>
-          <p className="pc-help">Las conexiones GHL, pagos y permisos solo las administra el Super Admin.</p>
-        </section>
-      )}
+function PartnerOffers() {
+  const [catalog,setCatalog]=useState([]);
+  const [selected,setSelected]=useState(null);
+  const [price,setPrice]=useState('');
+  const [checkout,setCheckout]=useState('');
+  const [notice,setNotice]=useState(null);
+  const [busy,setBusy]=useState(false);
 
-      {section === 'support' && (
-        <section className="pc-card">
-          <div className="pc-card-title"><div><span>SOPORTE</span><h3>Centro de ayuda</h3></div><LifeBuoy size={20} /></div>
-          <div className="pc-empty">Canal de soporte partner en construcción.</div>
-        </section>
+  useEffect(()=>{platformApi.listCatalog().then(d=>setCatalog(d?.products||[])).catch(()=>{});},[]);
+
+  const margin=selected&&price?Number(price)-Number(selected.wholesale_price||0):0;
+
+  async function generate(){
+    try{
+      if(!selected||!price)throw new Error('Selecciona un producto y define el precio.');
+      if(Number(price)<Number(selected.wholesale_price))throw new Error('El precio no puede ser menor al costo mayorista.');
+      setBusy(true);
+      await platformApi.savePartnerOffer({productId:selected.id,retailPrice:Number(price)});
+      const data=await platformApi.generateCheckoutLink({productId:selected.id,retailPrice:Number(price)});
+      setCheckout(data.checkoutUrl);
+      setNotice({type:'success',text:'Link de venta generado correctamente.'});
+    }catch(e){setNotice({type:'error',text:e.message});}finally{setBusy(false);}
+  }
+
+  return (
+    <div className="novo-page">
+      <div className="novo-page-header"><span className="kicker">CATÁLOGO NOVO</span><h1>Productos y ofertas</h1><p>Selecciona un producto, define tu precio y genera el link de Stripe.</p></div>
+      {notice&&<Notice {...notice} onClose={()=>setNotice(null)}/>}
+      <div className="novo-grid-2" style={{marginBottom:16}}>
+        {catalog.length===0&&<div className="novo-empty" style={{gridColumn:'1/-1'}}>El Super Admin aún no ha publicado productos.</div>}
+        {catalog.map(p=>(
+          <div key={p.id} className="novo-card" style={{cursor:'pointer',border:selected?.id===p.id?'1px solid #7C3AED':'1px solid var(--novo-card-border)',background:selected?.id===p.id?'rgba(124,58,237,.08)':'var(--novo-card)',transition:'all .18s'}}
+            onClick={()=>{setSelected(p);setPrice(String(p.suggested_price||''));setCheckout('');}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}>
+              <div><div style={{fontWeight:600,color:'#fff',marginBottom:4}}>{p.name}</div><div style={{fontSize:12,color:'var(--novo-muted)',textTransform:'capitalize'}}>{p.billing_type} · {p.interval}</div></div>
+              <div style={{textAlign:'right'}}><div style={{color:'#34d399',fontWeight:700,fontSize:18}}>${p.wholesale_price}</div><div style={{fontSize:11,color:'var(--novo-muted)'}}>costo mayorista</div></div>
+            </div>
+            {selected?.id===p.id&&<div style={{marginTop:10,paddingTop:10,borderTop:'1px solid rgba(124,58,237,.2)',fontSize:12,color:'#a78bfa'}}>✓ Seleccionado — configura tu precio abajo</div>}
+          </div>
+        ))}
+      </div>
+      {selected&&(
+        <div className="novo-card">
+          <div className="novo-card-header"><div><div className="novo-card-title">Configurar oferta — {selected.name}</div><div className="novo-card-sub">Define tu precio de venta y genera el link</div></div></div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr auto',gap:16,alignItems:'end',marginBottom:16}}>
+            <NField label="Precio de venta (USD)" type="number" value={price} onChange={v=>{setPrice(v);setCheckout('');}}/>
+            <div><label style={{fontSize:12,color:'var(--novo-muted)',display:'block',marginBottom:6}}>Costo mayorista</label><div style={{fontSize:16,fontWeight:600,color:'#64748b'}}>${selected.wholesale_price}</div></div>
+            <div><label style={{fontSize:12,color:'var(--novo-muted)',display:'block',marginBottom:6}}>Tu ganancia estimada</label><div style={{fontSize:22,fontWeight:700,color:margin>0?'#34d399':'#f87171'}}>${margin.toFixed(2)}</div></div>
+            <button className="novo-btn novo-btn-primary" onClick={generate} disabled={busy||!price}><Link2 size={14}/> Generar link Stripe</button>
+          </div>
+          {checkout&&(
+            <div style={{display:'flex',alignItems:'center',gap:8,background:'rgba(16,185,129,.06)',border:'1px solid rgba(16,185,129,.15)',borderRadius:8,padding:'12px 14px'}}>
+              <span style={{flex:1,fontSize:12,color:'#34d399',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{checkout}</span>
+              <button className="novo-btn novo-btn-ghost" style={{padding:'4px 10px',fontSize:11}} onClick={()=>navigator.clipboard.writeText(checkout)}><Copy size={12}/> Copiar</button>
+              <a href={checkout} target="_blank" rel="noreferrer" className="novo-btn novo-btn-ghost" style={{padding:'4px 10px',fontSize:11}}><ExternalLink size={12}/></a>
+            </div>
+          )}
+        </div>
       )}
     </div>
   );
 }
 
-function SecurityPanel() {
-  const items = [
-    'Supabase Auth con roles super_admin, partner y client',
-    'RLS obligatoria en todas las tablas',
-    'Secretos únicamente en Edge Functions',
-    'OAuth con refresh token automático',
-    'Webhooks con firma X-GHL-Signature Ed25519',
-    'Registro de auditoría e idempotencia',
-  ];
-  return <section className="pc-card"><div className="pc-card-title"><div><span>PRODUCCIÓN</span><h3>Checklist de seguridad</h3></div><ShieldCheck size={20} /></div>{items.map(item => <div className="pc-security-item" key={item}><CheckCircle2 size={16} /><span>{item}</span></div>)}</section>;
+function PartnerLinks(){
+  return(
+    <div className="novo-page">
+      <div className="novo-page-header"><span className="kicker">VENTAS</span><h1>Links de venta</h1><p>Historial de links generados y conversiones.</p></div>
+      <div className="novo-card"><div className="novo-empty" style={{padding:'60px 24px'}}><Link2 size={36} style={{opacity:.2,marginBottom:14}}/><p style={{fontWeight:600,color:'var(--novo-text)',marginBottom:6}}>Historial de links</p><p style={{fontSize:13}}>Los links que generes en "Productos y ofertas" aparecerán aquí.</p></div></div>
+    </div>
+  );
 }
 
-function Field({ label, value, onChange, secret = false, type = 'text' }) {
-  return <label className="pc-field"><span>{label}</span><input type={secret ? 'password' : type} value={value} onChange={e => onChange(e.target.value)} autoComplete="off" /></label>;
+function PartnerBrand(){
+  const [form,setForm]=useState({name:'',domain:'',metaPixelId:'',facebookUrl:''});
+  const [notice,setNotice]=useState(null);
+  const [busy,setBusy]=useState(false);
+
+  async function save(){
+    try{setBusy(true);await platformApi.savePartnerBranding(form);setNotice({type:'success',text:'Marca guardada.'});}
+    catch(e){setNotice({type:'error',text:e.message});}finally{setBusy(false);}
+  }
+
+  return(
+    <div className="novo-page">
+      <div className="novo-page-header"><span className="kicker">IDENTIDAD</span><h1>Marca y redes</h1><p>Configura tu identidad en el ecosistema NOVO.</p></div>
+      {notice&&<Notice {...notice} onClose={()=>setNotice(null)}/>}
+      <div className="novo-card">
+        <div className="novo-card-header"><div className="novo-card-title">Configuración permitida</div></div>
+        <div className="novo-grid-2">
+          <NField label="Nombre comercial" value={form.name} onChange={v=>setForm({...form,name:v})}/>
+          <NField label="Dominio" value={form.domain} onChange={v=>setForm({...form,domain:v})}/>
+          <NField label="Meta Pixel ID" value={form.metaPixelId} onChange={v=>setForm({...form,metaPixelId:v})}/>
+          <NField label="Facebook URL" value={form.facebookUrl} onChange={v=>setForm({...form,facebookUrl:v})}/>
+        </div>
+        <button className="novo-btn novo-btn-primary" onClick={save} disabled={busy}><Save size={14}/> Guardar marca</button>
+        <p style={{fontSize:11,color:'var(--novo-muted)',marginTop:10}}>Las conexiones GHL, pagos y permisos solo los administra el Super Admin.</p>
+      </div>
+    </div>
+  );
 }
 
-function Notice({ type, text }) {
-  return <div className={`pc-notice ${type}`}>{type === 'success' ? <CheckCircle2 size={17} /> : <AlertCircle size={17} />}<span>{text}</span></div>;
+function PartnerSupport(){
+  return(
+    <div className="novo-page">
+      <div className="novo-page-header"><span className="kicker">SOPORTE</span><h1>Centro de ayuda</h1><p>Soporte para partners del ecosistema NOVO.</p></div>
+      <div className="novo-card"><div className="novo-empty" style={{padding:'60px 24px'}}><LifeBuoy size={36} style={{opacity:.2,marginBottom:14}}/><p style={{fontWeight:600,color:'var(--novo-text)',marginBottom:6}}>Canal de soporte en construcción</p><p style={{fontSize:13}}>Contacta a tu administrador:</p><p style={{marginTop:8,color:'#818cf8',fontWeight:600}}>clients@novoeia.com</p></div></div>
+    </div>
+  );
+}
+
+/* SHARED */
+function NField({label,value='',onChange,secret=false,type='text'}){
+  return(<div className="novo-field"><label>{label}</label><input type={secret?'password':type} value={value} onChange={e=>onChange?.(e.target.value)} autoComplete="off"/></div>);
+}
+
+function Info({label,value}){
+  return(<div><div style={{fontSize:11,color:'var(--novo-muted)',marginBottom:3}}>{label}</div><div style={{fontSize:13,color:'#fff',fontWeight:500}}>{String(value)}</div></div>);
+}
+
+function Badge({status,label}){
+  const cls={active:'active',inactive:'inactive',pending:'pending'}[status]||'pending';
+  return <span className={`novo-badge ${cls}`}>{label||status}</span>;
+}
+
+function Notice({type,text,onClose}){
+  return(
+    <div className={`novo-notice ${type}`} style={{marginBottom:16}}>
+      {type==='success'?<CheckCircle2 size={15}/>:<AlertCircle size={15}/>}
+      <span style={{flex:1}}>{text}</span>
+      {onClose&&<button onClick={onClose} style={{background:'none',border:'none',cursor:'pointer',color:'inherit',padding:0}}><X size={14}/></button>}
+    </div>
+  );
 }
