@@ -14,6 +14,7 @@ import {
   AdminResources,
   PartnerResources,
 } from './ResourcesConsole.jsx';
+import PartnerBrandConsole from './PartnerBrandConsole.jsx';
 
 /* ================================
    SUPER ADMIN ROUTER
@@ -1190,7 +1191,7 @@ export function PartnerConsole({ section }) {
   if (section === 'links')     return <PartnerLinks />;
   if (section === 'commissions') return <PartnerCommissions />;
   if (section === 'resources') return <PartnerResources />;
-  if (section === 'brand')     return <PartnerBrand />;
+  if (section === 'brand')     return <PartnerBrandConsole />;
   if (section === 'support')   return <PartnerSupport />;
   return <PartnerDashboard />;
 }
@@ -1877,51 +1878,6 @@ function PartnerCommissions() {
             </tbody>
           </table>
         )}
-      </div>
-    </div>
-  );
-}
-
-/* ================================
-   PARTNER MARCA
-================================ */
-function PartnerBrand() {
-  const [form, setForm] = useState({ name: '', domain: '', logoUrl: '', primaryColor: '', metaPixelId: '', facebookUrl: '', instagramUrl: '', tiktokUrl: '' });
-  const [notice, setNotice] = useState(null);
-  const [busy, setBusy] = useState(false);
-
-  async function save() {
-    try {
-      setBusy(true);
-      await platformApi.savePartnerBranding(form);
-      setNotice({ type: 'success', text: 'Marca guardada.' });
-    } catch (e) {
-      setNotice({ type: 'error', text: e.message });
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <div className="novo-page">
-      <div className="novo-page-header"><span className="kicker">IDENTIDAD</span><h1>Marca y redes</h1><p>Configura tu identidad en el ecosistema NOVO.</p></div>
-      {notice && <Notice {...notice} onClose={() => setNotice(null)} />}
-      <div className="novo-card">
-        <div className="novo-card-header"><div className="novo-card-title">Configuración permitida</div></div>
-        <LogoField label="Logo del Partner" value={form.logoUrl} onChange={logoUrl => setForm(current => ({ ...current, logoUrl }))} uploadScope="partners" />
-        <div className="novo-grid-2">
-          <NField label="Nombre comercial" value={form.name} onChange={value => setForm(current => ({ ...current, name: value }))} />
-          <NField label="Dominio" value={form.domain} onChange={value => setForm(current => ({ ...current, domain: value }))} />
-          <NField label="Color principal" value={form.primaryColor} onChange={value => setForm(current => ({ ...current, primaryColor: value }))} />
-          <NField label="Meta Pixel ID" value={form.metaPixelId} onChange={value => setForm(current => ({ ...current, metaPixelId: value }))} />
-          <NField label="Facebook URL" value={form.facebookUrl} onChange={value => setForm(current => ({ ...current, facebookUrl: value }))} />
-          <NField label="Instagram URL" value={form.instagramUrl} onChange={value => setForm(current => ({ ...current, instagramUrl: value }))} />
-          <NField label="TikTok URL" value={form.tiktokUrl} onChange={value => setForm(current => ({ ...current, tiktokUrl: value }))} />
-        </div>
-        <button className="novo-btn novo-btn-primary" onClick={save} disabled={busy}>
-          {busy ? <Loader2 size={14} style={{ animation: 'novoSpin .8s linear infinite' }} /> : <Save size={14} />} Guardar marca
-        </button>
-        <p style={{ fontSize: 11, color: 'var(--novo-muted)', marginTop: 10 }}>Las conexiones GHL, pagos y permisos avanzados solo los administra el Super Admin.</p>
       </div>
     </div>
   );

@@ -1684,10 +1684,30 @@ export const platformApi = {
     });
   },
 
+  async getPartnerBranding() {
+    return invoke('partner-commerce', {
+      action: 'getBranding',
+    });
+  },
+
   savePartnerBranding(payload) {
     return invoke('partner-commerce', {
       action: 'saveBranding',
       payload,
+    });
+  },
+
+  getPartnerStorefront(slug) {
+    return invoke('partner-storefront', {
+      action: 'getStorefront',
+      payload: { slug },
+    });
+  },
+
+  submitPartnerLead(slug, payload) {
+    return invoke('partner-storefront', {
+      action: 'submitLead',
+      payload: { slug, ...payload },
     });
   },
 };

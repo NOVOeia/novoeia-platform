@@ -41,7 +41,7 @@ const partnerMenu = [
   ['offers', 'Productos y ofertas', Package],
   ['links', 'Links de venta', Link2],
   ['commissions', 'Comisiones', CreditCard],
-  ['brand', 'Marca y redes', Settings],
+  ['brand', 'Mi marca y páginas', Settings],
   ['support', 'Soporte', Bell],
 ];
 

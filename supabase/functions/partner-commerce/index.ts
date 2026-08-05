@@ -95,24 +95,55 @@ Deno.serve(async (req) => {
       return json({ offer: data });
     }
 
+    if (action === 'getBranding') {
+      const { data, error } = await supabase
+        .from('partners')
+        .select('id, name, slug, status, branding, social_settings')
+        .eq('id', partnerId)
+        .single();
+      if (error) throw error;
+      return json({ partner: data });
+    }
+
     if (action === 'saveBranding') {
-      const allowed = {
-        name: payload.name,
-        domain: payload.domain,
-        logoUrl: payload.logoUrl,
-        primaryColor: payload.primaryColor,
+      const brand = payload.brand || {};
+      const funnel = payload.funnel || {};
+      const checkout = payload.checkout || {};
+
+      const branding = {
+        brand,
+        funnel,
+        checkout,
+        name: brand.businessName || payload.name || null,
+        domain: payload.domain || brand.websiteUrl || null,
+        logoUrl: brand.logoUrl || payload.logoUrl || null,
+        primaryColor: brand.primaryColor || payload.primaryColor || '#7C3AED',
       };
+
       const social = {
-        metaPixelId: payload.metaPixelId,
-        facebookUrl: payload.facebookUrl,
-        instagramUrl: payload.instagramUrl,
-        tiktokUrl: payload.tiktokUrl,
+        metaPixelId: payload.metaPixelId || null,
+        facebookUrl: brand.facebookUrl || payload.facebookUrl || null,
+        instagramUrl: brand.instagramUrl || payload.instagramUrl || null,
+        linkedinUrl: brand.linkedinUrl || null,
+        tiktokUrl: brand.tiktokUrl || payload.tiktokUrl || null,
       };
-      const { data, error } = await supabase.from('partners').update({
-        branding: allowed,
+
+      const partnerPatch: Record<string, unknown> = {
+        branding,
         social_settings: social,
         updated_at: new Date().toISOString(),
-      }).eq('id', partnerId).select().single();
+      };
+
+      if (brand.businessName) {
+        partnerPatch.name = String(brand.businessName).trim();
+      }
+
+      const { data, error } = await supabase
+        .from('partners')
+        .update(partnerPatch)
+        .eq('id', partnerId)
+        .select('id, name, slug, status, branding, social_settings')
+        .single();
       if (error) throw error;
       return json({ partner: data });
     }
