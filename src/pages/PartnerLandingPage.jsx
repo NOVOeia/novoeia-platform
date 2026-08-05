@@ -23,6 +23,7 @@ export default function PartnerLandingPage({ slug, go }) {
   const [error, setError] = useState(null);
   const [storefront, setStorefront] = useState(null);
   const [products, setProducts] = useState([]);
+  const [published, setPublished] = useState(true);
   const [leadForm, setLeadForm] = useState({ companyName: '', contactName: '', email: '', phone: '', message: '', productName: '' });
   const [leadBusy, setLeadBusy] = useState(false);
   const [leadNotice, setLeadNotice] = useState(null);
@@ -35,6 +36,7 @@ export default function PartnerLandingPage({ slug, go }) {
         const data = await platformApi.getPartnerStorefront(slug);
         setStorefront(data?.storefront || null);
         setProducts(data?.products || []);
+        setPublished(data?.published !== false);
       } catch (err) {
         setError(err.message);
       } finally {
@@ -54,6 +56,11 @@ export default function PartnerLandingPage({ slug, go }) {
         <div className="partner-landing-empty">
           <h1>Página no disponible</h1>
           <p>{error || 'No encontramos esta landing.'}</p>
+          {error?.includes('activar') && (
+            <p style={{ maxWidth: 420, lineHeight: 1.6, opacity: 0.8 }}>
+              Si eres partner, pide al Super Admin que cambie tu estado a <strong>Activo</strong> en el panel de Partners.
+            </p>
+          )}
           <button type="button" className="partner-landing-btn" onClick={() => go('home')}>Volver al inicio</button>
         </div>
       </div>
@@ -103,6 +110,11 @@ export default function PartnerLandingPage({ slug, go }) {
 
   return (
     <div className="partner-landing-shell" style={cssVars}>
+      {!published && (
+        <div className="partner-landing-draft-bar">
+          Vista previa — tu landing será pública cuando el Super Admin active tu cuenta.
+        </div>
+      )}
       <header className="partner-landing-header">
         <div className="partner-landing-brand">
           {brand.logoUrl ? (

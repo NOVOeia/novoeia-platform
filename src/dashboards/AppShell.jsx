@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 
 import { Logo } from '../components/ui.jsx';
+import NotificationBell from '../components/NotificationBell.jsx';
 import {
   SuperAdminConsole,
   PartnerConsole,
@@ -112,9 +113,7 @@ export default function AppShell({ role, go }) {
               {theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}
             </button>
 
-            <button type="button" className="novo-bell" aria-label="Notificaciones">
-              <Bell size={17} />
-            </button>
+            <NotificationBell role={role} onNavigate={setActive} />
 
             <div className="novo-avatar">{initial}</div>
           </div>

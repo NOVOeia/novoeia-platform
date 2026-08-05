@@ -73,6 +73,8 @@ function normalizeStorefront(partner: Record<string, unknown>) {
     id: partner.id,
     name: partner.name,
     slug: partner.slug,
+    status: partner.status,
+    published: partner.status === 'active',
     brand,
     funnel,
   };
@@ -96,7 +98,9 @@ Deno.serve(async (req) => {
 
     if (partnerError) throw partnerError;
     if (!partner) throw new Error('PARTNER_NOT_FOUND');
-    if (partner.status !== 'active') throw new Error('PARTNER_NOT_PUBLISHED');
+    if (partner.status === 'inactive') throw new Error('PARTNER_NOT_PUBLISHED');
+
+    const published = partner.status === 'active';
 
     if (action === 'getStorefront') {
       const { data: offers, error: offersError } = await supabase
@@ -143,6 +147,7 @@ Deno.serve(async (req) => {
       return json({
         storefront: normalizeStorefront(partner),
         products,
+        published,
       });
     }
 
@@ -174,6 +179,22 @@ Deno.serve(async (req) => {
         .single();
 
       if (clientError) throw clientError;
+
+      await supabase.from('platform_notifications').insert({
+        partner_id: partner.id,
+        recipient_role: 'partner',
+        type: 'storefront.lead_created',
+        title: 'Nuevo lead desde tu landing',
+        body: `${companyName} dejó sus datos${productName ? ` por ${productName}` : ''}.`,
+        metadata: {
+          clientId: client.id,
+          slug,
+          email,
+          companyName,
+          contactName: String(payload.contactName || '').trim() || null,
+          productName: productName || null,
+        },
+      });
 
       await supabase.from('audit_logs').insert({
         action: 'storefront.lead_created',

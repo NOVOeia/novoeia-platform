@@ -66,6 +66,7 @@ export default function PartnerBrandConsole() {
   const [funnel, setFunnel] = useState(INITIAL_FUNNEL);
   const [checkout, setCheckout] = useState(INITIAL_CHECKOUT);
   const [slug, setSlug] = useState('');
+  const [partnerStatus, setPartnerStatus] = useState('');
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState(null);
@@ -78,6 +79,7 @@ export default function PartnerBrandConsole() {
         const partner = data?.partner;
         const branding = partner?.branding || {};
         setSlug(partner?.slug || '');
+        setPartnerStatus(partner?.status || '');
         setBrand(mergeBrand(branding.brand || {
           businessName: branding.name || partner?.name || '',
           logoUrl: branding.logoUrl || '',
@@ -168,7 +170,13 @@ export default function PartnerBrandConsole() {
           <div className="novo-card-header">
             <div>
               <div className="novo-card-title">Tu landing pública</div>
-              <div className="novo-card-sub">Comparte este link para promocionar tus productos</div>
+              <div className="novo-card-sub">
+                {partnerStatus === 'active'
+                  ? 'Comparte este link para promocionar tus productos'
+                  : partnerStatus === 'pending'
+                    ? 'Puedes previsualizar mientras el Super Admin activa tu cuenta'
+                    : 'Tu landing no está publicada — contacta al Super Admin'}
+              </div>
             </div>
           </div>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>

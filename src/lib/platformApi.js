@@ -148,6 +148,18 @@ const ERROR_HINTS = {
   PARTNER_NOT_ASSIGNED:
     'La cuenta no está vinculada a un Partner.',
 
+  PARTNER_NOT_FOUND:
+    'No encontramos un partner con ese enlace. Verifica el slug en Mi marca y páginas.',
+
+  PARTNER_NOT_PUBLISHED:
+    'Esta landing no está publicada. El Super Admin debe activar tu cuenta en Partners.',
+
+  PARTNER_SLUG_REQUIRED:
+    'Falta el identificador del partner en la URL.',
+
+  LEAD_FIELDS_REQUIRED:
+    'Completa empresa y correo para enviar la solicitud.',
+
   OFFER_NOT_FOUND:
     'La oferta no fue encontrada.',
 
@@ -268,6 +280,12 @@ async function parseFunctionError(error, data) {
     'Edge Function returned a non-2xx status code'
   ) {
     return 'La Edge Function falló. Revisa Supabase → Edge Functions → Logs.';
+  }
+
+  if (
+    error?.message?.includes('Failed to send a request to the Edge Function')
+  ) {
+    return 'No se pudo conectar con la Edge Function. Verifica que esté desplegada en Supabase.';
   }
 
   return translateKnownError(error?.message);
@@ -507,18 +525,60 @@ export const platformApi = {
     };
   },
 
-  createPartner(payload) {
-    return invoke('platform-admin', {
-      action: 'createPartner',
-      payload,
-    });
+  async createPartner(payload) {
+    await this.requireSuperAdmin();
+
+    const name = String(payload.name || '').trim();
+    const slug = String(payload.slug || '').trim().toLowerCase();
+
+    if (!name || !slug) {
+      throw new Error('MISSING_REQUIRED_FIELDS');
+    }
+
+    const { data, error } = await supabase
+      .from('partners')
+      .insert({
+        name,
+        slug,
+        plan_name: payload.plan_name || 'partner',
+        status: payload.status || 'pending',
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return { partner: data };
   },
 
-  updatePartner(payload) {
-    return invoke('platform-admin', {
-      action: 'updatePartner',
-      payload,
-    });
+  async updatePartner(payload) {
+    await this.requireSuperAdmin();
+
+    const id = payload.id;
+    if (!id) {
+      throw new Error('MISSING_REQUIRED_FIELDS');
+    }
+
+    const patch = {
+      updated_at: new Date().toISOString(),
+    };
+
+    if (payload.name != null) patch.name = String(payload.name).trim();
+    if (payload.slug != null) patch.slug = String(payload.slug).trim().toLowerCase();
+    if (payload.plan_name != null) patch.plan_name = payload.plan_name;
+    if (payload.status != null) patch.status = payload.status;
+    if (payload.ghl_location_id !== undefined) {
+      patch.ghl_location_id = payload.ghl_location_id || null;
+    }
+
+    const { data, error } = await supabase
+      .from('partners')
+      .update(patch)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return { partner: data };
   },
 
   listCatalog() {
@@ -1709,5 +1769,67 @@ export const platformApi = {
       action: 'submitLead',
       payload: { slug, ...payload },
     });
+  },
+
+  async listNotifications() {
+    const profile = await this.getMyProfile();
+    if (!profile) {
+      throw new Error(ERROR_HINTS.FORBIDDEN);
+    }
+
+    let query = supabase
+      .from('platform_notifications')
+      .select('id, partner_id, type, title, body, metadata, read_at, created_at')
+      .order('created_at', { ascending: false })
+      .limit(40);
+
+    if (profile.role === 'partner') {
+      if (!profile.partner_id) return { notifications: [] };
+      query = query.eq('partner_id', profile.partner_id);
+    } else if (profile.role !== 'super_admin') {
+      return { notifications: [] };
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+    return { notifications: data || [] };
+  },
+
+  async markNotificationRead(notificationId) {
+    const profile = await this.getMyProfile();
+    if (!profile) {
+      throw new Error(ERROR_HINTS.FORBIDDEN);
+    }
+
+    const { data, error } = await supabase
+      .from('platform_notifications')
+      .update({ read_at: new Date().toISOString() })
+      .eq('id', notificationId)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return { notification: data };
+  },
+
+  async markAllNotificationsRead() {
+    const profile = await this.getMyProfile();
+    if (!profile) {
+      throw new Error(ERROR_HINTS.FORBIDDEN);
+    }
+
+    let query = supabase
+      .from('platform_notifications')
+      .update({ read_at: new Date().toISOString() })
+      .is('read_at', null);
+
+    if (profile.role === 'partner') {
+      if (!profile.partner_id) return { ok: true };
+      query = query.eq('partner_id', profile.partner_id);
+    }
+
+    const { error } = await query;
+    if (error) throw error;
+    return { ok: true };
   },
 };

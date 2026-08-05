@@ -421,6 +421,137 @@
   border-color: var(--novo-info-border);
 }
 
+.novo-notifications {
+  position: relative;
+}
+
+.novo-notifications .novo-bell {
+  position: relative;
+}
+
+.novo-bell.has-unread {
+  color: var(--novo-purple);
+  border-color: rgba(124, 58, 237, 0.35);
+}
+
+.novo-bell-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--novo-purple);
+  color: white;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.novo-notifications-panel {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  width: min(360px, calc(100vw - 24px));
+  max-height: 420px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--novo-border);
+  border-radius: 14px;
+  background: var(--novo-card);
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.18);
+  z-index: 40;
+}
+
+.novo-notifications-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--novo-border);
+}
+
+.novo-notifications-mark-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  background: transparent;
+  color: var(--novo-purple);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.novo-notifications-empty {
+  padding: 28px 16px;
+  text-align: center;
+  color: var(--novo-muted);
+  font-size: 13px;
+}
+
+.novo-notifications-list {
+  overflow: auto;
+  max-height: 340px;
+}
+
+.novo-notification-item {
+  width: 100%;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 0;
+  border-bottom: 1px solid var(--novo-divider);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.novo-notification-item.unread {
+  background: rgba(124, 58, 237, 0.06);
+}
+
+.novo-notification-item:hover {
+  background: var(--novo-card-hover);
+}
+
+.novo-notification-icon {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: rgba(124, 58, 237, 0.12);
+  color: var(--novo-purple);
+}
+
+.novo-notification-copy {
+  display: grid;
+  gap: 4px;
+}
+
+.novo-notification-copy strong {
+  color: var(--novo-text);
+  font-size: 13px;
+}
+
+.novo-notification-copy span {
+  color: var(--novo-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.novo-notification-copy small {
+  color: var(--novo-muted);
+  font-size: 11px;
+}
+
 .novo-bell:focus-visible,
 .novo-theme-toggle:focus-visible,
 .novo-nav-item:focus-visible,

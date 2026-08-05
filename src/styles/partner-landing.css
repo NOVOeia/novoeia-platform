@@ -1,3 +1,12 @@
+.partner-landing-draft-bar {
+  padding: 10px 16px;
+  text-align: center;
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 13px;
+  font-weight: 600;
+}
+
 .partner-landing-shell {
   min-height: 100vh;
   background: var(--pl-bg, #f8fafc);
