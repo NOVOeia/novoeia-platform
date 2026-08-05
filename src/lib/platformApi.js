@@ -733,6 +733,14 @@ export const platformApi = {
         'partner_id',
         partnerId,
       );
+    } else if (
+      profile.role === 'partner' &&
+      profile.partner_id
+    ) {
+      query = query.eq(
+        'partner_id',
+        profile.partner_id,
+      );
     }
 
     if (clientId) {
@@ -793,6 +801,200 @@ export const platformApi = {
     return {
       link: data,
     };
+  },
+
+  async listAllClients({
+    partnerId = null,
+    status = null,
+  } = {}) {
+    const profile = await this.getMyProfile();
+    if (profile?.role !== 'super_admin') {
+      throw new Error(ERROR_HINTS.FORBIDDEN);
+    }
+
+    let query = supabase
+      .from('partner_clients')
+      .select(`
+        id,
+        partner_id,
+        name,
+        company_name,
+        contact_name,
+        email,
+        phone,
+        status,
+        industry,
+        city,
+        country,
+        logo_url,
+        created_at,
+        offer_id,
+        partners:partner_id ( id, name, slug )
+      `)
+      .order('created_at', { ascending: false });
+
+    if (partnerId) query = query.eq('partner_id', partnerId);
+    if (status) query = query.eq('status', status);
+
+    const { data, error } = await query;
+    if (error) throw error;
+    return { clients: data || [] };
+  },
+
+  async listCommissions({
+    partnerId = null,
+    status = null,
+  } = {}) {
+    const profile = await this.getMyProfile();
+    if (!profile) {
+      throw new Error(ERROR_HINTS.FORBIDDEN);
+    }
+
+    if (
+      profile.role !== 'super_admin' &&
+      profile.role !== 'partner'
+    ) {
+      throw new Error(ERROR_HINTS.FORBIDDEN);
+    }
+
+    let query = supabase
+      .from('partner_commissions')
+      .select(`
+        id,
+        partner_id,
+        sales_link_id,
+        client_id,
+        stripe_checkout_session_id,
+        stripe_subscription_id,
+        gross_amount,
+        wholesale_amount,
+        commission_amount,
+        currency,
+        status,
+        paid_at,
+        created_at,
+        updated_at,
+        partners:partner_id ( name, slug ),
+        partner_clients:client_id ( company_name, name, email )
+      `)
+      .order('created_at', { ascending: false });
+
+    if (profile.role === 'partner') {
+      if (!profile.partner_id) {
+        return { commissions: [] };
+      }
+      query = query.eq('partner_id', profile.partner_id);
+    } else if (partnerId) {
+      query = query.eq('partner_id', partnerId);
+    }
+
+    if (status) query = query.eq('status', status);
+
+    const { data, error } = await query;
+    if (error) throw error;
+    return { commissions: data || [] };
+  },
+
+  async updateCommissionStatus(commissionId, status) {
+    const profile = await this.getMyProfile();
+    if (profile?.role !== 'super_admin') {
+      throw new Error(ERROR_HINTS.FORBIDDEN);
+    }
+
+    const allowed = ['pending', 'paid', 'cancelled'];
+    if (!allowed.includes(status)) {
+      throw new Error('INVALID_COMMISSION_STATUS');
+    }
+
+    const patch = {
+      status,
+      updated_at: new Date().toISOString(),
+      paid_at: status === 'paid' ? new Date().toISOString() : null,
+    };
+
+    const { data, error } = await supabase
+      .from('partner_commissions')
+      .update(patch)
+      .eq('id', commissionId)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return { commission: data };
+  },
+
+  async listActiveSubscriptions({
+    partnerId = null,
+  } = {}) {
+    const profile = await this.getMyProfile();
+    if (!profile) {
+      throw new Error(ERROR_HINTS.FORBIDDEN);
+    }
+
+    if (
+      profile.role !== 'super_admin' &&
+      profile.role !== 'partner'
+    ) {
+      throw new Error(ERROR_HINTS.FORBIDDEN);
+    }
+
+    let query = supabase
+      .from('sales_links')
+      .select(`
+        id,
+        partner_id,
+        partner_name,
+        client_id,
+        client_name,
+        client_email,
+        product_name,
+        billing_interval,
+        currency,
+        sale_price,
+        wholesale_price,
+        partner_margin,
+        status,
+        stripe_checkout_session_id,
+        activated_at,
+        metadata,
+        created_at
+      `)
+      .eq('status', 'active')
+      .order('activated_at', { ascending: false, nullsFirst: false });
+
+    if (profile.role === 'partner') {
+      if (!profile.partner_id) {
+        return { subscriptions: [] };
+      }
+      query = query.eq('partner_id', profile.partner_id);
+    } else if (partnerId) {
+      query = query.eq('partner_id', partnerId);
+    }
+
+    const { data: links, error } = await query;
+    if (error) throw error;
+
+    const clientIds = [...new Set((links || []).map(link => link.client_id).filter(Boolean))];
+    let clientStatusMap = {};
+
+    if (clientIds.length > 0) {
+      const { data: clients } = await supabase
+        .from('partner_clients')
+        .select('id, status')
+        .in('id', clientIds);
+      clientStatusMap = Object.fromEntries((clients || []).map(c => [c.id, c.status]));
+    }
+
+    const subscriptions = (links || []).map(link => ({
+      ...link,
+      client_status: clientStatusMap[link.client_id] || null,
+      stripe_subscription_id:
+        link.metadata?.stripe_subscription_id ||
+        link.stripe_checkout_session_id ||
+        null,
+    }));
+
+    return { subscriptions };
   },
 
   async updateSalesLinkStatus(

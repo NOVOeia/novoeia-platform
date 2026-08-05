@@ -129,6 +129,32 @@ Deno.serve(async (req) => {
       );
     }
 
+    const {
+      data: partner,
+      error: partnerError,
+    } = await supabase
+      .from('partners')
+      .select('id, name')
+      .eq('id', partnerId)
+      .single();
+
+    if (partnerError || !partner) {
+      throw new Error('PARTNER_NOT_FOUND');
+    }
+
+    const clientName =
+      client.company_name ||
+      client.name;
+
+    const billingType =
+      product.billing_type || 'recurring';
+
+    const billingInterval =
+      product.interval || null;
+
+    const currency =
+      (product.currency || 'USD').toUpperCase();
+
     /* =====================================================
        5. CREAR O ACTUALIZAR OFERTA DEL PARTNER
     ===================================================== */
@@ -163,32 +189,97 @@ Deno.serve(async (req) => {
     }
 
     /* =====================================================
-       6. CREAR REGISTRO BORRADOR DEL LINK
+       6. ARCHIVAR LINKS ACTIVOS Y REUTILIZAR BORRADOR
     ===================================================== */
 
-    const {
-      data: salesLink,
-      error: salesLinkError,
-    } = await supabase
+    await supabase
       .from('sales_links')
-      .insert({
-        partner_id: partnerId,
-        client_id: client.id,
-        offer_id: offer.id,
-        product_id: product.id,
-
-        status: 'draft',
-
-        created_by: profile.id,
-        created_by_role: profile.role,
-
-        metadata: {
-          client_status: client.status || null,
-          requested_retail_price: retailPrice,
-        },
+      .update({
+        status: 'archived',
+        disabled_at: new Date().toISOString(),
+        stripe_checkout_session_id: null,
+        failure_reason: null,
       })
-      .select()
-      .single();
+      .eq('partner_id', partnerId)
+      .eq('client_id', client.id)
+      .eq('product_id', product.id)
+      .eq('status', 'active');
+
+    await supabase
+      .from('sales_links')
+      .update({
+        status: 'archived',
+        disabled_at: new Date().toISOString(),
+        stripe_checkout_session_id: null,
+      })
+      .eq('partner_id', partnerId)
+      .eq('client_id', client.id)
+      .eq('product_id', product.id)
+      .eq('status', 'draft')
+      .not('stripe_checkout_session_id', 'is', null);
+
+    const salesLinkBase = {
+      partner_id: partnerId,
+      partner_name: partner.name,
+      client_id: client.id,
+      client_name: clientName,
+      client_email: client.email || null,
+      offer_id: offer.id,
+      product_id: product.id,
+      product_name: product.name,
+      billing_type: billingType,
+      billing_interval: billingInterval,
+      currency,
+      wholesale_price: wholesalePrice,
+      sale_price: retailPrice,
+      stripe_product_id: stripeProductId,
+      stripe_checkout_session_id: null,
+      stripe_payment_link_id: null,
+      checkout_url: null,
+      status: 'draft',
+      created_by: profile.id,
+      created_by_role: profile.role,
+      failure_reason: null,
+      metadata: {
+        client_status: client.status || null,
+        requested_retail_price: retailPrice,
+      },
+    };
+
+    const { data: existingDraft } = await supabase
+      .from('sales_links')
+      .select('id')
+      .eq('partner_id', partnerId)
+      .eq('client_id', client.id)
+      .eq('product_id', product.id)
+      .eq('status', 'draft')
+      .is('stripe_checkout_session_id', null)
+      .maybeSingle();
+
+    let salesLink;
+    let salesLinkError;
+
+    if (existingDraft?.id) {
+      const updated = await supabase
+        .from('sales_links')
+        .update({
+          ...salesLinkBase,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', existingDraft.id)
+        .select()
+        .single();
+      salesLink = updated.data;
+      salesLinkError = updated.error;
+    } else {
+      const inserted = await supabase
+        .from('sales_links')
+        .insert(salesLinkBase)
+        .select()
+        .single();
+      salesLink = inserted.data;
+      salesLinkError = inserted.error;
+    }
 
     if (salesLinkError || !salesLink) {
       throw new Error(
@@ -305,34 +396,10 @@ Deno.serve(async (req) => {
       updated_at: new Date().toISOString(),
     };
 
-    let {
-      error: updateOfferError,
-    } = await supabase
+    const { error: updateOfferError } = await supabase
       .from('partner_offers')
-      .update({
-        ...offerPatch,
-        stripe_checkout_session_id:
-          session.id,
-      })
+      .update(offerPatch)
       .eq('id', offer.id);
-
-    /*
-      Compatibilidad por si la columna
-      stripe_checkout_session_id no existe
-      en algún entorno anterior.
-    */
-    if (
-      updateOfferError?.message?.includes(
-        'stripe_checkout_session_id',
-      )
-    ) {
-      const fallback = await supabase
-        .from('partner_offers')
-        .update(offerPatch)
-        .eq('id', offer.id);
-
-      updateOfferError = fallback.error;
-    }
 
     if (updateOfferError) {
       await supabase
@@ -352,6 +419,12 @@ Deno.serve(async (req) => {
        10. ACTIVAR LINK DE VENTA
     ===================================================== */
 
+    await supabase
+      .from('sales_links')
+      .update({ stripe_checkout_session_id: null })
+      .eq('stripe_checkout_session_id', session.id)
+      .neq('id', salesLink.id);
+
     const {
       data: activeSalesLink,
       error: updateSalesLinkError,
@@ -359,21 +432,17 @@ Deno.serve(async (req) => {
       .from('sales_links')
       .update({
         checkout_url: session.url,
-        stripe_checkout_session_id:
-          session.id,
-
+        stripe_checkout_session_id: session.id,
+        stripe_product_id: stripeProductId,
+        sale_price: retailPrice,
+        wholesale_price: wholesalePrice,
         status: 'active',
+        activated_at: new Date().toISOString(),
         failure_reason: null,
-
         metadata: {
-          client_status:
-            client.status || null,
-
-          requested_retail_price:
-            retailPrice,
-
-          stripe_session_id:
-            session.id,
+          client_status: client.status || null,
+          requested_retail_price: retailPrice,
+          stripe_session_id: session.id,
         },
       })
       .eq('id', salesLink.id)

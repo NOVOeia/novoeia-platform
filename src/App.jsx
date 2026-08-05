@@ -14,12 +14,26 @@ import AppShell from './dashboards/AppShell.jsx';
 import { platformApi } from './lib/platformApi.js';
 
 function parseRoute() {
-  const raw = location.hash.slice(1) || 'home';
-  const [page, section] = raw.split('/').filter(Boolean);
+  const hashBody = location.hash.slice(1) || 'home';
+  const hashPath = hashBody.split('?')[0];
+  const [page, section] = hashPath.split('/').filter(Boolean);
+
   if (page?.endsWith('-dashboard')) {
     return { page, section: section || 'dashboard' };
   }
-  return { page: raw, section: null };
+
+  if (page === 'checkout') {
+    return { page, section: section || 'success' };
+  }
+
+  return { page: page || hashPath, section: null };
+}
+
+function readCheckoutSessionId() {
+  const hashBody = location.hash.slice(1);
+  if (!hashBody.includes('?')) return null;
+  const query = hashBody.split('?').slice(1).join('?');
+  return new URLSearchParams(query).get('session_id');
 }
 
 function readHashPage() {
@@ -43,13 +57,20 @@ export default function App() {
 
   const go = (next, nextSection = null) => {
     setOauth(null);
-    const [routePage, routeSection] = String(next).split('/');
+    const hashPath = String(next).split('?')[0];
+    const [routePage, routeSection] = hashPath.split('/');
     const resolvedSection = nextSection || routeSection || null;
     setPage(routePage);
-    setSection(routePage.endsWith('-dashboard') ? (resolvedSection || 'dashboard') : null);
-    location.hash = resolvedSection && routePage.endsWith('-dashboard')
-      ? `${routePage}/${resolvedSection}`
-      : routePage;
+    if (routePage.endsWith('-dashboard')) {
+      setSection(resolvedSection || 'dashboard');
+      location.hash = `${routePage}/${resolvedSection || 'dashboard'}`;
+    } else if (routePage === 'checkout') {
+      setSection(resolvedSection || 'success');
+      location.hash = `checkout/${resolvedSection || 'success'}`;
+    } else {
+      setSection(null);
+      location.hash = routePage;
+    }
     window.scrollTo(0, 0);
   };
 
@@ -112,7 +133,13 @@ export default function App() {
     if (page === 'registro-partner') return <RegistrationPage go={go} />;
     if (page === 'login') return <LoginPage go={go} />;
     if (page === 'checkout') {
-      return <CheckoutPage go={go} status={section === 'cancel' ? 'cancel' : 'success'} />;
+      return (
+        <CheckoutPage
+          go={go}
+          status={section === 'cancel' ? 'cancel' : 'success'}
+          sessionId={readCheckoutSessionId()}
+        />
+      );
     }
     if (page === 'admin-dashboard') return <AppShell role="admin" section={section} go={go} />;
     if (page === 'partner-dashboard') return <AppShell role="partner" section={section} go={go} />;

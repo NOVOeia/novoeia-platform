@@ -2,7 +2,7 @@ import { CheckCircle2, XCircle } from 'lucide-react';
 import { Button, Logo } from '../components/ui.jsx';
 import '../styles/site-wow.css';
 
-export default function CheckoutPage({ go, status = 'success' }) {
+export default function CheckoutPage({ go, status = 'success', sessionId = null }) {
   const isSuccess = status === 'success';
 
   return (
@@ -17,6 +17,11 @@ export default function CheckoutPage({ go, status = 'success' }) {
             <p className="auth-intro">
               Tu suscripción NOVO quedó registrada. El partner y el equipo NOVO procesarán la activación.
             </p>
+            {sessionId && (
+              <p className="auth-intro" style={{ fontSize: 12, opacity: 0.75 }}>
+                Referencia: {sessionId.slice(0, 24)}…
+              </p>
+            )}
           </>
         ) : (
           <>

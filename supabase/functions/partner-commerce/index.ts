@@ -21,13 +21,50 @@ Deno.serve(async (req) => {
     }
 
     if (action === 'createClient') {
-      if (!payload.name) throw new Error('CLIENT_NAME_REQUIRED');
-      const { data, error } = await supabase.from('partner_clients').insert({
-        partner_id: partnerId,
-        name: payload.name,
+      const displayName = String(payload.company_name || payload.name || '').trim();
+      if (!displayName) throw new Error('CLIENT_NAME_REQUIRED');
+
+      const clientRow = {
+        name: displayName,
         email: payload.email || null,
         phone: payload.phone || null,
-        status: 'pending',
+        status: payload.status || 'pending',
+        company_name: payload.company_name || displayName,
+        logo_url: payload.logo_url || null,
+        industry: payload.industry || null,
+        website: payload.website || null,
+        contact_name: payload.contact_name || null,
+        contact_role: payload.contact_role || null,
+        country: payload.country || null,
+        city: payload.city || null,
+        address: payload.address || null,
+        notes: payload.notes || null,
+      };
+
+      if (payload.id) {
+        const { data, error } = await supabase
+          .from('partner_clients')
+          .update(clientRow)
+          .eq('id', payload.id)
+          .eq('partner_id', partnerId)
+          .select()
+          .single();
+        if (error) throw error;
+
+        await supabase.from('audit_logs').insert({
+          actor_user_id: profile.id,
+          action: 'partner.client_updated',
+          entity_type: 'partner_client',
+          entity_id: data.id,
+          metadata: { partnerId },
+        });
+
+        return json({ client: data });
+      }
+
+      const { data, error } = await supabase.from('partner_clients').insert({
+        partner_id: partnerId,
+        ...clientRow,
       }).select().single();
       if (error) throw error;
 
@@ -36,7 +73,7 @@ Deno.serve(async (req) => {
         action: 'partner.client_created',
         entity_type: 'partner_client',
         entity_id: data.id,
-        metadata: { partnerId, status: 'pending' },
+        metadata: { partnerId, status: clientRow.status },
       });
 
       return json({ client: data }, 201);

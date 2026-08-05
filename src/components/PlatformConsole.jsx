@@ -24,6 +24,7 @@ export function SuperAdminConsole({ section }) {
   if (section === 'clients') return <AdminClients />;
   if (section === 'products') return <AdminProducts />;
   if (section === 'links') return <AdminSalesLinks />;
+  if (section === 'subscriptions') return <AdminSubscriptions />;
   if (section === 'payments') return <AdminPayments />;
   if (section === 'resources') return <AdminResources />;
   if (section === 'settings') return <AdminSettings />;
@@ -36,17 +37,30 @@ export function SuperAdminConsole({ section }) {
 function AdminDashboard() {
   const [partners, setPartners] = useState([]);
   const [products, setProducts] = useState([]);
+  const [clientCount, setClientCount] = useState(null);
+  const [activeSubs, setActiveSubs] = useState(null);
+  const [pendingCommissions, setPendingCommissions] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function load() {
       try {
-        const [pd, cd] = await Promise.all([
+        const [pd, cd, clientsData, subsData, commData] = await Promise.all([
           platformApi.listPartners().catch(() => ({ partners: [] })),
           platformApi.listCatalogProducts().catch(() => ({ products: [] })),
+          platformApi.listAllClients().catch(() => ({ clients: [] })),
+          platformApi.listActiveSubscriptions().catch(() => ({ subscriptions: [] })),
+          platformApi.listCommissions({ status: 'pending' }).catch(() => ({ commissions: [] })),
         ]);
         setPartners(pd?.partners || []);
         setProducts(cd?.products || []);
+        setClientCount((clientsData?.clients || []).length);
+        setActiveSubs((subsData?.subscriptions || []).length);
+        const pending = commData?.commissions || [];
+        setPendingCommissions({
+          count: pending.length,
+          total: pending.reduce((sum, row) => sum + Number(row.commission_amount || 0), 0),
+        });
       } finally { setLoading(false); }
     }
     load();
@@ -64,9 +78,9 @@ function AdminDashboard() {
       <div className="novo-stats">
         {[
           { label: 'Partners registrados', value: loading ? '…' : partners.length, icon: Users, color: 'blue', sub: `${active} activos`, up: true },
-          { label: 'Clientes en plataforma', value: '—', icon: Building2, color: 'purple', sub: 'Módulo en construcción' },
-          { label: 'Productos en catálogo', value: loading ? '…' : products.length, icon: Package, color: 'green', sub: 'Publicados para partners', up: true },
-          { label: 'MRR estimado', value: '$—', icon: DollarSign, color: 'orange', sub: 'Conectar Stripe' },
+          { label: 'Clientes en plataforma', value: loading ? '…' : clientCount ?? '—', icon: Building2, color: 'purple', sub: 'Todos los partners' },
+          { label: 'Suscripciones activas', value: loading ? '…' : activeSubs ?? '—', icon: Activity, color: 'green', sub: 'Links pagados', up: activeSubs > 0 },
+          { label: 'Comisiones pendientes', value: loading ? '…' : pendingCommissions ? `$${pendingCommissions.total.toFixed(0)}` : '$—', icon: DollarSign, color: 'orange', sub: pendingCommissions ? `${pendingCommissions.count} por pagar` : 'Sin pendientes' },
         ].map(({ label, value, icon: Icon, color, sub, up }) => (
           <div className="novo-stat" key={label}>
             <div className={`novo-stat-icon ${color}`}><Icon size={17} /></div>
@@ -110,7 +124,7 @@ function AdminDashboard() {
             ['Catálogo de productos', products.length > 0],
             ['Partners registrados', partners.length > 0],
             ['GHL OAuth', false],
-            ['Stripe Checkout', false],
+            ['Stripe Checkout', activeSubs > 0],
           ].map(([label, ok]) => (
             <div key={label} className="status-row">
               <span>{label}</span>
@@ -265,49 +279,40 @@ function AdminPartners() {
 ================================ */
 function AdminClients() {
   const [partners, setPartners] = useState([]);
-  const [partnerId, setPartnerId] = useState('');
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [loadingClients, setLoadingClients] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [notice, setNotice] = useState(null);
   const [busy, setBusy] = useState(false);
   const [search, setSearch] = useState('');
+  const [filters, setFilters] = useState({ partnerId: '', status: '' });
+  const [formPartnerId, setFormPartnerId] = useState('');
 
-  const loadPartners = useCallback(async () => {
+  const load = useCallback(async () => {
     try {
       setLoading(true);
-      const data = await platformApi.listPartners();
-      const rows = data?.partners || [];
+      const [partnersData, clientsData] = await Promise.all([
+        platformApi.listPartners(),
+        platformApi.listAllClients({
+          partnerId: filters.partnerId || null,
+          status: filters.status || null,
+        }),
+      ]);
+      const rows = partnersData?.partners || [];
       setPartners(rows);
-      setPartnerId(current => current || rows[0]?.id || '');
+      setClients(clientsData?.clients || []);
+      setFormPartnerId(current => current || rows[0]?.id || '');
     } catch (e) {
       setNotice({ type: 'error', text: e.message });
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [filters.partnerId, filters.status]);
 
-  const loadClients = useCallback(async (selectedPartnerId) => {
-    if (!selectedPartnerId) {
-      setClients([]);
-      return;
-    }
-    try {
-      setLoadingClients(true);
-      const data = await platformApi.listPartnerClients(selectedPartnerId);
-      setClients(data?.clients || []);
-    } catch (e) {
-      setNotice({ type: 'error', text: e.message });
-    } finally {
-      setLoadingClients(false);
-    }
-  }, []);
-
-  useEffect(() => { loadPartners(); }, [loadPartners]);
-  useEffect(() => { loadClients(partnerId); }, [partnerId, loadClients]);
+  useEffect(() => { load(); }, [load]);
 
   async function saveClient(form) {
+    const partnerId = formPartnerId || filters.partnerId;
     if (!partnerId) {
       setNotice({ type: 'error', text: 'Selecciona un Partner antes de crear el cliente.' });
       return;
@@ -321,7 +326,7 @@ function AdminClients() {
       });
       setNotice({ type: 'success', text: 'Cliente creado y asignado al Partner.' });
       setShowForm(false);
-      await loadClients(partnerId);
+      await load();
     } catch (e) {
       setNotice({ type: 'error', text: e.message });
     } finally {
@@ -329,11 +334,12 @@ function AdminClients() {
     }
   }
 
-  const selectedPartner = partners.find(p => p.id === partnerId);
+  const formPartner = partners.find(p => p.id === formPartnerId);
   const filtered = clients.filter(client => {
     const term = search.trim().toLowerCase();
     if (!term) return true;
-    return [client.company_name, client.name, client.contact_name, client.email]
+    const partnerName = client.partners?.name || '';
+    return [client.company_name, client.name, client.contact_name, client.email, partnerName]
       .filter(Boolean)
       .some(value => String(value).toLowerCase().includes(term));
   });
@@ -344,9 +350,9 @@ function AdminClients() {
         <div>
           <span className="kicker">ECOSISTEMA</span>
           <h1>Clientes</h1>
-          <p>Consulta y crea clientes dentro del Partner correcto.</p>
+          <p>Vista global de todos los clientes del ecosistema NOVO.</p>
         </div>
-        <button className="novo-btn novo-btn-primary" onClick={() => setShowForm(true)} disabled={!partnerId}>
+        <button className="novo-btn novo-btn-primary" onClick={() => setShowForm(true)} disabled={!formPartnerId && !filters.partnerId}>
           <Plus size={15} /> Nuevo cliente
         </button>
       </div>
@@ -354,49 +360,60 @@ function AdminClients() {
       {notice && <Notice {...notice} onClose={() => setNotice(null)} />}
 
       <div className="novo-card" style={{ marginBottom: 16 }}>
-        <div className="novo-grid-2" style={{ marginBottom: 0 }}>
-          <div className="novo-field">
-            <label>Partner propietario</label>
-            <select value={partnerId} onChange={e => { setPartnerId(e.target.value); setShowForm(false); }} disabled={loading}>
-              <option value="">Selecciona un Partner</option>
-              {partners.map(partner => <option key={partner.id} value={partner.id}>{partner.name}</option>)}
-            </select>
-          </div>
+        <div className="novo-grid-3" style={{ marginBottom: 0 }}>
+          <SelectField label="Filtrar por Partner" value={filters.partnerId} onChange={value => setFilters(current => ({ ...current, partnerId: value }))}>
+            <option value="">Todos los Partners</option>
+            {partners.map(partner => <option key={partner.id} value={partner.id}>{partner.name}</option>)}
+          </SelectField>
+          <SelectField label="Estado" value={filters.status} onChange={value => setFilters(current => ({ ...current, status: value }))}>
+            <option value="">Todos</option>
+            <option value="pending">Pendiente</option>
+            <option value="active">Activo</option>
+            <option value="inactive">Inactivo</option>
+            <option value="cancelled">Cancelado</option>
+          </SelectField>
           <div className="novo-field">
             <label>Buscar cliente</label>
-            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Empresa, contacto o correo" />
+            <div className="novo-search" style={{ width: '100%' }}><Search size={13} /><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Empresa, contacto, correo o partner" /></div>
           </div>
         </div>
       </div>
 
       {showForm && (
-        <ClientForm
-          initial={emptyClient}
-          title={`Nuevo cliente${selectedPartner ? ` para ${selectedPartner.name}` : ''}`}
-          onSave={saveClient}
-          onCancel={() => setShowForm(false)}
-          busy={busy}
-          uploadScope={`clients/${partnerId || 'unassigned'}`}
-        />
+        <>
+          <div className="novo-card" style={{ marginBottom: 12 }}>
+            <SelectField label="Partner propietario *" value={formPartnerId} onChange={setFormPartnerId}>
+              <option value="">Selecciona un Partner</option>
+              {partners.map(partner => <option key={partner.id} value={partner.id}>{partner.name}</option>)}
+            </SelectField>
+          </div>
+          <ClientForm
+            initial={emptyClient}
+            title={formPartner ? `Nuevo cliente para ${formPartner.name}` : 'Nuevo cliente'}
+            onSave={saveClient}
+            onCancel={() => setShowForm(false)}
+            busy={busy}
+            uploadScope={`clients/${formPartnerId || 'unassigned'}`}
+          />
+        </>
       )}
 
       <div className="novo-card">
         <div className="novo-card-header">
           <div>
-            <div className="novo-card-title">Clientes de {selectedPartner?.name || 'Partner'}</div>
-            <div className="novo-card-sub">{filtered.length} registros visibles</div>
+            <div className="novo-card-title">Todos los clientes ({filtered.length})</div>
+            <div className="novo-card-sub">Registros de todos los partners</div>
           </div>
-          <button className="novo-btn novo-btn-ghost" onClick={() => loadClients(partnerId)} disabled={!partnerId || loadingClients}>
+          <button className="novo-btn novo-btn-ghost" onClick={load} disabled={loading}>
             <RefreshCw size={13} /> Actualizar
           </button>
         </div>
 
-        {(loading || loadingClients) && <div className="novo-empty">Cargando…</div>}
-        {!loading && !loadingClients && !partnerId && <div className="novo-empty">Selecciona un Partner.</div>}
-        {!loading && !loadingClients && partnerId && filtered.length === 0 && <div className="novo-empty">Este Partner todavía no tiene clientes.</div>}
-        {!loading && !loadingClients && filtered.length > 0 && (
+        {loading && <div className="novo-empty">Cargando…</div>}
+        {!loading && filtered.length === 0 && <div className="novo-empty">No hay clientes con estos filtros.</div>}
+        {!loading && filtered.length > 0 && (
           <table className="novo-table">
-            <thead><tr><th>Empresa</th><th>Contacto</th><th>Ubicación</th><th>Estado</th><th>Creado</th></tr></thead>
+            <thead><tr><th>Empresa</th><th>Partner</th><th>Contacto</th><th>Ubicación</th><th>Estado</th><th>Creado</th></tr></thead>
             <tbody>
               {filtered.map(client => (
                 <tr key={client.id}>
@@ -408,6 +425,10 @@ function AdminClients() {
                         {client.industry && <small style={{ color: 'var(--novo-muted)' }}>{client.industry}</small>}
                       </div>
                     </div>
+                  </td>
+                  <td>
+                    <strong style={{ color: 'var(--novo-text)' }}>{client.partners?.name || '—'}</strong>
+                    {client.partners?.slug && <><br /><small style={{ color: 'var(--novo-muted)' }}>/{client.partners.slug}</small></>}
                   </td>
                   <td>{client.contact_name || '—'}<br /><small style={{ color: 'var(--novo-muted)' }}>{client.email || '—'}</small></td>
                   <td>{[client.city, client.country].filter(Boolean).join(', ') || '—'}</td>
@@ -723,12 +744,172 @@ function AdminSalesLinks() {
 }
 
 /* ================================
+   ADMIN SUSCRIPCIONES
+================================ */
+function AdminSubscriptions() {
+  const [subscriptions, setSubscriptions] = useState([]);
+  const [partners, setPartners] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [notice, setNotice] = useState(null);
+  const [partnerId, setPartnerId] = useState('');
+  const [search, setSearch] = useState('');
+
+  const load = useCallback(async () => {
+    try {
+      setLoading(true);
+      const [subsData, partnersData] = await Promise.all([
+        platformApi.listActiveSubscriptions({ partnerId: partnerId || null }),
+        platformApi.listPartners(),
+      ]);
+      setSubscriptions(subsData?.subscriptions || []);
+      setPartners(partnersData?.partners || []);
+    } catch (e) {
+      setNotice({ type: 'error', text: e.message });
+    } finally {
+      setLoading(false);
+    }
+  }, [partnerId]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const filtered = subscriptions.filter(row => {
+    const term = search.trim().toLowerCase();
+    if (!term) return true;
+    return [row.partner_name, row.client_name, row.client_email, row.product_name, row.stripe_subscription_id]
+      .filter(Boolean)
+      .some(value => String(value).toLowerCase().includes(term));
+  });
+
+  const mrr = filtered.reduce((sum, row) => sum + Number(row.sale_price || 0), 0);
+
+  return (
+    <div className="novo-page">
+      <div className="novo-page-header">
+        <span className="kicker">INGRESOS RECURRENTES</span>
+        <h1>Suscripciones activas</h1>
+        <p>Links de venta pagados con suscripción activa en Stripe.</p>
+      </div>
+
+      {notice && <Notice {...notice} onClose={() => setNotice(null)} />}
+
+      <div className="novo-stats" style={{ gridTemplateColumns: 'repeat(3,1fr)', marginBottom: 16 }}>
+        <div className="novo-stat">
+          <div className="novo-stat-icon green"><Activity size={17} /></div>
+          <span className="novo-stat-label">Suscripciones activas</span>
+          <span className="novo-stat-value">{loading ? '…' : filtered.length}</span>
+          <span className="novo-stat-sub">Links con pago confirmado</span>
+        </div>
+        <div className="novo-stat">
+          <div className="novo-stat-icon purple"><DollarSign size={17} /></div>
+          <span className="novo-stat-label">MRR estimado</span>
+          <span className="novo-stat-value">{loading ? '…' : money(mrr)}</span>
+          <span className="novo-stat-sub">Suma de precios de venta</span>
+        </div>
+        <div className="novo-stat">
+          <div className="novo-stat-icon blue"><Users size={17} /></div>
+          <span className="novo-stat-label">Partners con ingresos</span>
+          <span className="novo-stat-value">{loading ? '…' : new Set(filtered.map(row => row.partner_id)).size}</span>
+          <span className="novo-stat-sub">Con al menos una suscripción</span>
+        </div>
+      </div>
+
+      <div className="novo-card" style={{ marginBottom: 16 }}>
+        <div className="novo-grid-2" style={{ marginBottom: 0 }}>
+          <SelectField label="Filtrar por Partner" value={partnerId} onChange={setPartnerId}>
+            <option value="">Todos los Partners</option>
+            {partners.map(partner => <option key={partner.id} value={partner.id}>{partner.name}</option>)}
+          </SelectField>
+          <div className="novo-field">
+            <label>Buscar</label>
+            <div className="novo-search" style={{ width: '100%' }}><Search size={13} /><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Partner, cliente, producto o subscription ID" /></div>
+          </div>
+        </div>
+      </div>
+
+      <div className="novo-card">
+        <div className="novo-card-header">
+          <div>
+            <div className="novo-card-title">Suscripciones ({filtered.length})</div>
+            <div className="novo-card-sub">Estado del cliente sincronizado desde partner_clients</div>
+          </div>
+          <button className="novo-btn novo-btn-ghost" onClick={load} disabled={loading}><RefreshCw size={13} /></button>
+        </div>
+
+        {loading && <div className="novo-empty">Cargando…</div>}
+        {!loading && filtered.length === 0 && <div className="novo-empty">No hay suscripciones activas.</div>}
+        {!loading && filtered.length > 0 && (
+          <table className="novo-table">
+            <thead>
+              <tr>
+                <th>Partner</th>
+                <th>Cliente</th>
+                <th>Producto</th>
+                <th>Precio</th>
+                <th>Activada</th>
+                <th>Stripe</th>
+                <th>Estado cliente</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map(row => (
+                <tr key={row.id}>
+                  <td><strong style={{ color: 'var(--novo-text)' }}>{row.partner_name}</strong></td>
+                  <td>
+                    <strong style={{ color: 'var(--novo-text)' }}>{row.client_name}</strong>
+                    {row.client_email && <><br /><small style={{ color: 'var(--novo-muted)' }}>{row.client_email}</small></>}
+                  </td>
+                  <td>
+                    {row.product_name}
+                    <br /><small style={{ color: 'var(--novo-muted)' }}>{row.billing_interval === 'year' ? 'Anual' : 'Mensual'}</small>
+                  </td>
+                  <td><span style={{ color: 'var(--novo-success)', fontWeight: 600 }}>{money(row.sale_price, row.currency)}</span></td>
+                  <td>{formatDate(row.activated_at || row.created_at)}</td>
+                  <td style={{ fontSize: 11, color: 'var(--novo-muted)', maxWidth: 140, wordBreak: 'break-all' }}>
+                    {row.stripe_subscription_id || '—'}
+                  </td>
+                  <td><Badge status={row.client_status || 'pending'} /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ================================
    ADMIN PAGOS
 ================================ */
 function AdminPayments() {
   const [keys, setKeys] = useState({ stripeSecretKey: '', stripeWebhookSecret: '' });
+  const [commissions, setCommissions] = useState([]);
+  const [partners, setPartners] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState(null);
+  const [filters, setFilters] = useState({ partnerId: '', status: 'pending' });
+
+  const loadCommissions = useCallback(async () => {
+    try {
+      setLoading(true);
+      const [commData, partnersData] = await Promise.all([
+        platformApi.listCommissions({
+          partnerId: filters.partnerId || null,
+          status: filters.status || null,
+        }),
+        platformApi.listPartners(),
+      ]);
+      setCommissions(commData?.commissions || []);
+      setPartners(partnersData?.partners || []);
+    } catch (e) {
+      setNotice({ type: 'error', text: e.message });
+    } finally {
+      setLoading(false);
+    }
+  }, [filters.partnerId, filters.status]);
+
+  useEffect(() => { loadCommissions(); }, [loadCommissions]);
 
   async function save() {
     try { setBusy(true); await platformApi.saveIntegrationSettings(keys); setNotice({ type: 'success', text: 'Claves guardadas.' }); }
@@ -736,31 +917,118 @@ function AdminPayments() {
     finally { setBusy(false); }
   }
 
+  async function markPaid(commission) {
+    try {
+      setBusy(true);
+      await platformApi.updateCommissionStatus(commission.id, 'paid');
+      setNotice({ type: 'success', text: `Comisión de ${money(commission.commission_amount, commission.currency)} marcada como pagada.` });
+      await loadCommissions();
+    } catch (e) {
+      setNotice({ type: 'error', text: e.message });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const pendingTotal = commissions
+    .filter(row => row.status === 'pending')
+    .reduce((sum, row) => sum + Number(row.commission_amount || 0), 0);
+
   return (
     <div className="novo-page">
-      <div className="novo-page-header"><span className="kicker">FINANZAS</span><h1>Pagos</h1><p>Administración financiera del ecosistema.</p></div>
+      <div className="novo-page-header"><span className="kicker">FINANZAS</span><h1>Pagos y comisiones</h1><p>Comisiones de partners y configuración Stripe.</p></div>
       {notice && <Notice {...notice} onClose={() => setNotice(null)} />}
+
       <div className="novo-stats" style={{ gridTemplateColumns: 'repeat(3,1fr)' }}>
-        {[['Ingresos este mes','$—',DollarSign,'green'],['Pagos a partners','$—',Users,'purple'],['Transacciones','—',Activity,'blue']].map(([label,value,Icon,color]) => (
-          <div className="novo-stat" key={label}>
-            <div className={`novo-stat-icon ${color}`}><Icon size={17} /></div>
-            <span className="novo-stat-label">{label}</span>
-            <span className="novo-stat-value">{value}</span>
-            <span className="novo-stat-sub">Conectar Stripe</span>
-          </div>
-        ))}
+        <div className="novo-stat">
+          <div className="novo-stat-icon orange"><DollarSign size={17} /></div>
+          <span className="novo-stat-label">Comisiones pendientes</span>
+          <span className="novo-stat-value">{loading ? '…' : money(pendingTotal)}</span>
+          <span className="novo-stat-sub">{commissions.filter(row => row.status === 'pending').length} por pagar</span>
+        </div>
+        <div className="novo-stat">
+          <div className="novo-stat-icon green"><CheckCircle2 size={17} /></div>
+          <span className="novo-stat-label">Comisiones pagadas</span>
+          <span className="novo-stat-value">{loading ? '…' : commissions.filter(row => row.status === 'paid').length}</span>
+          <span className="novo-stat-sub">Marcadas manualmente</span>
+        </div>
+        <div className="novo-stat">
+          <div className="novo-stat-icon blue"><Activity size={17} /></div>
+          <span className="novo-stat-label">Total en vista</span>
+          <span className="novo-stat-value">{loading ? '…' : commissions.length}</span>
+          <span className="novo-stat-sub">Según filtros activos</span>
+        </div>
       </div>
-      <div className="novo-card" style={{ marginTop: 16 }}>
+
+      <div className="novo-card" style={{ marginTop: 16, marginBottom: 16 }}>
+        <div className="novo-card-header">
+          <div><div className="novo-card-title">Comisiones de partners</div><div className="novo-card-sub">Generadas automáticamente al confirmar el pago en Stripe</div></div>
+          <button className="novo-btn novo-btn-ghost" onClick={loadCommissions} disabled={loading}><RefreshCw size={13} /></button>
+        </div>
+        <div className="novo-grid-2" style={{ marginBottom: 16 }}>
+          <SelectField label="Partner" value={filters.partnerId} onChange={value => setFilters(current => ({ ...current, partnerId: value }))}>
+            <option value="">Todos</option>
+            {partners.map(partner => <option key={partner.id} value={partner.id}>{partner.name}</option>)}
+          </SelectField>
+          <SelectField label="Estado" value={filters.status} onChange={value => setFilters(current => ({ ...current, status: value }))}>
+            <option value="">Todos</option>
+            <option value="pending">Pendiente</option>
+            <option value="paid">Pagada</option>
+            <option value="cancelled">Cancelada</option>
+          </SelectField>
+        </div>
+        {loading && <div className="novo-empty">Cargando…</div>}
+        {!loading && commissions.length === 0 && <div className="novo-empty">No hay comisiones con estos filtros.</div>}
+        {!loading && commissions.length > 0 && (
+          <table className="novo-table">
+            <thead>
+              <tr>
+                <th>Partner</th>
+                <th>Cliente</th>
+                <th>Bruto</th>
+                <th>Mayorista</th>
+                <th>Comisión</th>
+                <th>Estado</th>
+                <th>Fecha</th>
+                <th>Acción</th>
+              </tr>
+            </thead>
+            <tbody>
+              {commissions.map(row => {
+                const client = row.partner_clients;
+                return (
+                  <tr key={row.id}>
+                    <td><strong style={{ color: 'var(--novo-text)' }}>{row.partners?.name || '—'}</strong></td>
+                    <td>{client?.company_name || client?.name || '—'}<br /><small style={{ color: 'var(--novo-muted)' }}>{client?.email || '—'}</small></td>
+                    <td>{money(row.gross_amount, row.currency)}</td>
+                    <td>{money(row.wholesale_amount, row.currency)}</td>
+                    <td><span style={{ color: 'var(--novo-purple)', fontWeight: 600 }}>{money(row.commission_amount, row.currency)}</span></td>
+                    <td><Badge status={row.status} /></td>
+                    <td>{formatDate(row.created_at)}</td>
+                    <td>
+                      {row.status === 'pending' ? (
+                        <button className="novo-btn novo-btn-primary" style={{ padding: '4px 10px', fontSize: 11 }} onClick={() => markPaid(row)} disabled={busy}>
+                          <CheckCircle2 size={12} /> Marcar pagada
+                        </button>
+                      ) : row.paid_at ? (
+                        <small style={{ color: 'var(--novo-muted)' }}>{formatDate(row.paid_at)}</small>
+                      ) : '—'}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      <div className="novo-card">
         <div className="novo-card-header"><div><div className="novo-card-title">Configuración Stripe</div><div className="novo-card-sub">Claves para procesar pagos</div></div><Badge status="pending" label="Pendiente" /></div>
         <div className="novo-grid-2">
           <NField label="Secret key" secret value={keys.stripeSecretKey} onChange={v => setKeys({ ...keys, stripeSecretKey: v })} />
           <NField label="Webhook secret" secret value={keys.stripeWebhookSecret} onChange={v => setKeys({ ...keys, stripeWebhookSecret: v })} />
         </div>
         <button className="novo-btn novo-btn-primary" onClick={save} disabled={busy}><Save size={14} /> Guardar</button>
-      </div>
-      <div className="novo-card" style={{ marginTop: 16 }}>
-        <div className="novo-card-header"><div className="novo-card-title">Historial de transacciones</div></div>
-        <div className="novo-empty" style={{ padding: '48px 24px' }}><CreditCard size={32} style={{ opacity: .2, marginBottom: 12 }} /><p>Disponible cuando Stripe esté conectado.</p></div>
       </div>
     </div>
   );
@@ -920,6 +1188,7 @@ export function PartnerConsole({ section }) {
   if (section === 'clients')   return <PartnerClients />;
   if (section === 'offers')    return <PartnerOffers />;
   if (section === 'links')     return <PartnerLinks />;
+  if (section === 'commissions') return <PartnerCommissions />;
   if (section === 'resources') return <PartnerResources />;
   if (section === 'brand')     return <PartnerBrand />;
   if (section === 'support')   return <PartnerSupport />;
@@ -932,14 +1201,27 @@ export function PartnerConsole({ section }) {
 function PartnerDashboard() {
   const [clients, setClients] = useState([]);
   const [catalog, setCatalog] = useState([]);
+  const [subscriptions, setSubscriptions] = useState([]);
+  const [commissions, setCommissions] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     Promise.all([
       platformApi.listPartnerClients().catch(() => ({ clients: [] })),
       platformApi.listCatalog().catch(() => ({ products: [] })),
-    ]).then(([cd, ct]) => { setClients(cd?.clients || []); setCatalog(ct?.products || []); }).finally(() => setLoading(false));
+      platformApi.listActiveSubscriptions().catch(() => ({ subscriptions: [] })),
+      platformApi.listCommissions().catch(() => ({ commissions: [] })),
+    ]).then(([cd, ct, subs, comm]) => {
+      setClients(cd?.clients || []);
+      setCatalog(ct?.products || []);
+      setSubscriptions(subs?.subscriptions || []);
+      setCommissions(comm?.commissions || []);
+    }).finally(() => setLoading(false));
   }, []);
+
+  const pendingCommissions = commissions.filter(row => row.status === 'pending');
+  const paidCommissions = commissions.filter(row => row.status === 'paid');
+  const mrr = subscriptions.reduce((sum, row) => sum + Number(row.sale_price || 0), 0);
 
   return (
     <div className="novo-page">
@@ -948,13 +1230,19 @@ function PartnerDashboard() {
         {[
           ['Mis clientes', loading ? '…' : clients.length, Users, 'blue'],
           ['Clientes activos', loading ? '…' : clients.filter(c => c.status === 'active').length, CheckCircle2, 'green'],
-          ['Productos disponibles', loading ? '…' : catalog.length, Package, 'purple'],
-          ['MRR estimado', '$—', DollarSign, 'orange'],
+          ['Suscripciones activas', loading ? '…' : subscriptions.length, Activity, 'purple'],
+          ['Comisiones pendientes', loading ? '…' : money(pendingCommissions.reduce((sum, row) => sum + Number(row.commission_amount || 0), 0)), DollarSign, 'orange'],
         ].map(([label, value, Icon, color]) => (
           <div className="novo-stat" key={label}>
             <div className={`novo-stat-icon ${color}`}><Icon size={17} /></div>
             <span className="novo-stat-label">{label}</span>
             <span className="novo-stat-value">{value}</span>
+            {label === 'Suscripciones activas' && !loading && (
+              <span className="novo-stat-sub">MRR estimado {money(mrr)}</span>
+            )}
+            {label === 'Comisiones pendientes' && !loading && (
+              <span className="novo-stat-sub">{paidCommissions.length} ya pagadas</span>
+            )}
           </div>
         ))}
       </div>
@@ -1004,6 +1292,8 @@ function PartnerDashboard() {
 ================================ */
 function PartnerClients() {
   const [clients, setClients] = useState([]);
+  const [subscriptions, setSubscriptions] = useState([]);
+  const [commissions, setCommissions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editItem, setEditItem] = useState(null);
@@ -1013,7 +1303,17 @@ function PartnerClients() {
   const [search, setSearch] = useState('');
 
   const load = useCallback(async () => {
-    try { setLoading(true); const data = await platformApi.listPartnerClients(); setClients(data?.clients || []); }
+    try {
+      setLoading(true);
+      const [clientsData, subsData, commData] = await Promise.all([
+        platformApi.listPartnerClients(),
+        platformApi.listActiveSubscriptions().catch(() => ({ subscriptions: [] })),
+        platformApi.listCommissions().catch(() => ({ commissions: [] })),
+      ]);
+      setClients(clientsData?.clients || []);
+      setSubscriptions(subsData?.subscriptions || []);
+      setCommissions(commData?.commissions || []);
+    }
     catch (e) { setNotice({ type: 'error', text: e.message }); }
     finally { setLoading(false); }
   }, []);
@@ -1128,6 +1428,21 @@ function PartnerClients() {
                             <Info label="Ciudad" value={c.city || '—'} />
                             <Info label="Dirección" value={c.address || '—'} />
                           </div>
+                          {(() => {
+                            const clientSubs = subscriptions.filter(row => row.client_id === c.id);
+                            const clientComms = commissions.filter(row => row.client_id === c.id);
+                            const pendingComm = clientComms
+                              .filter(row => row.status === 'pending')
+                              .reduce((sum, row) => sum + Number(row.commission_amount || 0), 0);
+                            const activeSub = clientSubs[0];
+                            return (
+                              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 16, marginBottom: 16, padding: '14px 16px', background: 'var(--novo-card-hover)', borderRadius: 8 }}>
+                                <Info label="Suscripción activa" value={activeSub ? `${activeSub.product_name} — ${money(activeSub.sale_price, activeSub.currency)}` : 'Sin suscripción activa'} />
+                                <Info label="Margen recurrente" value={activeSub ? money(activeSub.partner_margin, activeSub.currency) : '—'} />
+                                <Info label="Comisiones pendientes" value={pendingComm > 0 ? money(pendingComm) : clientComms.length > 0 ? 'Al día' : 'Sin comisiones'} />
+                              </div>
+                            );
+                          })()}
                           {c.notes && <div style={{ background: 'var(--novo-card-hover)', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: 'var(--novo-muted)', marginBottom: 14 }}><strong style={{ color: 'var(--novo-text)' }}>Notas: </strong>{c.notes}</div>}
                           <div style={{ display: 'flex', gap: 10 }}>
                             <button className="novo-btn novo-btn-primary" onClick={() => openEdit(c)}><Edit2 size={13} /> Editar cliente</button>
@@ -1376,6 +1691,193 @@ function PartnerLinks() {
         onStatusChange={changeStatus}
         onRefresh={load}
       />
+    </div>
+  );
+}
+
+/* ================================
+   PARTNER COMISIONES
+================================ */
+function PartnerCommissions() {
+  const [commissions, setCommissions] = useState([]);
+  const [subscriptions, setSubscriptions] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [notice, setNotice] = useState(null);
+  const [statusFilter, setStatusFilter] = useState('');
+  const [search, setSearch] = useState('');
+
+  const load = useCallback(async () => {
+    try {
+      setLoading(true);
+      const [commData, subsData] = await Promise.all([
+        platformApi.listCommissions({ status: statusFilter || null }),
+        platformApi.listActiveSubscriptions(),
+      ]);
+      setCommissions(commData?.commissions || []);
+      setSubscriptions(subsData?.subscriptions || []);
+    } catch (e) {
+      setNotice({ type: 'error', text: e.message });
+    } finally {
+      setLoading(false);
+    }
+  }, [statusFilter]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const pendingTotal = commissions
+    .filter(row => row.status === 'pending')
+    .reduce((sum, row) => sum + Number(row.commission_amount || 0), 0);
+  const paidTotal = commissions
+    .filter(row => row.status === 'paid')
+    .reduce((sum, row) => sum + Number(row.commission_amount || 0), 0);
+  const mrr = subscriptions.reduce((sum, row) => sum + Number(row.sale_price || 0), 0);
+
+  const filtered = commissions.filter(row => {
+    const term = search.trim().toLowerCase();
+    if (!term) return true;
+    const client = row.partner_clients;
+    return [client?.company_name, client?.name, client?.email, row.stripe_subscription_id]
+      .filter(Boolean)
+      .some(value => String(value).toLowerCase().includes(term));
+  });
+
+  return (
+    <div className="novo-page">
+      <div className="novo-page-header">
+        <span className="kicker">TUS INGRESOS</span>
+        <h1>Comisiones e ingresos</h1>
+        <p>Seguimiento de comisiones y suscripciones activas de tus clientes.</p>
+      </div>
+
+      {notice && <Notice {...notice} onClose={() => setNotice(null)} />}
+
+      <div className="novo-stats" style={{ gridTemplateColumns: 'repeat(4,1fr)', marginBottom: 16 }}>
+        <div className="novo-stat">
+          <div className="novo-stat-icon orange"><DollarSign size={17} /></div>
+          <span className="novo-stat-label">Comisiones pendientes</span>
+          <span className="novo-stat-value">{loading ? '…' : money(pendingTotal)}</span>
+          <span className="novo-stat-sub">Por recibir de NOVO</span>
+        </div>
+        <div className="novo-stat">
+          <div className="novo-stat-icon green"><CheckCircle2 size={17} /></div>
+          <span className="novo-stat-label">Comisiones pagadas</span>
+          <span className="novo-stat-value">{loading ? '…' : money(paidTotal)}</span>
+          <span className="novo-stat-sub">{commissions.filter(row => row.status === 'paid').length} liquidadas</span>
+        </div>
+        <div className="novo-stat">
+          <div className="novo-stat-icon purple"><Activity size={17} /></div>
+          <span className="novo-stat-label">Suscripciones activas</span>
+          <span className="novo-stat-value">{loading ? '…' : subscriptions.length}</span>
+          <span className="novo-stat-sub">Clientes pagando</span>
+        </div>
+        <div className="novo-stat">
+          <div className="novo-stat-icon blue"><BarChart2 size={17} /></div>
+          <span className="novo-stat-label">MRR estimado</span>
+          <span className="novo-stat-value">{loading ? '…' : money(mrr)}</span>
+          <span className="novo-stat-sub">Suma de precios de venta</span>
+        </div>
+      </div>
+
+      <div className="novo-card" style={{ marginBottom: 16 }}>
+        <div className="novo-card-header">
+          <div>
+            <div className="novo-card-title">Suscripciones activas ({subscriptions.length})</div>
+            <div className="novo-card-sub">Clientes con pago confirmado en Stripe</div>
+          </div>
+          <button className="novo-btn novo-btn-ghost" onClick={load} disabled={loading}><RefreshCw size={13} /></button>
+        </div>
+        {loading && <div className="novo-empty">Cargando…</div>}
+        {!loading && subscriptions.length === 0 && <div className="novo-empty">Aún no tienes suscripciones activas.</div>}
+        {!loading && subscriptions.length > 0 && (
+          <table className="novo-table">
+            <thead>
+              <tr>
+                <th>Cliente</th>
+                <th>Producto</th>
+                <th>Precio venta</th>
+                <th>Tu margen</th>
+                <th>Activada</th>
+                <th>Estado</th>
+              </tr>
+            </thead>
+            <tbody>
+              {subscriptions.map(row => (
+                <tr key={row.id}>
+                  <td>
+                    <strong style={{ color: 'var(--novo-text)' }}>{row.client_name}</strong>
+                    {row.client_email && <><br /><small style={{ color: 'var(--novo-muted)' }}>{row.client_email}</small></>}
+                  </td>
+                  <td>
+                    {row.product_name}
+                    <br /><small style={{ color: 'var(--novo-muted)' }}>{row.billing_interval === 'year' ? 'Anual' : 'Mensual'}</small>
+                  </td>
+                  <td>{money(row.sale_price, row.currency)}</td>
+                  <td><span style={{ color: 'var(--novo-purple)', fontWeight: 600 }}>{money(row.partner_margin, row.currency)}</span></td>
+                  <td>{formatDate(row.activated_at || row.created_at)}</td>
+                  <td><Badge status={row.client_status || 'pending'} /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      <div className="novo-card">
+        <div className="novo-card-header">
+          <div>
+            <div className="novo-card-title">Historial de comisiones ({filtered.length})</div>
+            <div className="novo-card-sub">NOVO liquida manualmente las comisiones pendientes</div>
+          </div>
+        </div>
+        <div className="novo-grid-2" style={{ marginBottom: 16 }}>
+          <SelectField label="Estado" value={statusFilter} onChange={setStatusFilter}>
+            <option value="">Todas</option>
+            <option value="pending">Pendiente</option>
+            <option value="paid">Pagada</option>
+            <option value="cancelled">Cancelada</option>
+          </SelectField>
+          <div className="novo-field">
+            <label>Buscar cliente</label>
+            <div className="novo-search" style={{ width: '100%' }}><Search size={13} /><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Empresa, correo o subscription ID" /></div>
+          </div>
+        </div>
+        {loading && <div className="novo-empty">Cargando…</div>}
+        {!loading && filtered.length === 0 && <div className="novo-empty">No hay comisiones con estos filtros.</div>}
+        {!loading && filtered.length > 0 && (
+          <table className="novo-table">
+            <thead>
+              <tr>
+                <th>Cliente</th>
+                <th>Venta bruta</th>
+                <th>Costo NOVO</th>
+                <th>Tu comisión</th>
+                <th>Estado</th>
+                <th>Fecha</th>
+                <th>Pagada</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map(row => {
+                const client = row.partner_clients;
+                return (
+                  <tr key={row.id}>
+                    <td>
+                      <strong style={{ color: 'var(--novo-text)' }}>{client?.company_name || client?.name || '—'}</strong>
+                      {client?.email && <><br /><small style={{ color: 'var(--novo-muted)' }}>{client.email}</small></>}
+                    </td>
+                    <td>{money(row.gross_amount, row.currency)}</td>
+                    <td>{money(row.wholesale_amount, row.currency)}</td>
+                    <td><span style={{ color: 'var(--novo-purple)', fontWeight: 600 }}>{money(row.commission_amount, row.currency)}</span></td>
+                    <td><Badge status={row.status} /></td>
+                    <td>{formatDate(row.created_at)}</td>
+                    <td>{row.paid_at ? formatDate(row.paid_at) : '—'}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+      </div>
     </div>
   );
 }

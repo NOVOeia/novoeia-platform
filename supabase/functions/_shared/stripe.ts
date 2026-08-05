@@ -32,6 +32,7 @@ export async function createStripeCheckoutSession(params: CheckoutSessionParams)
 
   for (const [key, value] of Object.entries(params.metadata)) {
     body.set(`metadata[${key}]`, value);
+    body.set(`subscription_data[metadata][${key}]`, value);
   }
 
   const response = await fetch('https://api.stripe.com/v1/checkout/sessions', {

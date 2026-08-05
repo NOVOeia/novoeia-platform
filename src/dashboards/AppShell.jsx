@@ -13,6 +13,7 @@ import {
   Sun,
   Moon,
   Link2,
+  Activity,
 } from 'lucide-react';
 
 import { Logo } from '../components/ui.jsx';
@@ -29,6 +30,7 @@ const adminMenu = [
   ['clients', 'Clientes', Building2],
   ['products', 'Productos', Package],
   ['links', 'Links de venta', Link2],
+  ['subscriptions', 'Suscripciones', Activity],
   ['payments', 'Pagos', CreditCard],
   ['settings', 'ConfiguraciÃ³n', Settings],
 ];
@@ -38,6 +40,7 @@ const partnerMenu = [
   ['clients', 'Mis clientes', Users],
   ['offers', 'Productos y ofertas', Package],
   ['links', 'Links de venta', Link2],
+  ['commissions', 'Comisiones', CreditCard],
   ['brand', 'Marca y redes', Settings],
   ['support', 'Soporte', Bell],
 ];
