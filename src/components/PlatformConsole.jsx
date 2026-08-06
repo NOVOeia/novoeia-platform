@@ -2138,8 +2138,8 @@ function PartnerLinks({ linkProductPreset, onClearLinkPreset }) {
         {checkout && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(16,185,129,.06)', border: '1px solid rgba(16,185,129,.15)', borderRadius: 8, padding: '12px 14px', marginTop: 16 }}>
             <span style={{ flex: 1, fontSize: 12, color: 'var(--novo-success)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{checkout}</span>
-            <button type="button" className="novo-btn novo-btn-ghost" style={{ padding: '4px 10px', fontSize: 11 }} onClick={() => copyText(checkout)}><Copy size={12} /> Copiar</button>
-            <a href={checkout} target="_blank" rel="noreferrer" className="novo-btn novo-btn-ghost" style={{ padding: '4px 10px', fontSize: 11 }}><ExternalLink size={12} /> Abrir</a>
+            <button type="button" className="novo-btn novo-btn-ghost" style={{ padding: 6 }} onClick={() => copyText(checkout)} aria-label="Copiar" title="Copiar"><Copy size={14} /></button>
+            <a href={checkout} target="_blank" rel="noreferrer" className="novo-btn novo-btn-ghost" style={{ padding: 6 }} aria-label="Abrir" title="Abrir"><ExternalLink size={14} /></a>
           </div>
         )}
       </div>
@@ -2573,14 +2573,14 @@ function SalesLinksTable({ links, loading, admin = false, busy, onStatusChange, 
                   <td>{formatDate(link.created_at)}</td>
                   <td>
                     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                      <button className="novo-btn novo-btn-ghost" style={{ padding: '4px 8px', fontSize: 11 }} onClick={() => copyText(link.checkout_url)} disabled={!link.checkout_url}><Copy size={12} /> Copiar</button>
-                      {link.checkout_url && <a className="novo-btn novo-btn-ghost" style={{ padding: '4px 8px', fontSize: 11 }} href={link.checkout_url} target="_blank" rel="noreferrer"><ExternalLink size={12} /> Abrir</a>}
+                      <button className="novo-btn novo-btn-ghost" style={{ padding: 6 }} onClick={() => copyText(link.checkout_url)} disabled={!link.checkout_url} aria-label="Copiar" title="Copiar"><Copy size={14} /></button>
+                      {link.checkout_url && <a className="novo-btn novo-btn-ghost" style={{ padding: 6 }} href={link.checkout_url} target="_blank" rel="noreferrer" aria-label="Abrir" title="Abrir"><ExternalLink size={14} /></a>}
                       {link.status === 'active' ? (
-                        <button className="novo-btn novo-btn-ghost" style={{ padding: '4px 8px', fontSize: 11 }} onClick={() => onStatusChange(link, 'disabled')} disabled={busy}><PowerOff size={12} /> Desactivar</button>
+                        <button className="novo-btn novo-btn-ghost" style={{ padding: 6 }} onClick={() => onStatusChange(link, 'disabled')} disabled={busy} aria-label="Desactivar" title="Desactivar"><PowerOff size={14} /></button>
                       ) : link.status !== 'archived' && (
-                        <button className="novo-btn novo-btn-ghost" style={{ padding: '4px 8px', fontSize: 11 }} onClick={() => onStatusChange(link, 'active')} disabled={busy}><Power size={12} /> Activar</button>
+                        <button className="novo-btn novo-btn-ghost" style={{ padding: 6 }} onClick={() => onStatusChange(link, 'active')} disabled={busy} aria-label="Activar" title="Activar"><Power size={14} /></button>
                       )}
-                      {link.status !== 'archived' && <button className="novo-btn novo-btn-ghost" style={{ padding: '4px 8px', fontSize: 11 }} onClick={() => onStatusChange(link, 'archived')} disabled={busy}><Archive size={12} /> Archivar</button>}
+                      {link.status !== 'archived' && <button className="novo-btn novo-btn-ghost" style={{ padding: 6 }} onClick={() => onStatusChange(link, 'archived')} disabled={busy} aria-label="Archivar" title="Archivar"><Archive size={14} /></button>}
                     </div>
                   </td>
                 </tr>
