@@ -1,11 +1,20 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import PublicCheckoutPage from '../components/PublicCheckoutPage.jsx';
 import { platformApi } from '../lib/platformApi.js';
 
+function readCheckoutLinkToken() {
+  const hash = location.hash.slice(1);
+  if (!hash.includes('?')) return null;
+  const query = hash.split('?').slice(1).join('?');
+  return new URLSearchParams(query).get('link');
+}
+
 export default function PartnerCheckoutPage({ slug, productId, go }) {
+  const linkToken = useMemo(() => readCheckoutLinkToken(), [slug, productId]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [checkoutData, setCheckoutData] = useState(null);
+  const [salesLink, setSalesLink] = useState(null);
   const [published, setPublished] = useState(true);
   const [busy, setBusy] = useState(false);
 
@@ -14,8 +23,9 @@ export default function PartnerCheckoutPage({ slug, productId, go }) {
       try {
         setLoading(true);
         setError(null);
-        const data = await platformApi.getPartnerCheckout(slug, productId);
+        const data = await platformApi.getPartnerCheckout(slug, productId, linkToken);
         setCheckoutData(data?.checkout || null);
+        setSalesLink(data?.salesLink || null);
         setPublished(data?.published !== false);
       } catch (err) {
         setError(err.message);
@@ -24,7 +34,7 @@ export default function PartnerCheckoutPage({ slug, productId, go }) {
       }
     }
     if (slug && productId) load();
-  }, [slug, productId]);
+  }, [slug, productId, linkToken]);
 
   if (loading) {
     return (
@@ -60,11 +70,18 @@ export default function PartnerCheckoutPage({ slug, productId, go }) {
         productId,
         email,
         selectedServiceIds,
+        salesLinkId: salesLink?.id || null,
+        linkToken,
       });
-      if (!result?.url) {
-        throw new Error('Stripe no devolvió una URL de pago.');
+      if (!result?.clientSecret) {
+        if (result?.url) {
+          throw new Error(
+            'El backend aún devuelve checkout por redirección. Despliega la función partner-storefront actualizada en Supabase.',
+          );
+        }
+        throw new Error('Stripe no devolvió el formulario de pago.');
       }
-      window.location.href = result.url;
+      return result;
     } finally {
       setBusy(false);
     }
@@ -92,6 +109,8 @@ export default function PartnerCheckoutPage({ slug, productId, go }) {
         checkoutData={checkoutData}
         onCheckout={startCheckout}
         busy={busy}
+        initialEmail={salesLink?.clientEmail || ''}
+        initialSelectedServices={salesLink?.preselectedServiceIds || []}
       />
     </>
   );

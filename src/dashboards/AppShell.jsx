@@ -22,6 +22,7 @@ import {
   SuperAdminConsole,
   PartnerConsole,
 } from '../components/PlatformConsole.jsx';
+import PartnerBrandConsole from '../components/PartnerBrandConsole.jsx';
 
 import '../styles/dashboard-clean.css';
 
@@ -39,7 +40,7 @@ const adminMenu = [
 const partnerMenu = [
   ['dashboard', 'Mi negocio', LayoutDashboard],
   ['clients', 'Mis clientes', Users],
-  ['offers', 'Productos y ofertas', Package],
+  ['products', 'Productos y servicios', Package],
   ['links', 'Links de venta', Link2],
   ['commissions', 'Comisiones', CreditCard],
   ['brand', 'Mi marca y páginas', Settings],
@@ -48,6 +49,14 @@ const partnerMenu = [
 
 export default function AppShell({ role, go }) {
   const [active, setActive] = useState('dashboard');
+  const [linkProductPreset, setLinkProductPreset] = useState(null);
+
+  function navigatePartner(section, options = {}) {
+    if (options.productId) {
+      setLinkProductPreset(options.productId);
+    }
+    setActive(section);
+  }
 
   const [theme, setTheme] = useState(() => {
     return localStorage.getItem('novo-dashboard-theme') || 'light';
@@ -121,7 +130,21 @@ export default function AppShell({ role, go }) {
 
         <div className="novo-content">
           {role === 'admin' && <SuperAdminConsole section={active} />}
-          {role === 'partner' && <PartnerConsole section={active} />}
+          {role === 'partner' && (
+            <>
+              <div style={{ display: active === 'brand' ? 'block' : 'none' }}>
+                <PartnerBrandConsole />
+              </div>
+              {active !== 'brand' && (
+                <PartnerConsole
+                  section={active}
+                  onNavigate={navigatePartner}
+                  linkProductPreset={linkProductPreset}
+                  onClearLinkPreset={() => setLinkProductPreset(null)}
+                />
+              )}
+            </>
+          )}
           {role === 'client' && <ClientPlaceholder />}
         </div>
       </div>

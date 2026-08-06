@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 
 import { cloneFunnelSettings } from '../lib/storefrontDefaults.js';
+import BrandMediaField from './BrandMediaField.jsx';
 
 // ─── TABS ─────────────────────────────────────────────────────────────────────
 
@@ -315,14 +316,26 @@ function VideoTab({ values, update }) {
         onChange={v => update('enabled', v)}
       />
       <Grid>
-        <Field label="URL del video" full>
-          <input
+        <div className="fam-field fam-field-full">
+          <BrandMediaField
+            label="Video"
             value={values.url}
-            onChange={e => update('url', e.target.value)}
-            placeholder="https://www.youtube.com/watch?v=... o Vimeo, Loom"
+            onChange={value => update('url', value)}
+            uploadFolder="funnel/videos"
+            assetType="video"
+            helper="Sube MP4, WebM o MOV (máx. 50 MB) o pega un enlace de YouTube, Vimeo, Loom o URL directa."
           />
-          <small className="fam-field-hint">Soporta YouTube, Vimeo y Loom. Puedes pegar el link normal, lo convertimos automáticamente.</small>
-        </Field>
+        </div>
+        <div className="fam-field fam-field-full">
+          <BrandMediaField
+            label="Miniatura del video"
+            value={values.posterUrl}
+            onChange={value => update('posterUrl', value)}
+            uploadFolder="funnel/posters"
+            assetType="image"
+            helper="PNG, JPG o WEBP. Máximo 2 MB. Se muestra antes de reproducir el video."
+          />
+        </div>
         <Field label="Inicio del título">
           <input value={values.titlePrefix} onChange={e => update('titlePrefix', e.target.value)} />
         </Field>
@@ -364,7 +377,7 @@ function ProductsTab({ values, products, update, toggleProduct }) {
 
       <Switch
         label="Mostrar precios"
-        description="Desactívalo si prefieres captar el lead antes de mostrar el precio."
+        description="Si lo desactivas, la landing mostrará “Precio personalizado” y el botón de solicitar propuesta."
         checked={values.showPrices}
         onChange={v => update('showPrices', v)}
       />
@@ -373,14 +386,14 @@ function ProductsTab({ values, products, update, toggleProduct }) {
         <div className="fam-product-list-head">
           <div>
             <strong>Productos visibles</strong>
-            <span>Sin selección = se muestran todos</span>
+            <span>Lista completa del catálogo NOVO · sin selección = se muestran todos los publicados</span>
           </div>
           <div>
             <strong>Destacado</strong>
           </div>
         </div>
         {products.length === 0 ? (
-          <div className="fam-empty">No hay productos configurados aún. Agrégalos desde la sección de productos.</div>
+          <div className="fam-empty">No hay productos en el catálogo NOVO. El Super Admin debe publicarlos primero.</div>
         ) : (
           products.map(p => {
             const visible = values.visibleProductIds?.includes(p.id);
@@ -399,6 +412,7 @@ function ProductsTab({ values, products, update, toggleProduct }) {
                       {p.price
                         ? new Intl.NumberFormat('en-US', { style: 'currency', currency: p.currency || 'USD', maximumFractionDigits: 0 }).format(p.price) + `/${p.interval === 'year' ? 'año' : 'mes'}`
                         : 'Precio personalizado'}
+                      {!p.published && ' · Sin publicar en Productos y servicios'}
                     </small>
                   </span>
                 </label>

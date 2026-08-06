@@ -9,6 +9,8 @@ import {
   Archive, Power, PowerOff
 } from 'lucide-react';
 import { platformApi } from '../lib/platformApi.js';
+import { calculateCheckoutDueToday } from '../lib/checkoutLineItems.js';
+import { notifyPartnerCatalogUpdated, subscribePartnerCatalogUpdated } from '../lib/partnerCatalogEvents.js';
 import { supabase } from '../lib/supabase.js';
 import {
   AdminResources,
@@ -1184,14 +1186,23 @@ function ClientForm({ initial = emptyClient, onSave, onCancel, busy, title = 'Nu
 /* ================================
    PARTNER ROUTER
 ================================ */
-export function PartnerConsole({ section }) {
+export function PartnerConsole({ section, onNavigate, linkProductPreset, onClearLinkPreset }) {
   if (section === 'dashboard') return <PartnerDashboard />;
   if (section === 'clients')   return <PartnerClients />;
-  if (section === 'offers')    return <PartnerOffers />;
-  if (section === 'links')     return <PartnerLinks />;
+  if (section === 'products' || section === 'offers') {
+    return <PartnerProductServices onNavigate={onNavigate} />;
+  }
+  if (section === 'links') {
+    return (
+      <PartnerLinks
+        linkProductPreset={linkProductPreset}
+        onClearLinkPreset={onClearLinkPreset}
+      />
+    );
+  }
   if (section === 'commissions') return <PartnerCommissions />;
   if (section === 'resources') return <PartnerResources />;
-  if (section === 'brand')     return <PartnerBrandConsole />;
+  if (section === 'brand')     return null;
   if (section === 'support')   return <PartnerSupport />;
   return <PartnerDashboard />;
 }
@@ -1464,65 +1475,129 @@ function PartnerClients() {
 }
 
 /* ================================
-   PARTNER OFERTAS
+   PARTNER PRODUCTOS Y SERVICIOS
 ================================ */
-function PartnerOffers() {
-  const [catalog, setCatalog] = useState([]);
-  const [clients, setClients] = useState([]);
-  const [selected, setSelected] = useState(null);
-  const [clientId, setClientId] = useState('');
-  const [price, setPrice] = useState('');
-  const [checkout, setCheckout] = useState('');
-  const [notice, setNotice] = useState(null);
-  const [busy, setBusy] = useState(false);
+function PartnerProductServices({ onNavigate }) {
+  const [products, setProducts] = useState([]);
+  const [additionalServices, setAdditionalServices] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState(null);
+  const [expandedProductId, setExpandedProductId] = useState(null);
+  const [drafts, setDrafts] = useState({});
 
-  useEffect(() => {
-    Promise.all([platformApi.listCatalog(), platformApi.listPartnerClients()])
-      .then(([catalogData, clientsData]) => {
-        setCatalog(catalogData?.products || []);
-        setClients(clientsData?.clients || []);
-      })
-      .catch(error => setNotice({ type: 'error', text: error.message }))
-      .finally(() => setLoading(false));
+  const load = useCallback(async () => {
+    try {
+      setLoading(true);
+      const [catalogData, brandingData] = await Promise.all([
+        platformApi.listPartnerCatalog(),
+        platformApi.getPartnerBranding(),
+      ]);
+      const rows = catalogData?.products || [];
+      const branding = brandingData?.partner?.branding || {};
+      setProducts(rows);
+      setAdditionalServices(Array.isArray(branding.additionalServices) ? branding.additionalServices : []);
+      setDrafts(() => {
+        const next = {};
+        rows.forEach(product => {
+          next[product.id] = {
+            displayName: product.displayName || '',
+            displayDescription: product.displayDescription || '',
+            retailPrice: product.retailPrice != null ? String(product.retailPrice) : '',
+          };
+        });
+        return next;
+      });
+    } catch (error) {
+      setNotice({ type: 'error', text: error.message });
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  const selectedClient = clients.find(client => client.id === clientId);
-  const margin = selected && price ? Number(price) - Number(selected.wholesale_price || 0) : 0;
+  useEffect(() => { load(); }, [load]);
 
-  async function generate() {
-    if (!selected) {
-      setNotice({ type: 'error', text: 'Selecciona un producto.' });
+  function updateDraft(productId, field, value) {
+    setDrafts(current => ({
+      ...current,
+      [productId]: {
+        ...current[productId],
+        [field]: value,
+      },
+    }));
+  }
+
+  async function saveProduct(product) {
+    const draft = drafts[product.id] || {};
+    const retailPrice = Number(draft.retailPrice);
+    if (!draft.displayName?.trim()) {
+      setNotice({ type: 'error', text: 'El nombre público del producto es obligatorio.' });
       return;
     }
-    if (!clientId) {
-      setNotice({ type: 'error', text: 'Selecciona el cliente al que pertenece este link.' });
-      return;
-    }
-    if (!price || Number(price) <= 0) {
+    if (!Number.isFinite(retailPrice) || retailPrice <= 0) {
       setNotice({ type: 'error', text: 'Define un precio de venta válido.' });
       return;
     }
-    if (Number(price) < Number(selected.wholesale_price)) {
+    if (retailPrice < Number(product.wholesalePrice || 0)) {
       setNotice({ type: 'error', text: 'El precio no puede ser menor al costo mayorista.' });
       return;
     }
 
     try {
       setBusy(true);
-      const data = await platformApi.generateCheckoutLink({
-        productId: selected.id,
-        clientId,
-        clientEmail: selectedClient?.email || null,
-        retailPrice: Number(price),
+      await platformApi.savePartnerOffer({
+        productId: product.id,
+        retailPrice,
+        displayName: draft.displayName.trim(),
+        displayDescription: draft.displayDescription?.trim() || '',
       });
-      setCheckout(data.checkoutUrl || '');
-      setNotice({
-        type: 'success',
-        text: `Link guardado para ${selectedClient?.company_name || selectedClient?.name}. Ya aparece en Links de venta.`,
-      });
-    } catch (e) {
-      setNotice({ type: 'error', text: e.message });
+      setNotice({ type: 'success', text: `Producto "${draft.displayName.trim()}" guardado.` });
+      notifyPartnerCatalogUpdated({ source: 'product', productId: product.id });
+      await load();
+    } catch (error) {
+      setNotice({ type: 'error', text: error.message });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function goCreateLink(product) {
+    onNavigate?.('links', { productId: product.id });
+  }
+
+  function addAdditionalService() {
+    setAdditionalServices(current => [
+      ...current,
+      {
+        id: `svc-${Date.now()}`,
+        title: '',
+        description: '',
+        price: 0,
+        compareAtPrice: null,
+        billingType: 'one_time',
+        active: true,
+      },
+    ]);
+  }
+
+  function updateAdditionalService(index, field, value) {
+    setAdditionalServices(current => current.map((item, i) => (
+      i === index ? { ...item, [field]: value } : item
+    )));
+  }
+
+  function removeAdditionalService(index) {
+    setAdditionalServices(current => current.filter((_, i) => i !== index));
+  }
+
+  async function saveAdditionalServices() {
+    try {
+      setBusy(true);
+      await platformApi.savePartnerAdditionalServices(additionalServices);
+      setNotice({ type: 'success', text: 'Servicios adicionales guardados correctamente.' });
+      await load();
+    } catch (error) {
+      setNotice({ type: 'error', text: error.message });
     } finally {
       setBusy(false);
     }
@@ -1531,104 +1606,264 @@ function PartnerOffers() {
   return (
     <div className="novo-page">
       <div className="novo-page-header">
-        <span className="kicker">CATÁLOGO NOVO</span>
-        <h1>Productos y ofertas</h1>
-        <p>Selecciona producto, cliente y precio. El link quedará guardado automáticamente.</p>
+        <span className="kicker">CATÁLOGO PARTNER</span>
+        <h1>Productos y servicios</h1>
+        <p>Personaliza tus planes del catálogo NOVO y administra los servicios adicionales del checkout.</p>
       </div>
+
       {notice && <Notice {...notice} onClose={() => setNotice(null)} />}
 
-      {loading && <div className="novo-card"><div className="novo-empty">Cargando catálogo y clientes…</div></div>}
-      {!loading && clients.length === 0 && (
-        <div className="novo-notice error" style={{ marginBottom: 16 }}>
-          <AlertCircle size={15} />
-          <span>No tienes clientes registrados. Crea un cliente antes de generar un link de venta.</span>
+      <div className="novo-card">
+        <div className="novo-card-header">
+          <div>
+            <div className="novo-card-title">Mis productos</div>
+            <div className="novo-card-sub">Define nombre, descripción y precio público de cada plan del catálogo NOVO.</div>
+          </div>
+          <button type="button" className="novo-btn novo-btn-ghost" onClick={load}><RefreshCw size={13} /></button>
         </div>
-      )}
 
-      {!loading && (
-        <div className="novo-grid-2" style={{ marginBottom: 16 }}>
-          {catalog.length === 0 && <div className="novo-empty" style={{ gridColumn: '1/-1' }}>El Super Admin aún no ha publicado productos.</div>}
-          {catalog.map(product => (
-            <button
-              type="button"
-              key={product.id}
+        {loading && <div className="novo-empty">Cargando catálogo…</div>}
+        {!loading && products.length === 0 && (
+          <div className="novo-empty">El Super Admin aún no ha publicado productos.</div>
+        )}
+
+        {!loading && products.length > 0 && (
+          <div className="novo-grid-2">
+            {products.map(product => {
+              const draft = drafts[product.id] || {};
+              const expanded = expandedProductId === product.id;
+              return (
+                <div
+                  key={product.id}
+                  className="novo-card"
+                  style={{
+                    marginBottom: 0,
+                    border: expanded ? '1px solid #7C3AED' : '1px solid var(--novo-card-border)',
+                    background: expanded ? 'rgba(124,58,237,.05)' : 'var(--novo-card)',
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }}>
+                    <div>
+                      <div style={{ fontWeight: 700, color: 'var(--novo-text)', marginBottom: 4 }}>
+                        {draft.displayName || product.catalogName}
+                      </div>
+                      <div style={{ fontSize: 12, color: 'var(--novo-muted)', textTransform: 'capitalize' }}>
+                        {product.billingType} · {product.interval}
+                      </div>
+                      {product.published ? (
+                        <span style={{ display: 'inline-block', marginTop: 8, fontSize: 11, color: 'var(--novo-success)' }}>Publicado en tu landing</span>
+                      ) : (
+                        <span style={{ display: 'inline-block', marginTop: 8, fontSize: 11, color: 'var(--novo-muted)' }}>Sin publicar — guarda nombre y precio</span>
+                      )}
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ color: 'var(--novo-success)', fontWeight: 700, fontSize: 18 }}>
+                        {money(product.retailPrice || draft.retailPrice || 0, product.currency)}
+                      </div>
+                      <div style={{ fontSize: 11, color: 'var(--novo-muted)' }}>
+                        mayorista {money(product.wholesalePrice, product.currency)}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      className="novo-btn novo-btn-ghost"
+                      style={{ padding: '4px 10px', fontSize: 11 }}
+                      onClick={() => setExpandedProductId(expanded ? null : product.id)}
+                    >
+                      <Edit2 size={12} /> {expanded ? 'Cerrar' : 'Editar producto'}
+                    </button>
+                    {product.published && onNavigate && (
+                      <button
+                        type="button"
+                        className="novo-btn novo-btn-secondary"
+                        style={{ padding: '4px 10px', fontSize: 11 }}
+                        onClick={() => goCreateLink(product)}
+                      >
+                        <Link2 size={12} /> Crear link
+                      </button>
+                    )}
+                  </div>
+
+                  {expanded && (
+                    <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--novo-border)' }}>
+                      <div className="novo-grid-2" style={{ marginBottom: 12 }}>
+                        <NField
+                          label="Nombre público *"
+                          value={draft.displayName || ''}
+                          onChange={value => updateDraft(product.id, 'displayName', value)}
+                        />
+                        <NField
+                          label="Precio de venta (USD) *"
+                          type="number"
+                          value={draft.retailPrice || ''}
+                          onChange={value => updateDraft(product.id, 'retailPrice', value)}
+                        />
+                      </div>
+                      <div className="novo-field" style={{ marginBottom: 12 }}>
+                        <label>Descripción pública</label>
+                        <textarea
+                          rows={3}
+                          value={draft.displayDescription || ''}
+                          onChange={event => updateDraft(product.id, 'displayDescription', event.target.value)}
+                          style={{ width: '100%', resize: 'vertical', background: 'var(--novo-card-hover)', border: '1px solid var(--novo-border)', borderRadius: 8, padding: '10px 12px', color: 'var(--novo-text)', fontSize: 13, outline: 'none' }}
+                        />
+                      </div>
+                      <div className="novo-grid-3" style={{ marginBottom: 14 }}>
+                        <Metric label="Costo mayorista" value={money(product.wholesalePrice, product.currency)} />
+                        <Metric label="Precio al cliente" value={money(draft.retailPrice || 0, product.currency)} />
+                        <Metric
+                          label="Tu margen"
+                          value={money(Number(draft.retailPrice || 0) - Number(product.wholesalePrice || 0), product.currency)}
+                          tone={Number(draft.retailPrice || 0) >= Number(product.wholesalePrice || 0) ? 'success' : 'danger'}
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        className="novo-btn novo-btn-primary"
+                        disabled={busy}
+                        onClick={() => saveProduct(product)}
+                      >
+                        {busy ? <Loader2 size={14} style={{ animation: 'novoSpin .8s linear infinite' }} /> : <Save size={14} />}
+                        Guardar producto
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      <div className="novo-card" style={{ marginTop: 16 }}>
+        <div className="novo-card-header">
+          <div>
+            <div className="novo-card-title">Servicios adicionales</div>
+            <div className="novo-card-sub">Upsells opcionales que el cliente puede agregar durante el pago en tu checkout.</div>
+          </div>
+        </div>
+
+        {additionalServices.length === 0 ? (
+          <p style={{ margin: '0 0 14px', color: 'var(--novo-muted)', fontSize: 12, lineHeight: 1.55 }}>
+            Aún no tienes servicios adicionales. Agrega configuración inicial, integraciones u otros cargos.
+          </p>
+        ) : (
+          additionalServices.map((service, index) => (
+            <div
+              key={service.id || index}
               className="novo-card"
-              style={{ cursor: 'pointer', textAlign: 'left', border: selected?.id === product.id ? '1px solid #7C3AED' : '1px solid var(--novo-card-border)', background: selected?.id === product.id ? 'rgba(124,58,237,.08)' : 'var(--novo-card)', transition: 'all .18s' }}
-              onClick={() => { setSelected(product); setPrice(String(product.suggested_price || '')); setCheckout(''); }}
+              style={{ marginBottom: 12, padding: 16, background: 'var(--novo-card-hover)' }}
             >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <div>
-                  <div style={{ fontWeight: 600, color: 'var(--novo-text)', marginBottom: 4 }}>{product.name}</div>
-                  <div style={{ fontSize: 12, color: 'var(--novo-muted)', textTransform: 'capitalize' }}>{product.billing_type} · {product.interval}</div>
-                </div>
-                <div style={{ textAlign: 'right' }}>
-                  <div style={{ color: 'var(--novo-success)', fontWeight: 700, fontSize: 18 }}>{money(product.wholesale_price, product.currency)}</div>
-                  <div style={{ fontSize: 11, color: 'var(--novo-muted)' }}>costo mayorista</div>
-                </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                <strong>Servicio {index + 1}</strong>
+                <button
+                  type="button"
+                  className="novo-btn novo-btn-ghost"
+                  style={{ padding: '4px 8px' }}
+                  onClick={() => removeAdditionalService(index)}
+                  aria-label="Eliminar servicio"
+                >
+                  <Trash2 size={14} />
+                </button>
               </div>
-              {selected?.id === product.id && <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid rgba(124,58,237,.2)', fontSize: 12, color: 'var(--novo-purple)' }}>✓ Producto seleccionado</div>}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {selected && (
-        <div className="novo-card">
-          <div className="novo-card-header">
-            <div>
-              <div className="novo-card-title">Configurar oferta — {selected.name}</div>
-              <div className="novo-card-sub">El cliente seleccionado quedará asociado permanentemente al link.</div>
+              <div className="novo-grid-2" style={{ marginBottom: 12 }}>
+                <NField label="Nombre" value={service.title} onChange={value => updateAdditionalService(index, 'title', value)} />
+                <SelectField
+                  label="Tipo de cobro"
+                  value={service.billingType || 'one_time'}
+                  onChange={value => updateAdditionalService(index, 'billingType', value)}
+                >
+                  <option value="one_time">Pago único</option>
+                  <option value="month">Mensual</option>
+                  <option value="year">Anual</option>
+                </SelectField>
+                <NField label="Precio (USD)" type="number" value={service.price} onChange={value => updateAdditionalService(index, 'price', Number(value))} />
+                <NField
+                  label="Precio anterior (USD)"
+                  type="number"
+                  value={service.compareAtPrice ?? ''}
+                  onChange={value => updateAdditionalService(index, 'compareAtPrice', value === '' ? null : Number(value))}
+                />
+              </div>
+              <div className="novo-field" style={{ marginBottom: 12 }}>
+                <label>Descripción</label>
+                <input
+                  type="text"
+                  value={service.description || ''}
+                  onChange={event => updateAdditionalService(index, 'description', event.target.value)}
+                  style={{ width: '100%', background: 'var(--novo-card-hover)', border: '1px solid var(--novo-border)', borderRadius: 8, padding: '10px 12px', color: 'var(--novo-text)', fontSize: 13, outline: 'none' }}
+                />
+                <small style={{ display: 'block', marginTop: 6, color: 'var(--novo-muted)', fontSize: 11 }}>
+                  El precio anterior aparece tachado en el checkout si es mayor al precio de venta.
+                </small>
+              </div>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--novo-text)', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={service.active !== false}
+                  onChange={event => updateAdditionalService(index, 'active', event.target.checked)}
+                />
+                Servicio activo — si lo desactivas, no aparecerá en el checkout
+              </label>
             </div>
-          </div>
+          ))
+        )}
 
-          <div className="novo-grid-2" style={{ marginBottom: 16 }}>
-            <SelectField label="Cliente *" value={clientId} onChange={value => { setClientId(value); setCheckout(''); }} disabled={clients.length === 0}>
-              <option value="">Selecciona un cliente</option>
-              {clients.map(client => <option key={client.id} value={client.id}>{client.company_name || client.name}{client.email ? ` — ${client.email}` : ''}</option>)}
-            </SelectField>
-            <NField label="Precio de venta (USD) *" type="number" value={price} onChange={value => { setPrice(value); setCheckout(''); }} />
-          </div>
-
-          <div className="novo-grid-3" style={{ marginBottom: 16 }}>
-            <Metric label="Costo mayorista" value={money(selected.wholesale_price, selected.currency)} />
-            <Metric label="Precio al cliente" value={money(price || 0, selected.currency)} />
-            <Metric label="Tu ganancia estimada" value={money(margin, selected.currency)} tone={margin >= 0 ? 'success' : 'danger'} />
-          </div>
-
-          <button className="novo-btn novo-btn-primary" onClick={generate} disabled={busy || !clientId || !price || clients.length === 0}>
-            {busy ? <Loader2 size={14} style={{ animation: 'novoSpin .8s linear infinite' }} /> : <Link2 size={14} />} Generar y guardar link
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 8 }}>
+          <button type="button" className="novo-btn novo-btn-ghost" onClick={addAdditionalService}>
+            <Plus size={14} /> Agregar servicio adicional
           </button>
-
-          {checkout && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(16,185,129,.06)', border: '1px solid rgba(16,185,129,.15)', borderRadius: 8, padding: '12px 14px', marginTop: 16 }}>
-              <span style={{ flex: 1, fontSize: 12, color: 'var(--novo-success)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{checkout}</span>
-              <button className="novo-btn novo-btn-ghost" style={{ padding: '4px 10px', fontSize: 11 }} onClick={() => copyText(checkout)}><Copy size={12} /> Copiar</button>
-              <a href={checkout} target="_blank" rel="noreferrer" className="novo-btn novo-btn-ghost" style={{ padding: '4px 10px', fontSize: 11 }}><ExternalLink size={12} /> Abrir</a>
-            </div>
-          )}
+          <button type="button" className="novo-btn novo-btn-primary" onClick={saveAdditionalServices} disabled={busy}>
+            {busy ? <Loader2 size={14} style={{ animation: 'novoSpin .8s linear infinite' }} /> : <Save size={14} />}
+            Guardar servicios
+          </button>
         </div>
-      )}
+      </div>
     </div>
   );
 }
 
 /* ================================
-   PARTNER LINKS
+   PARTNER LINKS DE VENTA
 ================================ */
-function PartnerLinks() {
+function PartnerLinks({ linkProductPreset, onClearLinkPreset }) {
+  const [products, setProducts] = useState([]);
+  const [clients, setClients] = useState([]);
   const [links, setLinks] = useState([]);
+  const [additionalServices, setAdditionalServices] = useState([]);
+  const [selectedServiceIds, setSelectedServiceIds] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState(null);
   const [filters, setFilters] = useState({ status: '', search: '' });
+  const [linkProductId, setLinkProductId] = useState('');
+  const [clientId, setClientId] = useState('');
+  const [linkPrice, setLinkPrice] = useState('');
+  const [checkout, setCheckout] = useState('');
 
   const load = useCallback(async () => {
     try {
       setLoading(true);
-      const data = await platformApi.listSalesLinks();
-      setLinks(data?.links || []);
-    } catch (e) {
-      setNotice({ type: 'error', text: e.message });
+      const [catalogData, clientsData, linksData, brandingData] = await Promise.all([
+        platformApi.listPartnerCatalog(),
+        platformApi.listPartnerClients(),
+        platformApi.listSalesLinks(),
+        platformApi.getPartnerBranding(),
+      ]);
+      setProducts(catalogData?.products || []);
+      setClients(clientsData?.clients || []);
+      setLinks(linksData?.links || []);
+      const branding = brandingData?.partner?.branding || {};
+      setAdditionalServices(
+        Array.isArray(branding.additionalServices)
+          ? branding.additionalServices.filter(service => service.active !== false)
+          : [],
+      );
+    } catch (error) {
+      setNotice({ type: 'error', text: error.message });
     } finally {
       setLoading(false);
     }
@@ -1636,14 +1871,104 @@ function PartnerLinks() {
 
   useEffect(() => { load(); }, [load]);
 
+  useEffect(() => subscribePartnerCatalogUpdated(() => {
+    load().catch(error => setNotice({ type: 'error', text: error.message }));
+  }), [load]);
+
+  useEffect(() => {
+    if (!linkProductPreset || products.length === 0) return;
+    const product = products.find(row => row.id === linkProductPreset);
+    if (!product) return;
+    setLinkProductId(product.id);
+    setLinkPrice(product.retailPrice != null ? String(product.retailPrice) : '');
+    onClearLinkPreset?.();
+  }, [linkProductPreset, products, onClearLinkPreset]);
+
+  const publishedProducts = products.filter(product => product.published);
+  const selectedLinkProduct = products.find(product => product.id === linkProductId);
+  const selectedClient = clients.find(client => client.id === clientId);
+  const linkMargin = selectedLinkProduct && linkPrice
+    ? Number(linkPrice) - Number(selectedLinkProduct.wholesalePrice || 0)
+    : 0;
+  const selectedLinkServices = additionalServices.filter(service =>
+    selectedServiceIds.includes(service.id),
+  );
+  const estimatedFirstPayment = selectedLinkProduct
+    ? calculateCheckoutDueToday(
+      {
+        price: linkPrice,
+        interval: selectedLinkProduct.interval,
+      },
+      selectedLinkServices,
+    ).dueToday
+    : 0;
+
+  function toggleLinkService(serviceId) {
+    setSelectedServiceIds(current => (
+      current.includes(serviceId)
+        ? current.filter(id => id !== serviceId)
+        : [...current, serviceId]
+    ));
+    setCheckout('');
+  }
+
+  function linkServiceBillingLabel(billingType) {
+    if (billingType === 'month') return '/ mes';
+    if (billingType === 'year') return '/ año';
+    return ' · único';
+  }
+
+  async function generateLink() {
+    if (!linkProductId) {
+      setNotice({ type: 'error', text: 'Selecciona un producto publicado.' });
+      return;
+    }
+    if (!clientId) {
+      setNotice({ type: 'error', text: 'Selecciona el cliente al que pertenece este link.' });
+      return;
+    }
+    if (!linkPrice || Number(linkPrice) <= 0) {
+      setNotice({ type: 'error', text: 'Define un precio de venta válido.' });
+      return;
+    }
+    if (selectedLinkProduct && Number(linkPrice) < Number(selectedLinkProduct.wholesalePrice || 0)) {
+      setNotice({ type: 'error', text: 'El precio no puede ser menor al costo mayorista.' });
+      return;
+    }
+
+    try {
+      setBusy(true);
+      const data = await platformApi.generateCheckoutLink({
+        productId: linkProductId,
+        clientId,
+        clientEmail: selectedClient?.email || null,
+        retailPrice: Number(linkPrice),
+        selectedServiceIds,
+      });
+      setCheckout(data.checkoutUrl || '');
+      setNotice({
+        type: 'success',
+        text: `Link guardado para ${selectedClient?.company_name || selectedClient?.name}.`,
+      });
+      await load();
+    } catch (error) {
+      setNotice({ type: 'error', text: error.message });
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function changeStatus(link, status) {
     try {
       setBusy(true);
       await platformApi.updateSalesLinkStatus(link.id, status);
-      setNotice({ type: 'success', text: status === 'active' ? 'Link reactivado.' : status === 'disabled' ? 'Link desactivado.' : 'Link archivado.' });
+      setNotice({
+        type: 'success',
+        text: status === 'active' ? 'Link reactivado.' : status === 'disabled' ? 'Link desactivado.' : 'Link archivado.',
+      });
       await load();
-    } catch (e) {
-      setNotice({ type: 'error', text: e.message });
+    } catch (error) {
+      setNotice({ type: 'error', text: error.message });
     } finally {
       setBusy(false);
     }
@@ -1663,10 +1988,161 @@ function PartnerLinks() {
       <div className="novo-page-header">
         <span className="kicker">VENTAS</span>
         <h1>Links de venta</h1>
-        <p>Historial real de links, clientes, productos, precios y estados.</p>
+        <p>Genera links a tu checkout white-label con producto, cliente y servicios preseleccionados.</p>
       </div>
 
       {notice && <Notice {...notice} onClose={() => setNotice(null)} />}
+
+      <div id="partner-generate-link" className="novo-card" style={{ marginBottom: 16 }}>
+        <div className="novo-card-header">
+          <div>
+            <div className="novo-card-title">Generar link de venta</div>
+            <div className="novo-card-sub">Selecciona producto, cliente y servicios incluidos. El cliente pagará en tu checkout embebido.</div>
+          </div>
+        </div>
+
+        {!loading && clients.length === 0 && (
+          <div className="novo-notice error" style={{ marginBottom: 16 }}>
+            <AlertCircle size={15} />
+            <span>No tienes clientes registrados. Crea un cliente antes de generar un link.</span>
+          </div>
+        )}
+
+        {!loading && publishedProducts.length === 0 && (
+          <div className="novo-notice error" style={{ marginBottom: 16 }}>
+            <AlertCircle size={15} />
+            <span>Publica al menos un producto en Productos y servicios antes de generar links.</span>
+          </div>
+        )}
+
+        <div className="novo-grid-2" style={{ marginBottom: 16 }}>
+          <SelectField
+            label="Producto *"
+            value={linkProductId}
+            onChange={value => {
+              setLinkProductId(value);
+              const product = products.find(row => row.id === value);
+              setLinkPrice(product?.retailPrice != null ? String(product.retailPrice) : '');
+              setSelectedServiceIds([]);
+              setCheckout('');
+            }}
+            disabled={publishedProducts.length === 0}
+          >
+            <option value="">Selecciona un producto</option>
+            {publishedProducts.map(product => (
+              <option key={product.id} value={product.id}>
+                {product.displayName} — {money(product.retailPrice, product.currency)}
+              </option>
+            ))}
+          </SelectField>
+          <SelectField
+            label="Cliente *"
+            value={clientId}
+            onChange={value => { setClientId(value); setCheckout(''); }}
+            disabled={clients.length === 0}
+          >
+            <option value="">Selecciona un cliente</option>
+            {clients.map(client => (
+              <option key={client.id} value={client.id}>
+                {client.company_name || client.name}{client.email ? ` — ${client.email}` : ''}
+              </option>
+            ))}
+          </SelectField>
+        </div>
+
+        {selectedLinkProduct && (
+          <>
+            <div className="novo-grid-2" style={{ marginBottom: 16 }}>
+              <NField
+                label="Precio del link (USD) *"
+                type="number"
+                value={linkPrice}
+                onChange={value => { setLinkPrice(value); setCheckout(''); }}
+              />
+              <div className="novo-field">
+                <label>Descripción que verá el cliente</label>
+                <div style={{ padding: '10px 12px', borderRadius: 8, background: 'var(--novo-card-hover)', fontSize: 12, color: 'var(--novo-muted)', minHeight: 42 }}>
+                  {selectedLinkProduct.displayDescription || 'Sin descripción'}
+                </div>
+              </div>
+            </div>
+            <div className="novo-grid-3" style={{ marginBottom: 16 }}>
+              <Metric label="Costo mayorista" value={money(selectedLinkProduct.wholesalePrice, selectedLinkProduct.currency)} />
+              <Metric label="Precio al cliente" value={money(linkPrice || 0, selectedLinkProduct.currency)} />
+              <Metric label="Tu ganancia estimada" value={money(linkMargin, selectedLinkProduct.currency)} tone={linkMargin >= 0 ? 'success' : 'danger'} />
+            </div>
+
+            {additionalServices.length > 0 && (
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--novo-text)', marginBottom: 10 }}>
+                  Servicios incluidos en el link
+                </div>
+                <div style={{ display: 'grid', gap: 8 }}>
+                  {additionalServices.map(service => {
+                    const selected = selectedServiceIds.includes(service.id);
+                    return (
+                      <label
+                        key={service.id}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 12,
+                          padding: '12px 14px',
+                          borderRadius: 10,
+                          border: selected ? '1px solid var(--novo-purple)' : '1px solid var(--novo-border)',
+                          background: selected ? 'rgba(124,58,237,.06)' : 'var(--novo-card-hover)',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selected}
+                          onChange={() => toggleLinkService(service.id)}
+                        />
+                        <span style={{ flex: 1 }}>
+                          <strong style={{ display: 'block', fontSize: 13 }}>{service.title}</strong>
+                          <small style={{ color: 'var(--novo-muted)', fontSize: 11 }}>
+                            {service.description || 'Servicio adicional'}
+                          </small>
+                        </span>
+                        <span style={{ fontWeight: 700, color: 'var(--novo-success)', fontSize: 13 }}>
+                          {money(service.price, selectedLinkProduct.currency)}
+                          <small style={{ display: 'block', color: 'var(--novo-muted)', fontWeight: 500, fontSize: 10 }}>
+                            {linkServiceBillingLabel(service.billingType)}
+                          </small>
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+                {selectedLinkServices.length > 0 && (
+                  <p style={{ margin: '10px 0 0', fontSize: 11, color: 'var(--novo-muted)' }}>
+                    Total estimado de hoy: {money(estimatedFirstPayment, selectedLinkProduct.currency)}
+                  </p>
+                )}
+              </div>
+            )}
+          </>
+        )}
+
+        <button
+          type="button"
+          className="novo-btn novo-btn-primary"
+          onClick={generateLink}
+          disabled={busy || !linkProductId || !clientId || !linkPrice || clients.length === 0}
+        >
+          {busy ? <Loader2 size={14} style={{ animation: 'novoSpin .8s linear infinite' }} /> : <Link2 size={14} />}
+          Generar y guardar link
+        </button>
+
+        {checkout && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(16,185,129,.06)', border: '1px solid rgba(16,185,129,.15)', borderRadius: 8, padding: '12px 14px', marginTop: 16 }}>
+            <span style={{ flex: 1, fontSize: 12, color: 'var(--novo-success)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{checkout}</span>
+            <button type="button" className="novo-btn novo-btn-ghost" style={{ padding: '4px 10px', fontSize: 11 }} onClick={() => copyText(checkout)}><Copy size={12} /> Copiar</button>
+            <a href={checkout} target="_blank" rel="noreferrer" className="novo-btn novo-btn-ghost" style={{ padding: '4px 10px', fontSize: 11 }}><ExternalLink size={12} /> Abrir</a>
+          </div>
+        )}
+      </div>
 
       <div className="novo-card" style={{ marginBottom: 16 }}>
         <div className="novo-grid-2" style={{ marginBottom: 0 }}>
@@ -1680,7 +2156,14 @@ function PartnerLinks() {
           </SelectField>
           <div className="novo-field">
             <label>Buscar</label>
-            <div className="novo-search" style={{ width: '100%' }}><Search size={13} /><input value={filters.search} onChange={e => setFilters(current => ({ ...current, search: e.target.value }))} placeholder="Cliente, correo o producto" /></div>
+            <div className="novo-search" style={{ width: '100%' }}>
+              <Search size={13} />
+              <input
+                value={filters.search}
+                onChange={event => setFilters(current => ({ ...current, search: event.target.value }))}
+                placeholder="Cliente, correo o producto"
+              />
+            </div>
           </div>
         </div>
       </div>
@@ -1695,6 +2178,7 @@ function PartnerLinks() {
     </div>
   );
 }
+
 
 /* ================================
    PARTNER COMISIONES

@@ -88,11 +88,54 @@ Deno.serve(async (req) => {
         partner_id: partnerId,
         product_id: payload.productId,
         retail_price: payload.retailPrice,
+        display_name: payload.displayName ? String(payload.displayName).trim() : null,
+        display_description: payload.displayDescription ? String(payload.displayDescription).trim() : null,
         currency: product.currency,
+        active: payload.active !== false,
         updated_at: new Date().toISOString(),
       }, { onConflict: 'partner_id,product_id' }).select().single();
       if (error) throw error;
       return json({ offer: data });
+    }
+
+    if (action === 'listPartnerCatalog') {
+      const { data: products, error: productsError } = await supabase
+        .from('catalog_products')
+        .select('*')
+        .eq('active', true)
+        .order('name');
+      if (productsError) throw productsError;
+
+      const { data: offers, error: offersError } = await supabase
+        .from('partner_offers')
+        .select('id, product_id, retail_price, display_name, display_description, currency, active')
+        .eq('partner_id', partnerId);
+      if (offersError) throw offersError;
+
+      const offerByProduct = new Map(
+        (offers || []).map((offer) => [String(offer.product_id), offer]),
+      );
+
+      const rows = (products || []).map((product) => {
+        const offer = offerByProduct.get(String(product.id));
+        return {
+          id: product.id,
+          catalogName: product.name,
+          catalogDescription: product.description,
+          wholesalePrice: product.wholesale_price,
+          suggestedPrice: product.suggested_price,
+          currency: product.currency,
+          billingType: product.billing_type,
+          interval: product.interval,
+          offerId: offer?.id || null,
+          displayName: offer?.display_name || product.name,
+          displayDescription: offer?.display_description || product.description || '',
+          retailPrice: offer?.retail_price ?? product.suggested_price ?? null,
+          published: Boolean(offer?.active && offer?.retail_price != null),
+        };
+      });
+
+      return json({ products: rows });
     }
 
     if (action === 'listOffers') {
@@ -101,6 +144,8 @@ Deno.serve(async (req) => {
         .select(`
           id,
           retail_price,
+          display_name,
+          display_description,
           currency,
           active,
           catalog_products:product_id (
@@ -131,25 +176,66 @@ Deno.serve(async (req) => {
       return json({ partner: data });
     }
 
-    if (action === 'saveBranding') {
-      const brand = payload.brand || {};
-      const funnel = payload.funnel || {};
-      const checkout = payload.checkout || {};
-      const terms = payload.terms || {};
-      const additionalServices = Array.isArray(payload.additionalServices) ? payload.additionalServices : [];
-      const productOverrides = payload.productOverrides || {};
+    if (action === 'saveAdditionalServices') {
+      const services = Array.isArray(payload.additionalServices) ? payload.additionalServices : [];
+
+      const { data: partner, error: readError } = await supabase
+        .from('partners')
+        .select('branding')
+        .eq('id', partnerId)
+        .single();
+      if (readError) throw readError;
 
       const branding = {
+        ...(partner.branding || {}),
+        additionalServices: services,
+      };
+
+      const { data, error } = await supabase
+        .from('partners')
+        .update({
+          branding,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', partnerId)
+        .select('id, name, slug, status, branding, social_settings')
+        .single();
+      if (error) throw error;
+      return json({ partner: data });
+    }
+
+    if (action === 'saveBranding') {
+      const { data: existingPartner, error: readError } = await supabase
+        .from('partners')
+        .select('branding, social_settings')
+        .eq('id', partnerId)
+        .single();
+      if (readError) throw readError;
+
+      const existingBranding = (existingPartner?.branding || {}) as Record<string, unknown>;
+      const brand = payload.brand !== undefined ? payload.brand : (existingBranding.brand || {});
+      const funnel = payload.funnel !== undefined ? payload.funnel : (existingBranding.funnel || {});
+      const checkout = payload.checkout !== undefined ? payload.checkout : (existingBranding.checkout || {});
+      const terms = payload.terms !== undefined ? payload.terms : (existingBranding.terms || {});
+      const additionalServices = Array.isArray(payload.additionalServices)
+        ? payload.additionalServices
+        : (Array.isArray(existingBranding.additionalServices) ? existingBranding.additionalServices : []);
+      const productOverrides = payload.productOverrides !== undefined
+        ? payload.productOverrides
+        : (existingBranding.productOverrides || {});
+
+      const branding = {
+        ...existingBranding,
         brand,
         funnel,
         checkout,
         terms,
         additionalServices,
         productOverrides,
-        name: brand.businessName || payload.name || null,
-        domain: payload.domain || brand.websiteUrl || null,
-        logoUrl: brand.logoUrl || payload.logoUrl || null,
-        primaryColor: brand.primaryColor || payload.primaryColor || '#7C3AED',
+        name: brand.businessName || payload.name || existingBranding.name || null,
+        domain: payload.domain || brand.websiteUrl || existingBranding.domain || null,
+        logoUrl: brand.logoUrl || payload.logoUrl || existingBranding.logoUrl || null,
+        primaryColor: brand.primaryColor || payload.primaryColor || existingBranding.primaryColor || '#7C3AED',
       };
 
       const social = {

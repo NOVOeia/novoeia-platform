@@ -1,5 +1,6 @@
 import { adminClient, corsHeaders, handleError, json } from '../_shared/core.ts';
 import { createStripeCheckoutSession } from '../_shared/stripe.ts';
+import { buildAdditionalLineItems } from '../_shared/checkout-line-items.ts';
 
 const DEFAULT_BRAND = {
   businessName: '',
@@ -44,6 +45,7 @@ const DEFAULT_FUNNEL = {
   video: {
     enabled: true,
     url: '',
+    posterUrl: '',
     titlePrefix: 'Mira cómo funciona tu',
     titleHighlight: 'nuevo sistema comercial',
     titleSuffix: 'en acción',
@@ -192,19 +194,68 @@ function buildStorefrontProducts(
 
       return {
         id: product.id,
-        name: override.name || product.name,
+        name: offer.display_name || override.name || product.name,
         badge: override.badge || '',
-        description: override.description || product.description || '',
+        description: offer.display_description || override.description || product.description || '',
         price,
         currency: offer.currency || product.currency || 'USD',
         interval: product.interval || null,
         showPrice: override.showPrice !== false && price != null,
+        published: true,
         checkoutUrl: override.checkoutUrl || `#p/${slug}/checkout/${product.id}`,
         features: Array.isArray(override.features) ? override.features : [],
         status: 'active',
       };
     })
     .filter(Boolean);
+}
+
+async function loadStorefrontCatalogProducts(
+  supabase: ReturnType<typeof adminClient>,
+  partnerId: string,
+  slug: string,
+  overrides: Record<string, unknown>,
+) {
+  const { data: catalogProducts, error: catalogError } = await supabase
+    .from('catalog_products')
+    .select('*')
+    .eq('active', true)
+    .order('name');
+  if (catalogError) throw catalogError;
+
+  const { data: offers, error: offersError } = await supabase
+    .from('partner_offers')
+    .select('id, product_id, retail_price, display_name, display_description, currency, active')
+    .eq('partner_id', partnerId);
+  if (offersError) throw offersError;
+
+  const offerByProduct = new Map(
+    (offers || []).map((offer) => [String(offer.product_id), offer]),
+  );
+
+  return (catalogProducts || []).map((product) => {
+    const offer = offerByProduct.get(String(product.id));
+    const override = (overrides[String(product.id)] || {}) as Record<string, unknown>;
+    const published = Boolean(offer?.active && offer?.retail_price != null);
+    const retailPrice = offer?.retail_price != null ? Number(offer.retail_price) : null;
+    const suggestedPrice = product.suggested_price != null ? Number(product.suggested_price) : null;
+    const price = retailPrice ?? suggestedPrice;
+
+    return {
+      id: product.id,
+      name: offer?.display_name || override.name || product.name,
+      badge: override.badge || '',
+      description: offer?.display_description || override.description || product.description || '',
+      price,
+      currency: offer?.currency || product.currency || 'USD',
+      interval: product.interval || null,
+      showPrice: override.showPrice !== false && price != null,
+      published,
+      checkoutUrl: override.checkoutUrl || `#p/${slug}/checkout/${product.id}`,
+      features: Array.isArray(override.features) ? override.features : [],
+      status: published ? 'active' : 'draft',
+    };
+  });
 }
 
 async function loadPartnerOffer(
@@ -217,6 +268,8 @@ async function loadPartnerOffer(
     .select(`
       id,
       retail_price,
+      display_name,
+      display_description,
       currency,
       active,
       catalog_products:product_id (
@@ -252,6 +305,8 @@ function buildCheckoutPayload(
 ) {
   const override = (storefront.productOverrides[String(product.id)] || {}) as Record<string, unknown>;
   const price = offer.retail_price != null ? Number(offer.retail_price) : null;
+  const offerDisplayName = offer.display_name as string | null | undefined;
+  const offerDisplayDescription = offer.display_description as string | null | undefined;
 
   return {
     partner: {
@@ -273,8 +328,8 @@ function buildCheckoutPayload(
     },
     product: {
       id: product.id,
-      name: override.name || product.name,
-      description: override.description || product.description || '',
+      name: offerDisplayName || override.name || product.name,
+      description: offerDisplayDescription || override.description || product.description || '',
       price,
       currency: offer.currency || product.currency || 'USD',
       interval: product.interval || 'month',
@@ -284,6 +339,42 @@ function buildCheckoutPayload(
     terms: storefront.terms,
     checkout: storefront.checkout,
   };
+}
+
+async function loadActiveSalesLink(
+  supabase: ReturnType<typeof adminClient>,
+  partnerId: string,
+  linkToken: string,
+  productId: string,
+) {
+  const { data: byToken, error: tokenError } = await supabase
+    .from('sales_links')
+    .select('*')
+    .eq('partner_id', partnerId)
+    .eq('status', 'active')
+    .eq('public_token', linkToken)
+    .maybeSingle();
+
+  if (tokenError) throw tokenError;
+
+  let salesLink = byToken;
+
+  if (!salesLink) {
+    const { data: byId, error: idError } = await supabase
+      .from('sales_links')
+      .select('*')
+      .eq('partner_id', partnerId)
+      .eq('status', 'active')
+      .eq('id', linkToken)
+      .maybeSingle();
+    if (idError) throw idError;
+    salesLink = byId;
+  }
+
+  if (!salesLink) throw new Error('SALES_LINK_NOT_FOUND');
+  if (String(salesLink.product_id) !== productId) throw new Error('SALES_LINK_PRODUCT_MISMATCH');
+
+  return salesLink;
 }
 
 Deno.serve(async (req) => {
@@ -310,34 +401,11 @@ Deno.serve(async (req) => {
     const storefront = normalizeStorefront(partner);
 
     if (action === 'getStorefront') {
-      const { data: offers, error: offersError } = await supabase
-        .from('partner_offers')
-        .select(`
-          id,
-          retail_price,
-          currency,
-          active,
-          catalog_products:product_id (
-            id,
-            name,
-            description,
-            wholesale_price,
-            suggested_price,
-            currency,
-            interval,
-            billing_type,
-            active
-          )
-        `)
-        .eq('partner_id', partner.id)
-        .eq('active', true);
-
-      if (offersError) throw offersError;
-
-      const products = buildStorefrontProducts(
-        offers || [],
-        storefront.productOverrides,
+      const products = await loadStorefrontCatalogProducts(
+        supabase,
+        String(partner.id),
         String(partner.slug),
+        storefront.productOverrides,
       );
 
       if (!storefront.funnelSettings.products.featuredProductId && products.length > 0) {
@@ -409,31 +477,78 @@ Deno.serve(async (req) => {
 
     if (action === 'getCheckout') {
       const productId = String(payload.productId || '').trim();
+      const linkToken = String(payload.linkToken || '').trim();
       if (!productId) throw new Error('PRODUCT_ID_REQUIRED');
+
+      let salesLink: Record<string, unknown> | null = null;
+      if (linkToken) {
+        salesLink = await loadActiveSalesLink(supabase, String(partner.id), linkToken, productId);
+      }
 
       const { offer, product } = await loadPartnerOffer(supabase, String(partner.id), productId);
       const checkout = buildCheckoutPayload(storefront, offer, product);
+
+      if (salesLink?.sale_price != null) {
+        checkout.product.price = Number(salesLink.sale_price);
+      }
 
       if (checkout.product.price == null || checkout.product.price <= 0) {
         throw new Error('PRODUCT_REQUIRES_CUSTOM_QUOTE');
       }
 
-      return json({ checkout, published });
+      const preselectedServiceIds = Array.isArray((salesLink?.metadata as Record<string, unknown>)?.selectedServiceIds)
+        ? ((salesLink?.metadata as Record<string, unknown>).selectedServiceIds as unknown[]).map(String)
+        : [];
+
+      return json({
+        checkout,
+        published,
+        salesLink: salesLink
+          ? {
+            id: salesLink.id,
+            clientEmail: salesLink.client_email,
+            preselectedServiceIds,
+          }
+          : null,
+      });
     }
 
     if (action === 'createCheckoutSession') {
       const productId = String(payload.productId || '').trim();
-      const email = String(payload.email || '').trim().toLowerCase();
+      const emailInput = String(payload.email || '').trim().toLowerCase();
+      const salesLinkId = String(payload.salesLinkId || '').trim();
+      const linkToken = String(payload.linkToken || '').trim();
       const selectedServiceIds = Array.isArray(payload.selectedServiceIds)
         ? payload.selectedServiceIds.map(String)
         : [];
 
       if (!productId) throw new Error('PRODUCT_ID_REQUIRED');
+
+      let salesLink: Record<string, unknown> | null = null;
+      if (salesLinkId) {
+        const { data, error } = await supabase
+          .from('sales_links')
+          .select('*')
+          .eq('partner_id', partner.id)
+          .eq('id', salesLinkId)
+          .eq('status', 'active')
+          .maybeSingle();
+        if (error) throw error;
+        salesLink = data;
+      } else if (linkToken) {
+        salesLink = await loadActiveSalesLink(supabase, String(partner.id), linkToken, productId);
+      }
+
+      const email = emailInput || String(salesLink?.client_email || '').trim().toLowerCase();
       if (!email) throw new Error('CHECKOUT_EMAIL_REQUIRED');
 
       const { offer, product } = await loadPartnerOffer(supabase, String(partner.id), productId);
       const checkout = buildCheckoutPayload(storefront, offer, product);
-      const retailPrice = Number(checkout.product.price || 0);
+      let retailPrice = Number(checkout.product.price || 0);
+      if (salesLink?.sale_price != null) {
+        retailPrice = Number(salesLink.sale_price);
+        checkout.product.price = retailPrice;
+      }
       const wholesalePrice = Number(product.wholesale_price || 0);
 
       if (!Number.isFinite(retailPrice) || retailPrice <= 0) {
@@ -456,14 +571,11 @@ Deno.serve(async (req) => {
         selectedServiceIds.includes(String(service.id))
       );
 
-      const oneTimeLineItems = selectedServices
-        .filter(service => service.billingType === 'one_time')
-        .map(service => ({
-          name: String(service.title || 'Servicio adicional'),
-          unitAmountCents: Math.round(Number(service.price || 0) * 100),
-          currency: String(checkout.product.currency || 'USD'),
-        }))
-        .filter(item => item.unitAmountCents > 0);
+      const additionalLineItems = buildAdditionalLineItems(
+        product.interval,
+        selectedServices,
+        String(checkout.product.currency || 'USD'),
+      );
 
       const { data: existingClient } = await supabase
         .from('partner_clients')
@@ -473,6 +585,22 @@ Deno.serve(async (req) => {
         .maybeSingle();
 
       let client = existingClient;
+
+      if (salesLink?.client_id) {
+        const { data: linkedClient, error: linkedClientError } = await supabase
+          .from('partner_clients')
+          .select('id, name, company_name, email, status')
+          .eq('partner_id', partner.id)
+          .eq('id', String(salesLink.client_id))
+          .maybeSingle();
+        if (linkedClientError) throw linkedClientError;
+        if (linkedClient) {
+          client = linkedClient;
+          if (emailInput && linkedClient.email && linkedClient.email.toLowerCase() !== emailInput) {
+            throw new Error('SALES_LINK_EMAIL_MISMATCH');
+          }
+        }
+      }
 
       if (!client) {
         const clientName = email.split('@')[0] || 'Cliente storefront';
@@ -504,7 +632,7 @@ Deno.serve(async (req) => {
         offer_id: String(offer.id),
         catalog_product_id: String(product.id),
         product_name: String(product.name),
-        source: 'public_storefront_checkout',
+        source: salesLink ? 'partner_sales_link_checkout' : 'public_storefront_checkout',
         storefront_slug: slug,
         selected_services: JSON.stringify(selectedServiceIds),
         wholesale_cents: String(Math.round(wholesalePrice * 100)),
@@ -512,20 +640,28 @@ Deno.serve(async (req) => {
         retail_cents: String(Math.round(retailPrice * 100)),
       };
 
+      if (salesLink?.id) {
+        metadata.sales_link_id = String(salesLink.id);
+      }
+
+      const returnUrl = `${publicUrl}/#checkout/success?session_id={CHECKOUT_SESSION_ID}`;
+
       const session = await createStripeCheckoutSession({
         stripeProductId,
         interval,
         unitAmountCents: Math.round(retailPrice * 100),
         currency,
-        successUrl: `${publicUrl}/#checkout/success?session_id={CHECKOUT_SESSION_ID}`,
+        successUrl: returnUrl,
         cancelUrl: `${publicUrl}/#p/${slug}/checkout/${productId}`,
+        returnUrl,
+        embedded: true,
         metadata,
         customerEmail: email,
-        oneTimeLineItems,
+        additionalLineItems,
       });
 
       await supabase.from('partner_offers').update({
-        checkout_url: session.url,
+        stripe_checkout_session_id: session.id,
         updated_at: new Date().toISOString(),
       }).eq('id', offer.id);
 
@@ -543,7 +679,10 @@ Deno.serve(async (req) => {
         },
       });
 
-      return json({ url: session.url, sessionId: session.id });
+      return json({
+        clientSecret: session.client_secret,
+        sessionId: session.id,
+      });
     }
 
     throw new Error('UNKNOWN_ACTION');
