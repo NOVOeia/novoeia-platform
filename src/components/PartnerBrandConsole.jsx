@@ -1,9 +1,16 @@
 import { useEffect, useState } from 'react';
 import {
   Building2, Check, ChevronRight, CreditCard, Copy, Eye, Globe, Image,
-  MapPin, Palette, Phone, RefreshCw, Save, Settings, ShoppingCart,
+  MapPin, Palette, Phone, Plus, RefreshCw, Save, Settings, ShoppingCart, Trash2,
 } from 'lucide-react';
+import FunnelAdminPanel from './FunnelAdminPanel.jsx';
 import { platformApi } from '../lib/platformApi.js';
+import {
+  DEFAULT_CHECKOUT,
+  DEFAULT_TERMS,
+  mapOfferToAdminProduct,
+  normalizeStoredFunnel,
+} from '../lib/storefrontDefaults.js';
 
 const INITIAL_BRAND = {
   businessName: '',
@@ -33,38 +40,31 @@ const INITIAL_BRAND = {
   tiktokUrl: '',
 };
 
-const INITIAL_FUNNEL = {
-  title: 'Soluciones digitales para hacer crecer tu negocio',
-  subtitle: 'Organiza tus clientes, automatiza procesos y vende mejor.',
-  heroImageUrl: '',
-  buttonText: 'Conocer soluciones',
-  showProductPrices: true,
-  showContactFormWithoutPrice: true,
-};
+const INITIAL_CHECKOUT = { ...DEFAULT_CHECKOUT };
 
-const INITIAL_CHECKOUT = {
-  title: 'Activa tu servicio',
-  subtitle: 'Revisa los detalles de tu compra y completa el pago.',
-  buttonText: 'Activar mi servicio',
-};
+const INITIAL_TERMS = { ...DEFAULT_TERMS };
 
 function mergeBrand(source = {}) {
   return { ...INITIAL_BRAND, ...source };
-}
-
-function mergeFunnel(source = {}) {
-  return { ...INITIAL_FUNNEL, ...source };
 }
 
 function mergeCheckout(source = {}) {
   return { ...INITIAL_CHECKOUT, ...source };
 }
 
+function mergeTerms(source = {}) {
+  return { ...INITIAL_TERMS, ...source };
+}
+
 export default function PartnerBrandConsole() {
   const [activeTab, setActiveTab] = useState('brand');
   const [brand, setBrand] = useState(INITIAL_BRAND);
-  const [funnel, setFunnel] = useState(INITIAL_FUNNEL);
+  const [funnel, setFunnel] = useState(() => normalizeStoredFunnel());
   const [checkout, setCheckout] = useState(INITIAL_CHECKOUT);
+  const [terms, setTerms] = useState(INITIAL_TERMS);
+  const [additionalServices, setAdditionalServices] = useState([]);
+  const [productOverrides, setProductOverrides] = useState({});
+  const [partnerProducts, setPartnerProducts] = useState([]);
   const [slug, setSlug] = useState('');
   const [partnerStatus, setPartnerStatus] = useState('');
   const [loading, setLoading] = useState(true);
@@ -88,8 +88,17 @@ export default function PartnerBrandConsole() {
           instagramUrl: partner?.social_settings?.instagramUrl || '',
           tiktokUrl: partner?.social_settings?.tiktokUrl || '',
         }));
-        setFunnel(mergeFunnel(branding.funnel));
+        setFunnel(normalizeStoredFunnel(branding.funnel));
         setCheckout(mergeCheckout(branding.checkout));
+        setTerms(mergeTerms(branding.terms));
+        setAdditionalServices(Array.isArray(branding.additionalServices) ? branding.additionalServices : []);
+        setProductOverrides(branding.productOverrides || {});
+
+        const offersData = await platformApi.listPartnerOffers().catch(() => ({ offers: [] }));
+        const products = (offersData?.offers || [])
+          .map(mapOfferToAdminProduct)
+          .filter(Boolean);
+        setPartnerProducts(products);
       } catch (error) {
         setNotice({ type: 'error', text: error.message });
       } finally {
@@ -103,12 +112,57 @@ export default function PartnerBrandConsole() {
     setBrand(current => ({ ...current, [field]: value }));
   }
 
-  function updateFunnel(field, value) {
-    setFunnel(current => ({ ...current, [field]: value }));
-  }
-
   function updateCheckout(field, value) {
     setCheckout(current => ({ ...current, [field]: value }));
+  }
+
+  function updateTerms(field, value) {
+    setTerms(current => ({ ...current, [field]: value }));
+  }
+
+  function updateProductOverride(productId, field, value) {
+    setProductOverrides(current => ({
+      ...current,
+      [productId]: {
+        ...(current[productId] || {}),
+        [field]: value,
+      },
+    }));
+  }
+
+  function addAdditionalService() {
+    setAdditionalServices(current => [
+      ...current,
+      {
+        id: `svc-${Date.now()}`,
+        title: '',
+        description: '',
+        price: 0,
+        billingType: 'one_time',
+        active: true,
+      },
+    ]);
+  }
+
+  function updateAdditionalService(index, field, value) {
+    setAdditionalServices(current => current.map((item, i) => (
+      i === index ? { ...item, [field]: value } : item
+    )));
+  }
+
+  function removeAdditionalService(index) {
+    setAdditionalServices(current => current.filter((_, i) => i !== index));
+  }
+
+  async function persistBranding(nextFunnel = funnel) {
+    await platformApi.savePartnerBranding({
+      brand,
+      funnel: nextFunnel,
+      checkout,
+      terms,
+      additionalServices,
+      productOverrides,
+    });
   }
 
   const landingUrl = slug
@@ -118,10 +172,24 @@ export default function PartnerBrandConsole() {
   async function saveCurrentSection() {
     try {
       setBusy(true);
-      await platformApi.savePartnerBranding({ brand, funnel, checkout });
+      await persistBranding();
       setNotice({ type: 'success', text: 'Configuración guardada correctamente.' });
     } catch (error) {
       setNotice({ type: 'error', text: error.message });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveFunnelSettings(nextFunnel) {
+    setFunnel(nextFunnel);
+    try {
+      setBusy(true);
+      await persistBranding(nextFunnel);
+      setNotice({ type: 'success', text: 'Configuración del funnel guardada correctamente.' });
+    } catch (error) {
+      setNotice({ type: 'error', text: error.message });
+      throw error;
     } finally {
       setBusy(false);
     }
@@ -140,6 +208,19 @@ export default function PartnerBrandConsole() {
   function openPreview() {
     if (!slug) return;
     window.open(`#p/${slug}`, '_blank', 'noopener,noreferrer');
+  }
+
+  function openCheckoutPreview(productId) {
+    if (!slug) return;
+    const targetId = productId || partnerProducts.find(product => product.price != null)?.id;
+    if (!targetId) {
+      setNotice({
+        type: 'error',
+        text: 'Configura al menos un producto con precio para previsualizar el checkout.',
+      });
+      return;
+    }
+    window.open(`#p/${slug}/checkout/${targetId}`, '_blank', 'noopener,noreferrer');
   }
 
   if (loading) {
@@ -198,8 +279,35 @@ export default function PartnerBrandConsole() {
       </div>
 
       {activeTab === 'brand' && <BrandForm brand={brand} updateBrand={updateBrand} onSave={saveCurrentSection} busy={busy} />}
-      {activeTab === 'funnel' && <FunnelForm funnel={funnel} updateFunnel={updateFunnel} onSave={saveCurrentSection} busy={busy} onPreview={openPreview} />}
-      {activeTab === 'checkout' && <CheckoutForm checkout={checkout} updateCheckout={updateCheckout} onSave={saveCurrentSection} busy={busy} />}
+      {activeTab === 'funnel' && (
+        <FunnelAdminPanel
+          embedded
+          settings={funnel}
+          onChange={setFunnel}
+          products={partnerProducts}
+          onSave={saveFunnelSettings}
+          onPreview={openPreview}
+          busy={busy}
+        />
+      )}
+      {activeTab === 'checkout' && (
+        <CheckoutForm
+          checkout={checkout}
+          terms={terms}
+          additionalServices={additionalServices}
+          partnerProducts={partnerProducts}
+          productOverrides={productOverrides}
+          updateCheckout={updateCheckout}
+          updateTerms={updateTerms}
+          updateProductOverride={updateProductOverride}
+          addAdditionalService={addAdditionalService}
+          updateAdditionalService={updateAdditionalService}
+          removeAdditionalService={removeAdditionalService}
+          onSave={saveCurrentSection}
+          onPreviewCheckout={openCheckoutPreview}
+          busy={busy}
+        />
+      )}
 
       <style>{styles}</style>
     </div>
@@ -267,25 +375,36 @@ function BrandForm({ brand, updateBrand, onSave, busy }) {
   );
 }
 
-function FunnelForm({ funnel, updateFunnel, onSave, busy, onPreview }) {
-  return (
-    <>
-      <FormSection icon={ShoppingCart} title="Configuración del funnel" description="Personaliza algunos elementos de la página estándar de ventas.">
-        <div className="novo-grid-2">
-          <Field label="Título principal" value={funnel.title} onChange={value => updateFunnel('title', value)} />
-          <Field label="Subtítulo" value={funnel.subtitle} onChange={value => updateFunnel('subtitle', value)} />
-          <Field label="Imagen principal" value={funnel.heroImageUrl} placeholder="https://..." onChange={value => updateFunnel('heroImageUrl', value)} />
-          <Field label="Texto del botón" value={funnel.buttonText} onChange={value => updateFunnel('buttonText', value)} />
-        </div>
-        <ToggleField label="Mostrar precios de los productos" description="Los productos mostrarán su precio y botón de compra." checked={funnel.showProductPrices} onChange={value => updateFunnel('showProductPrices', value)} />
-        <ToggleField label="Formulario para productos sin precio" description="Cuando un producto no tenga precio, aparecerá un formulario corto." checked={funnel.showContactFormWithoutPrice} onChange={value => updateFunnel('showContactFormWithoutPrice', value)} />
-      </FormSection>
-      <ActionBar onSave={onSave} busy={busy} label="Guardar configuración del funnel" previewLabel="Vista previa del funnel" onPreview={onPreview} />
-    </>
+function CheckoutForm({
+  checkout,
+  terms,
+  additionalServices,
+  partnerProducts,
+  productOverrides,
+  updateCheckout,
+  updateTerms,
+  updateProductOverride,
+  addAdditionalService,
+  updateAdditionalService,
+  removeAdditionalService,
+  onSave,
+  onPreviewCheckout,
+  busy,
+}) {
+  const previewableProducts = partnerProducts.filter(product => product.price != null);
+  const [previewProductId, setPreviewProductId] = useState(
+    () => previewableProducts[0]?.id || '',
   );
-}
 
-function CheckoutForm({ checkout, updateCheckout, onSave, busy }) {
+  useEffect(() => {
+    setPreviewProductId(current => {
+      if (current && previewableProducts.some(product => product.id === current)) {
+        return current;
+      }
+      return previewableProducts[0]?.id || '';
+    });
+  }, [partnerProducts]);
+
   return (
     <>
       <FormSection icon={CreditCard} title="Configuración de checkout" description="Esta configuración se aplicará a la página estándar de pago.">
@@ -294,15 +413,148 @@ function CheckoutForm({ checkout, updateCheckout, onSave, busy }) {
           <Field label="Subtítulo" value={checkout.subtitle} onChange={value => updateCheckout('subtitle', value)} />
           <Field label="Texto del botón de pago" value={checkout.buttonText} onChange={value => updateCheckout('buttonText', value)} />
         </div>
-        <div className="checkout-info-box">
-          <Settings size={18} />
-          <div>
-            <strong>Servicios adicionales y términos</strong>
-            <p>Estos valores se configurarán por producto. Cuando se genere un link, podrás conservar los valores predeterminados o personalizarlos únicamente para ese link.</p>
+
+        {previewableProducts.length > 0 ? (
+          <div className="checkout-preview-row">
+            <div className="novo-field" style={{ marginBottom: 0 }}>
+              <label>Producto para vista previa</label>
+              <select
+                value={previewProductId}
+                onChange={event => setPreviewProductId(event.target.value)}
+              >
+                {previewableProducts.map(product => (
+                  <option key={product.id} value={product.id}>
+                    {product.name}
+                    {product.price ? ` — $${product.price}/${product.interval === 'year' ? 'año' : 'mes'}` : ''}
+                  </option>
+                ))}
+              </select>
+              <small className="brand-field-helper">
+                Abre el checkout white-label tal como lo verá tu cliente al pagar ese plan.
+              </small>
+            </div>
+            <button
+              type="button"
+              className="novo-btn novo-btn-secondary"
+              onClick={() => onPreviewCheckout?.(previewProductId)}
+            >
+              <Eye size={14} /> Vista previa del checkout
+            </button>
           </div>
-        </div>
+        ) : (
+          <p className="brand-empty-copy">
+            Publica al menos un producto con precio en tu catálogo de partner para previsualizar el checkout.
+          </p>
+        )}
       </FormSection>
-      <ActionBar onSave={onSave} busy={busy} label="Guardar configuración del checkout" />
+
+      <FormSection icon={Settings} title="Servicios adicionales" description="Upsells opcionales que el cliente puede agregar durante el pago.">
+        {additionalServices.length === 0 ? (
+          <p className="brand-empty-copy">Aún no tienes servicios adicionales. Agrega configuración inicial, integraciones u otros cargos únicos.</p>
+        ) : (
+          additionalServices.map((service, index) => (
+            <div key={service.id || index} className="brand-inline-card">
+              <div className="brand-inline-card-head">
+                <strong>Servicio {index + 1}</strong>
+                <button type="button" className="brand-icon-btn" onClick={() => removeAdditionalService(index)} aria-label="Eliminar servicio">
+                  <Trash2 size={14} />
+                </button>
+              </div>
+              <div className="novo-grid-2">
+                <Field label="Nombre" value={service.title} onChange={value => updateAdditionalService(index, 'title', value)} />
+                <Field label="Precio (USD)" value={service.price} type="number" onChange={value => updateAdditionalService(index, 'price', Number(value))} />
+                <Field label="Descripción" value={service.description} onChange={value => updateAdditionalService(index, 'description', value)} />
+                <div className="novo-field">
+                  <label>Tipo de cobro</label>
+                  <select value={service.billingType || 'one_time'} onChange={event => updateAdditionalService(index, 'billingType', event.target.value)}>
+                    <option value="one_time">Pago único</option>
+                    <option value="month">Mensual</option>
+                    <option value="year">Anual</option>
+                  </select>
+                </div>
+              </div>
+              <ToggleField
+                label="Servicio activo"
+                description="Si lo desactivas, no aparecerá en el checkout."
+                checked={service.active !== false}
+                onChange={value => updateAdditionalService(index, 'active', value)}
+              />
+            </div>
+          ))
+        )}
+        <button type="button" className="novo-btn novo-btn-ghost" onClick={addAdditionalService}>
+          <Plus size={14} /> Agregar servicio adicional
+        </button>
+      </FormSection>
+
+      <FormSection icon={Settings} title="Términos y condiciones" description="Texto legal que el cliente debe aceptar antes de pagar.">
+        <div className="novo-grid-2">
+          <Field label="Título" value={terms.title} onChange={value => updateTerms('title', value)} />
+          <ToggleField
+            label="Aceptación obligatoria"
+            description="El cliente no podrá pagar sin marcar la casilla."
+            checked={terms.required !== false}
+            onChange={value => updateTerms('required', value)}
+          />
+        </div>
+        <TextArea label="Texto de términos" value={terms.text} onChange={value => updateTerms('text', value)} />
+      </FormSection>
+
+      {partnerProducts.length > 0 && (
+        <FormSection icon={ShoppingCart} title="Presentación por producto" description="Personaliza badge, descripción y beneficios que verán tus clientes en el funnel y checkout.">
+          {partnerProducts.map(product => {
+            const override = productOverrides[product.id] || {};
+            const featuresText = (override.features || []).join('\n');
+            return (
+              <div key={product.id} className="brand-inline-card">
+                <div className="brand-inline-card-head">
+                  <strong>{product.name}</strong>
+                  <div className="brand-inline-card-actions">
+                    <span>{product.price ? `$${product.price}/${product.interval === 'year' ? 'año' : 'mes'}` : 'Precio personalizado'}</span>
+                    {product.price != null && (
+                      <button
+                        type="button"
+                        className="novo-btn novo-btn-ghost"
+                        onClick={() => onPreviewCheckout?.(product.id)}
+                      >
+                        <Eye size={13} /> Preview
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <div className="novo-grid-2">
+                  <Field label="Badge / etiqueta" value={override.badge || ''} placeholder="El más elegido" onChange={value => updateProductOverride(product.id, 'badge', value)} />
+                  <ToggleField
+                    label="Mostrar precio"
+                    description="Desactívalo para captar leads antes del pago."
+                    checked={override.showPrice !== false}
+                    onChange={value => updateProductOverride(product.id, 'showPrice', value)}
+                  />
+                  <Field label="Descripción personalizada" value={override.description || ''} onChange={value => updateProductOverride(product.id, 'description', value)} />
+                  <Field label="URL de checkout (opcional)" value={override.checkoutUrl || ''} placeholder="#p/tu-slug/checkout/..." onChange={value => updateProductOverride(product.id, 'checkoutUrl', value)} />
+                </div>
+                <TextArea
+                  label="Beneficios (uno por línea)"
+                  value={featuresText}
+                  onChange={value => updateProductOverride(
+                    product.id,
+                    'features',
+                    value.split('\n').map(line => line.trim()).filter(Boolean),
+                  )}
+                />
+              </div>
+            );
+          })}
+        </FormSection>
+      )}
+
+      <ActionBar
+        onSave={onSave}
+        busy={busy}
+        label="Guardar configuración del checkout"
+        previewLabel="Vista previa del checkout"
+        onPreview={previewableProducts.length > 0 ? () => onPreviewCheckout?.(previewProductId) : null}
+      />
     </>
   );
 }
@@ -432,7 +684,14 @@ const styles = `
   .checkout-info-box { display: flex; gap: 12px; margin-top: 18px; padding: 15px; border-radius: 11px; background: rgba(124, 58, 237, 0.07); color: var(--novo-text); }
   .checkout-info-box svg { flex-shrink: 0; color: var(--novo-purple); }
   .checkout-info-box p { margin: 5px 0 0; color: var(--novo-muted); font-size: 12px; line-height: 1.5; }
+  .brand-empty-copy { margin: 0 0 14px; color: var(--novo-muted); font-size: 12px; line-height: 1.55; }
+  .brand-inline-card { margin-bottom: 16px; padding: 16px; border: 1px solid var(--novo-border); border-radius: 12px; background: var(--novo-card-hover); }
+  .brand-inline-card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+  .brand-inline-card-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .brand-inline-card-head span { color: var(--novo-muted); font-size: 11px; }
+  .checkout-preview-row { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: end; margin-top: 8px; padding-top: 18px; border-top: 1px solid var(--novo-border); }
+  .brand-icon-btn { display: inline-grid; place-items: center; width: 32px; height: 32px; border: 1px solid var(--novo-border); border-radius: 8px; background: transparent; color: var(--novo-muted); cursor: pointer; }
   .brand-action-bar { display: flex; gap: 10px; justify-content: flex-end; margin-top: 18px; }
-  @media (max-width: 900px) { .brand-page-tabs, .brand-preview-row { grid-template-columns: 1fr; } }
+  @media (max-width: 900px) { .brand-page-tabs, .brand-preview-row, .checkout-preview-row { grid-template-columns: 1fr; } }
   @media (max-width: 600px) { .brand-color-grid, .brand-action-bar { grid-template-columns: 1fr; flex-direction: column; } .brand-action-bar button { width: 100%; justify-content: center; } }
 `;

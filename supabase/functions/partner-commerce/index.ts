@@ -95,6 +95,32 @@ Deno.serve(async (req) => {
       return json({ offer: data });
     }
 
+    if (action === 'listOffers') {
+      const { data, error } = await supabase
+        .from('partner_offers')
+        .select(`
+          id,
+          retail_price,
+          currency,
+          active,
+          catalog_products:product_id (
+            id,
+            name,
+            description,
+            interval,
+            billing_type,
+            currency,
+            suggested_price,
+            active
+          )
+        `)
+        .eq('partner_id', partnerId)
+        .eq('active', true);
+
+      if (error) throw error;
+      return json({ offers: data || [] });
+    }
+
     if (action === 'getBranding') {
       const { data, error } = await supabase
         .from('partners')
@@ -109,11 +135,17 @@ Deno.serve(async (req) => {
       const brand = payload.brand || {};
       const funnel = payload.funnel || {};
       const checkout = payload.checkout || {};
+      const terms = payload.terms || {};
+      const additionalServices = Array.isArray(payload.additionalServices) ? payload.additionalServices : [];
+      const productOverrides = payload.productOverrides || {};
 
       const branding = {
         brand,
         funnel,
         checkout,
+        terms,
+        additionalServices,
+        productOverrides,
         name: brand.businessName || payload.name || null,
         domain: payload.domain || brand.websiteUrl || null,
         logoUrl: brand.logoUrl || payload.logoUrl || null,

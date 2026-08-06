@@ -7,6 +7,11 @@ type CheckoutSessionParams = {
   cancelUrl: string;
   metadata: Record<string, string>;
   customerEmail?: string;
+  oneTimeLineItems?: Array<{
+    name: string;
+    unitAmountCents: number;
+    currency: string;
+  }>;
 };
 
 function stripeSecretKey() {
@@ -34,6 +39,14 @@ export async function createStripeCheckoutSession(params: CheckoutSessionParams)
     body.set(`metadata[${key}]`, value);
     body.set(`subscription_data[metadata][${key}]`, value);
   }
+
+  (params.oneTimeLineItems || []).forEach((item, index) => {
+    const lineIndex = index + 1;
+    body.set(`line_items[${lineIndex}][quantity]`, '1');
+    body.set(`line_items[${lineIndex}][price_data][currency]`, item.currency.toLowerCase());
+    body.set(`line_items[${lineIndex}][price_data][product_data][name]`, item.name);
+    body.set(`line_items[${lineIndex}][price_data][unit_amount]`, String(item.unitAmountCents));
+  });
 
   const response = await fetch('https://api.stripe.com/v1/checkout/sessions', {
     method: 'POST',

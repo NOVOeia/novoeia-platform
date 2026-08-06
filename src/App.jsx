@@ -11,27 +11,57 @@ import GhlCallbackPage from './pages/GhlCallbackPage.jsx';
 import ClientInterestPage from './pages/ClientInterestPage.jsx';
 import CheckoutPage from './pages/CheckoutPage.jsx';
 import PartnerLandingPage from './pages/PartnerLandingPage.jsx';
+import PartnerCheckoutPage from './pages/PartnerCheckoutPage.jsx';
 import AppShell from './dashboards/AppShell.jsx';
 import { platformApi } from './lib/platformApi.js';
 
 function parseRoute() {
   const hashBody = location.hash.slice(1) || 'home';
   const hashPath = hashBody.split('?')[0];
-  const [page, section] = hashPath.split('/').filter(Boolean);
+  const parts = hashPath.split('/').filter(Boolean);
+  const page = parts[0];
 
   if (page?.endsWith('-dashboard')) {
-    return { page, section: section || 'dashboard' };
+    return {
+      page,
+      section: parts[1] || 'dashboard',
+      slug: null,
+      productId: null,
+    };
   }
 
   if (page === 'checkout') {
-    return { page, section: section || 'success' };
+    return {
+      page,
+      section: parts[1] || 'success',
+      slug: null,
+      productId: null,
+    };
   }
 
-  if (page === 'p' && section) {
-    return { page: 'partner-landing', section: null, slug: section };
+  if (page === 'p' && parts[1]) {
+    if (parts[2] === 'checkout' && parts[3]) {
+      return {
+        page: 'partner-checkout',
+        section: null,
+        slug: parts[1],
+        productId: parts[3],
+      };
+    }
+    return {
+      page: 'partner-landing',
+      section: null,
+      slug: parts[1],
+      productId: null,
+    };
   }
 
-  return { page: page || hashPath, section: null, slug: null };
+  return {
+    page: page || hashPath,
+    section: null,
+    slug: null,
+    productId: null,
+  };
 }
 
 function readCheckoutSessionId() {
@@ -59,29 +89,50 @@ export default function App() {
   const [page, setPage] = useState(() => (initialOAuth ? 'ghl-callback' : initialRoute.page));
   const [section, setSection] = useState(() => initialRoute.section);
   const [landingSlug, setLandingSlug] = useState(() => initialRoute.slug || null);
+  const [checkoutProductId, setCheckoutProductId] = useState(() => initialRoute.productId || null);
   const [oauth, setOauth] = useState(() => initialOAuth);
 
   const go = (next, nextSection = null) => {
     setOauth(null);
     const hashPath = String(next).split('?')[0];
-    const [routePage, routeSection] = hashPath.split('/');
-    const resolvedSection = nextSection || routeSection || null;
+    const parts = hashPath.split('/').filter(Boolean);
+    const routePage = parts[0] || hashPath;
+    const resolvedSection = nextSection || parts[1] || null;
     setPage(routePage);
     if (routePage.endsWith('-dashboard')) {
       setSection(resolvedSection || 'dashboard');
+      setLandingSlug(null);
+      setCheckoutProductId(null);
       location.hash = `${routePage}/${resolvedSection || 'dashboard'}`;
     } else if (routePage === 'checkout') {
       setSection(resolvedSection || 'success');
       setLandingSlug(null);
+      setCheckoutProductId(null);
       location.hash = `checkout/${resolvedSection || 'success'}`;
+    } else if (routePage === 'p' && parts[1]) {
+      if (parts[2] === 'checkout' && parts[3]) {
+        setPage('partner-checkout');
+        setSection(null);
+        setLandingSlug(parts[1]);
+        setCheckoutProductId(parts[3]);
+        location.hash = `p/${parts[1]}/checkout/${parts[3]}`;
+      } else {
+        setPage('partner-landing');
+        setSection(null);
+        setLandingSlug(parts[1]);
+        setCheckoutProductId(null);
+        location.hash = `p/${parts[1]}`;
+      }
     } else if (routePage === 'p' && resolvedSection) {
       setPage('partner-landing');
       setSection(null);
       setLandingSlug(resolvedSection);
+      setCheckoutProductId(null);
       location.hash = `p/${resolvedSection}`;
     } else {
       setSection(null);
       setLandingSlug(null);
+      setCheckoutProductId(null);
       location.hash = routePage;
     }
     window.scrollTo(0, 0);
@@ -93,6 +144,7 @@ export default function App() {
       setPage(route.page);
       setSection(route.section);
       setLandingSlug(route.slug || null);
+      setCheckoutProductId(route.productId || null);
     };
     window.addEventListener('hashchange', onHashChange);
     return () => window.removeEventListener('hashchange', onHashChange);
@@ -158,11 +210,20 @@ export default function App() {
     if (page === 'partner-landing') {
       return <PartnerLandingPage go={go} slug={landingSlug} />;
     }
+    if (page === 'partner-checkout') {
+      return (
+        <PartnerCheckoutPage
+          go={go}
+          slug={landingSlug}
+          productId={checkoutProductId}
+        />
+      );
+    }
     if (page === 'admin-dashboard') return <AppShell role="admin" section={section} go={go} />;
     if (page === 'partner-dashboard') return <AppShell role="partner" section={section} go={go} />;
     if (page === 'client-dashboard') return <AppShell role="client" section={section} go={go} />;
     return <HomePage go={go} />;
-  }, [page, section, landingSlug, oauth]);
+  }, [page, section, landingSlug, checkoutProductId, oauth]);
 
   return <div className="app">{content}</div>;
 }
