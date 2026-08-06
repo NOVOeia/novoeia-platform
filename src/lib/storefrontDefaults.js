@@ -16,6 +16,7 @@ export const DEFAULT_FUNNEL_SETTINGS = {
   video: {
     enabled: true,
     url: '',
+    posterUrl: '',
     titlePrefix: 'Mira cómo funciona tu',
     titleHighlight: 'nuevo sistema comercial',
     titleSuffix: 'en acción',
@@ -134,14 +135,28 @@ export function normalizeStoredFunnel(stored = {}) {
   });
 }
 
+export function mapCatalogToAdminProduct(product) {
+  if (!product?.id) return null;
+
+  return {
+    id: product.id,
+    name: product.displayName || product.catalogName || product.name,
+    description: product.displayDescription || product.catalogDescription || product.description || '',
+    price: product.retailPrice ?? product.retail_price ?? null,
+    currency: product.currency || 'USD',
+    interval: product.interval || 'month',
+    published: product.published !== false && product.retailPrice != null,
+  };
+}
+
 export function mapOfferToAdminProduct(offer) {
   const product = offer?.catalog_products || offer?.catalogProducts || null;
   if (!product) return null;
 
   return {
     id: product.id,
-    name: product.name,
-    description: product.description || '',
+    name: offer.display_name || product.name,
+    description: offer.display_description || product.description || '',
     price: offer.retail_price ?? offer.retailPrice ?? null,
     currency: offer.currency || product.currency || 'USD',
     interval: product.interval || 'month',

@@ -433,6 +433,73 @@ function normalizeVideoUrl(url = '') {
   return url;
 }
 
+function isEmbeddableVideoUrl(url = '') {
+  return /youtube|youtu\.be|vimeo|loom\.com/i.test(String(url));
+}
+
+function isDirectVideoUrl(url = '') {
+  const normalized = String(url || '').toLowerCase();
+  if (/\.(mp4|webm|mov)(\?|#|$)/i.test(normalized)) return true;
+  if (normalized.includes('brand-assets') && /\/funnel\/videos\//.test(normalized)) return true;
+  return false;
+}
+
+function FunnelVideoPlayer({ url, posterUrl, businessName }) {
+  const [playing, setPlaying] = useState(false);
+
+  if (!url) {
+    return (
+      <div className="fp-video-placeholder">
+        <div className="fp-play-btn">
+          <Play size={32} fill="currentColor" />
+        </div>
+        <p>Video de presentación</p>
+        <small>El equipo de {businessName} lo añadirá pronto</small>
+      </div>
+    );
+  }
+
+  if (isDirectVideoUrl(url)) {
+    return (
+      <video
+        className="fp-video-native"
+        src={url}
+        poster={posterUrl || undefined}
+        controls
+        playsInline
+        preload="metadata"
+      />
+    );
+  }
+
+  const embedUrl = normalizeVideoUrl(url);
+
+  if (posterUrl && !playing) {
+    return (
+      <button
+        type="button"
+        className="fp-video-poster"
+        onClick={() => setPlaying(true)}
+        aria-label="Reproducir video"
+      >
+        <img src={posterUrl} alt="" />
+        <span className="fp-play-btn">
+          <Play size={32} fill="currentColor" />
+        </span>
+      </button>
+    );
+  }
+
+  return (
+    <iframe
+      src={embedUrl}
+      title="Presentación del CRM"
+      allow="autoplay; fullscreen; picture-in-picture"
+      allowFullScreen
+    />
+  );
+}
+
 // ─── MAIN COMPONENT ──────────────────────────────────────────────────────────
 
 export default function PublicFunnelPage({
@@ -469,7 +536,7 @@ export default function PublicFunnelPage({
     const visibleIds = settings.products.visibleProductIds || [];
     const filtered = visibleIds.length
       ? source.filter(p => visibleIds.includes(p.id))
-      : source;
+      : source.filter(p => p.published !== false);
     return filtered.map(p => ({
       ...p,
       featured: p.id === settings.products.featuredProductId,
@@ -759,22 +826,11 @@ export default function PublicFunnelPage({
                   </ul>
                 </div>
                 <div className="fp-video-player">
-                  {settings.video.url ? (
-                    <iframe
-                      src={normalizeVideoUrl(settings.video.url)}
-                      title="Presentación del CRM"
-                      allow="autoplay; fullscreen; picture-in-picture"
-                      allowFullScreen
-                    />
-                  ) : (
-                    <div className="fp-video-placeholder">
-                      <div className="fp-play-btn">
-                        <Play size={32} fill="currentColor" />
-                      </div>
-                      <p>Video de presentación</p>
-                      <small>El equipo de {brand.businessName} lo añadirá pronto</small>
-                    </div>
-                  )}
+                  <FunnelVideoPlayer
+                    url={settings.video.url}
+                    posterUrl={settings.video.posterUrl}
+                    businessName={brand.businessName}
+                  />
                 </div>
               </div>
             </div>
@@ -833,6 +889,7 @@ export default function PublicFunnelPage({
                   settings.products.showPrices &&
                   product.showPrice !== false &&
                   product.price != null;
+                const canCheckout = product.published !== false;
                 return (
                   <div
                     key={product.id}
@@ -856,15 +913,24 @@ export default function PublicFunnelPage({
                       ))}
                     </ul>
                     <div className="fp-plan-footer">
+                      {!product.published && (
+                        <div className="fp-plan-draft-label">Configura precio en Productos y servicios</div>
+                      )}
                       {showPrice ? (
                         <>
                           <div className="fp-plan-price">
                             <strong>{formatMoney(product.price, product.currency)}</strong>
                             <span>/{product.interval === 'year' ? 'año' : 'mes'}</span>
                           </div>
-                          <a className="fp-btn-plan" href={product.checkoutUrl || `#p/${funnelSlug}/checkout/${product.id}`}>
-                            Comenzar ahora <ArrowRight size={15} />
-                          </a>
+                          {canCheckout ? (
+                            <a className="fp-btn-plan" href={product.checkoutUrl || `#p/${funnelSlug}/checkout/${product.id}`}>
+                              Comenzar ahora <ArrowRight size={15} />
+                            </a>
+                          ) : (
+                            <button className="fp-btn-plan fp-btn-plan-outline" onClick={() => requestInfo(product)}>
+                              Solicitar propuesta <ArrowRight size={15} />
+                            </button>
+                          )}
                         </>
                       ) : (
                         <>
@@ -2046,6 +2112,33 @@ const CSS = `
     box-shadow: 0 40px 80px rgba(0,0,0,.4);
   }
   .fp-video-player iframe { width: 100%; height: 100%; border: 0; }
+  .fp-video-native {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: cover;
+    background: #000;
+  }
+  .fp-video-poster {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    padding: 0;
+    border: 0;
+    background: #000;
+    cursor: pointer;
+  }
+  .fp-video-poster img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  .fp-video-poster .fp-play-btn {
+    position: absolute;
+    inset: 0;
+    margin: auto;
+  }
   .fp-video-placeholder {
     width: 100%; height: 100%;
     display: flex; flex-direction: column;
@@ -2152,6 +2245,7 @@ const CSS = `
   .fp-plan-price strong { font-size: 34px; font-weight: 900; }
   .fp-plan-price span { font-size: 13px; color: #64748b; }
   .fp-plan-custom-label { font-size: 14px; font-weight: 700; color: var(--fp); margin-bottom: 14px; }
+  .fp-plan-draft-label { font-size: 12px; font-weight: 600; color: #b45309; margin-bottom: 10px; }
   .fp-btn-plan {
     display: flex;
     align-items: center;

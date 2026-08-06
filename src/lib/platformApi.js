@@ -3,7 +3,22 @@ import { supabase } from './supabase.js';
 const GHL_OAUTH_STATE_KEY = 'novoeia_ghl_oauth_state';
 
 const RESOURCE_BUCKET = 'partner-resources';
+const BRAND_ASSETS_BUCKET = 'brand-assets';
+const MAX_BRAND_IMAGE_SIZE = 2 * 1024 * 1024;
+const MAX_BRAND_VIDEO_SIZE = 50 * 1024 * 1024;
 const MAX_RESOURCE_FILE_SIZE = 100 * 1024 * 1024;
+
+const ALLOWED_BRAND_IMAGE_TYPES = new Set([
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+]);
+
+const ALLOWED_BRAND_VIDEO_TYPES = new Set([
+  'video/mp4',
+  'video/webm',
+  'video/quicktime',
+]);
 
 const ALLOWED_RESOURCE_MIME_TYPES = new Set([
   'image/png',
@@ -692,6 +707,13 @@ export const platformApi = {
     return invoke('partner-commerce', {
       action: 'saveOffer',
       payload,
+    });
+  },
+
+  savePartnerAdditionalServices(additionalServices) {
+    return invoke('partner-commerce', {
+      action: 'saveAdditionalServices',
+      payload: { additionalServices },
     });
   },
 
@@ -1750,6 +1772,73 @@ export const platformApi = {
     });
   },
 
+  async uploadBrandAsset(file, { folder = 'logos', assetType = 'image' } = {}) {
+    const profile = await this.getMyProfile();
+    if (!profile) {
+      throw new Error(ERROR_HINTS.FORBIDDEN);
+    }
+
+    if (!file) {
+      throw new Error(assetType === 'video' ? 'Selecciona un video.' : 'Selecciona una imagen.');
+    }
+
+    const mimeType = String(file.type || '').toLowerCase();
+    const isVideo = assetType === 'video';
+
+    if (isVideo) {
+      if (!ALLOWED_BRAND_VIDEO_TYPES.has(mimeType)) {
+        throw new Error('Usa MP4, WebM o MOV.');
+      }
+      if (file.size > MAX_BRAND_VIDEO_SIZE) {
+        throw new Error('El video no puede superar 50 MB.');
+      }
+    } else if (!ALLOWED_BRAND_IMAGE_TYPES.has(mimeType)) {
+      throw new Error('Usa PNG, JPG, JPEG o WEBP.');
+    } else if (file.size > MAX_BRAND_IMAGE_SIZE) {
+      throw new Error('La imagen no puede superar 2 MB.');
+    }
+
+    const { data: userData, error: userError } = await supabase.auth.getUser();
+    if (userError || !userData?.user) {
+      throw new Error('Debes iniciar sesión para subir archivos.');
+    }
+
+    const extension = sanitizeStorageFileName(
+      (file.name.split('.').pop() || (isVideo ? 'mp4' : 'png')).toLowerCase(),
+    ).replace(/\.+/g, '');
+    const partnerScope = profile.partner_id
+      ? `partners/${profile.partner_id}`
+      : 'partners/unassigned';
+    const cleanFolder = String(folder || 'logos').replace(/[^a-zA-Z0-9/_-]/g, '-');
+    const storagePath = `${partnerScope}/${cleanFolder}/${userData.user.id}-${crypto.randomUUID()}.${extension}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from(BRAND_ASSETS_BUCKET)
+      .upload(storagePath, file, {
+        cacheControl: '3600',
+        contentType: mimeType,
+        upsert: false,
+      });
+
+    if (uploadError) {
+      throw new Error(`No se pudo subir el ${isVideo ? 'video' : 'imagen'}: ${uploadError.message}`);
+    }
+
+    const { data: publicUrlData } = supabase.storage
+      .from(BRAND_ASSETS_BUCKET)
+      .getPublicUrl(storagePath);
+
+    if (!publicUrlData?.publicUrl) {
+      await supabase.storage.from(BRAND_ASSETS_BUCKET).remove([storagePath]);
+      throw new Error(`Supabase no devolvió la URL pública del ${isVideo ? 'video' : 'imagen'}.`);
+    }
+
+    return {
+      url: publicUrlData.publicUrl,
+      path: storagePath,
+    };
+  },
+
   savePartnerBranding(payload) {
     return invoke('partner-commerce', {
       action: 'saveBranding',
@@ -1763,6 +1852,12 @@ export const platformApi = {
     });
   },
 
+  listPartnerCatalog() {
+    return invoke('partner-commerce', {
+      action: 'listPartnerCatalog',
+    });
+  },
+
   getPartnerStorefront(slug) {
     return invoke('partner-storefront', {
       action: 'getStorefront',
@@ -1770,18 +1865,29 @@ export const platformApi = {
     });
   },
 
-  getPartnerCheckout(slug, productId) {
+  getPartnerCheckout(slug, productId, linkToken = null) {
     return invoke('partner-storefront', {
       action: 'getCheckout',
-      payload: { slug, productId },
+      payload: {
+        slug,
+        productId,
+        linkToken,
+      },
     });
   },
 
-  createPartnerCheckoutSession(payload) {
-    return invoke('partner-storefront', {
+  async createPartnerCheckoutSession(payload) {
+    const data = await invoke('partner-storefront', {
       action: 'createCheckoutSession',
       payload,
     });
+
+    return {
+      ...data,
+      clientSecret: data?.clientSecret || data?.client_secret || null,
+      sessionId: data?.sessionId || data?.session_id || null,
+      url: data?.url || null,
+    };
   },
 
   submitPartnerLead(slug, payload) {

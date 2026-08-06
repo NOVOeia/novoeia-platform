@@ -1,14 +1,16 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   Building2, Check, ChevronRight, CreditCard, Copy, Eye, Globe, Image,
   MapPin, Palette, Phone, Plus, RefreshCw, Save, Settings, ShoppingCart, Trash2,
 } from 'lucide-react';
 import FunnelAdminPanel from './FunnelAdminPanel.jsx';
+import BrandImageField from './BrandImageField.jsx';
 import { platformApi } from '../lib/platformApi.js';
+import { subscribePartnerCatalogUpdated } from '../lib/partnerCatalogEvents.js';
 import {
   DEFAULT_CHECKOUT,
   DEFAULT_TERMS,
-  mapOfferToAdminProduct,
+  mapCatalogToAdminProduct,
   normalizeStoredFunnel,
 } from '../lib/storefrontDefaults.js';
 
@@ -62,7 +64,6 @@ export default function PartnerBrandConsole() {
   const [funnel, setFunnel] = useState(() => normalizeStoredFunnel());
   const [checkout, setCheckout] = useState(INITIAL_CHECKOUT);
   const [terms, setTerms] = useState(INITIAL_TERMS);
-  const [additionalServices, setAdditionalServices] = useState([]);
   const [productOverrides, setProductOverrides] = useState({});
   const [partnerProducts, setPartnerProducts] = useState([]);
   const [slug, setSlug] = useState('');
@@ -70,6 +71,14 @@ export default function PartnerBrandConsole() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState(null);
+
+  const loadCatalogProducts = useCallback(async () => {
+    const catalogData = await platformApi.listPartnerCatalog().catch(() => ({ products: [] }));
+    const products = (catalogData?.products || [])
+      .map(mapCatalogToAdminProduct)
+      .filter(Boolean);
+    setPartnerProducts(products);
+  }, []);
 
   useEffect(() => {
     async function load() {
@@ -91,14 +100,9 @@ export default function PartnerBrandConsole() {
         setFunnel(normalizeStoredFunnel(branding.funnel));
         setCheckout(mergeCheckout(branding.checkout));
         setTerms(mergeTerms(branding.terms));
-        setAdditionalServices(Array.isArray(branding.additionalServices) ? branding.additionalServices : []);
         setProductOverrides(branding.productOverrides || {});
 
-        const offersData = await platformApi.listPartnerOffers().catch(() => ({ offers: [] }));
-        const products = (offersData?.offers || [])
-          .map(mapOfferToAdminProduct)
-          .filter(Boolean);
-        setPartnerProducts(products);
+        await loadCatalogProducts();
       } catch (error) {
         setNotice({ type: 'error', text: error.message });
       } finally {
@@ -106,7 +110,13 @@ export default function PartnerBrandConsole() {
       }
     }
     load();
-  }, []);
+  }, [loadCatalogProducts]);
+
+  useEffect(() => subscribePartnerCatalogUpdated(() => {
+    loadCatalogProducts().catch(error => {
+      setNotice({ type: 'error', text: error.message });
+    });
+  }), [loadCatalogProducts]);
 
   function updateBrand(field, value) {
     setBrand(current => ({ ...current, [field]: value }));
@@ -130,37 +140,12 @@ export default function PartnerBrandConsole() {
     }));
   }
 
-  function addAdditionalService() {
-    setAdditionalServices(current => [
-      ...current,
-      {
-        id: `svc-${Date.now()}`,
-        title: '',
-        description: '',
-        price: 0,
-        billingType: 'one_time',
-        active: true,
-      },
-    ]);
-  }
-
-  function updateAdditionalService(index, field, value) {
-    setAdditionalServices(current => current.map((item, i) => (
-      i === index ? { ...item, [field]: value } : item
-    )));
-  }
-
-  function removeAdditionalService(index) {
-    setAdditionalServices(current => current.filter((_, i) => i !== index));
-  }
-
   async function persistBranding(nextFunnel = funnel) {
     await platformApi.savePartnerBranding({
       brand,
       funnel: nextFunnel,
       checkout,
       terms,
-      additionalServices,
       productOverrides,
     });
   }
@@ -294,15 +279,11 @@ export default function PartnerBrandConsole() {
         <CheckoutForm
           checkout={checkout}
           terms={terms}
-          additionalServices={additionalServices}
           partnerProducts={partnerProducts}
           productOverrides={productOverrides}
           updateCheckout={updateCheckout}
           updateTerms={updateTerms}
           updateProductOverride={updateProductOverride}
-          addAdditionalService={addAdditionalService}
-          updateAdditionalService={updateAdditionalService}
-          removeAdditionalService={removeAdditionalService}
           onSave={saveCurrentSection}
           onPreviewCheckout={openCheckoutPreview}
           busy={busy}
@@ -329,8 +310,20 @@ function BrandForm({ brand, updateBrand, onSave, busy }) {
 
       <FormSection icon={Image} title="Identidad visual" description="Estas imágenes se utilizarán en el checkout y el funnel.">
         <div className="novo-grid-2">
-          <Field label="URL del logo *" value={brand.logoUrl} placeholder="https://..." onChange={value => updateBrand('logoUrl', value)} />
-          <Field label="URL de imagen de portada" value={brand.coverImageUrl} placeholder="https://..." onChange={value => updateBrand('coverImageUrl', value)} />
+          <BrandImageField
+            label="Logo"
+            value={brand.logoUrl}
+            onChange={value => updateBrand('logoUrl', value)}
+            uploadFolder="logos"
+            required
+          />
+          <BrandImageField
+            label="Imagen de portada"
+            value={brand.coverImageUrl}
+            onChange={value => updateBrand('coverImageUrl', value)}
+            uploadFolder="covers"
+            helper="Opcional. Se usa como fondo o imagen destacada en el funnel."
+          />
         </div>
         <div className="brand-preview-row">
           <LogoPreview brand={brand} />
@@ -378,15 +371,11 @@ function BrandForm({ brand, updateBrand, onSave, busy }) {
 function CheckoutForm({
   checkout,
   terms,
-  additionalServices,
   partnerProducts,
   productOverrides,
   updateCheckout,
   updateTerms,
   updateProductOverride,
-  addAdditionalService,
-  updateAdditionalService,
-  removeAdditionalService,
   onSave,
   onPreviewCheckout,
   busy,
@@ -448,43 +437,14 @@ function CheckoutForm({
         )}
       </FormSection>
 
-      <FormSection icon={Settings} title="Servicios adicionales" description="Upsells opcionales que el cliente puede agregar durante el pago.">
-        {additionalServices.length === 0 ? (
-          <p className="brand-empty-copy">Aún no tienes servicios adicionales. Agrega configuración inicial, integraciones u otros cargos únicos.</p>
-        ) : (
-          additionalServices.map((service, index) => (
-            <div key={service.id || index} className="brand-inline-card">
-              <div className="brand-inline-card-head">
-                <strong>Servicio {index + 1}</strong>
-                <button type="button" className="brand-icon-btn" onClick={() => removeAdditionalService(index)} aria-label="Eliminar servicio">
-                  <Trash2 size={14} />
-                </button>
-              </div>
-              <div className="novo-grid-2">
-                <Field label="Nombre" value={service.title} onChange={value => updateAdditionalService(index, 'title', value)} />
-                <Field label="Precio (USD)" value={service.price} type="number" onChange={value => updateAdditionalService(index, 'price', Number(value))} />
-                <Field label="Descripción" value={service.description} onChange={value => updateAdditionalService(index, 'description', value)} />
-                <div className="novo-field">
-                  <label>Tipo de cobro</label>
-                  <select value={service.billingType || 'one_time'} onChange={event => updateAdditionalService(index, 'billingType', event.target.value)}>
-                    <option value="one_time">Pago único</option>
-                    <option value="month">Mensual</option>
-                    <option value="year">Anual</option>
-                  </select>
-                </div>
-              </div>
-              <ToggleField
-                label="Servicio activo"
-                description="Si lo desactivas, no aparecerá en el checkout."
-                checked={service.active !== false}
-                onChange={value => updateAdditionalService(index, 'active', value)}
-              />
-            </div>
-          ))
-        )}
-        <button type="button" className="novo-btn novo-btn-ghost" onClick={addAdditionalService}>
-          <Plus size={14} /> Agregar servicio adicional
-        </button>
+      <FormSection icon={Settings} title="Servicios adicionales" description="Los upsells del checkout se administran en Productos y servicios.">
+        <div className="checkout-info-box">
+          <Settings size={18} />
+          <div>
+            <strong>Configuración centralizada</strong>
+            <p>Ve a <strong>Productos y servicios</strong> para crear o editar servicios adicionales como configuración inicial, integraciones o cargos únicos.</p>
+          </div>
+        </div>
       </FormSection>
 
       <FormSection icon={Settings} title="Términos y condiciones" description="Texto legal que el cliente debe aceptar antes de pagar.">
@@ -501,7 +461,7 @@ function CheckoutForm({
       </FormSection>
 
       {partnerProducts.length > 0 && (
-        <FormSection icon={ShoppingCart} title="Presentación por producto" description="Personaliza badge, descripción y beneficios que verán tus clientes en el funnel y checkout.">
+        <FormSection icon={ShoppingCart} title="Presentación en funnel" description="El nombre, descripción y precio de cada plan se configuran en Productos y servicios. Aquí puedes ajustar badge, beneficios y visibilidad.">
           {partnerProducts.map(product => {
             const override = productOverrides[product.id] || {};
             const featuresText = (override.features || []).join('\n');
@@ -530,7 +490,6 @@ function CheckoutForm({
                     checked={override.showPrice !== false}
                     onChange={value => updateProductOverride(product.id, 'showPrice', value)}
                   />
-                  <Field label="Descripción personalizada" value={override.description || ''} onChange={value => updateProductOverride(product.id, 'description', value)} />
                   <Field label="URL de checkout (opcional)" value={override.checkoutUrl || ''} placeholder="#p/tu-slug/checkout/..." onChange={value => updateProductOverride(product.id, 'checkoutUrl', value)} />
                 </div>
                 <TextArea
@@ -667,6 +626,37 @@ const styles = `
   .brand-section-header { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid var(--novo-border); }
   .brand-section-icon { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 10px; color: var(--novo-purple); background: rgba(124, 58, 237, 0.1); }
   .brand-field-helper { display: block; margin-top: 5px; color: var(--novo-muted); font-size: 10px; }
+  .brand-field-helper-error { color: var(--novo-danger, #ef4444); }
+  .brand-image-field .brand-image-mode-tabs { display: flex; gap: 8px; margin-bottom: 10px; }
+  .brand-image-field .brand-image-mode-tabs button {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 7px 11px; border-radius: 8px;
+    border: 1px solid var(--novo-border); background: transparent;
+    color: var(--novo-muted); font-size: 11px; font-weight: 600; cursor: pointer;
+  }
+  .brand-image-field .brand-image-mode-tabs button.active {
+    border-color: var(--novo-purple); background: rgba(124, 58, 237, 0.08); color: var(--novo-purple);
+  }
+  .brand-image-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .brand-image-row > input { flex: 1; min-width: 180px; }
+  .brand-image-preview {
+    width: 58px; height: 58px; border-radius: 12px; overflow: hidden;
+    border: 1px solid var(--novo-border); background: var(--novo-card-hover);
+    display: grid; place-items: center; flex-shrink: 0;
+  }
+  .brand-image-preview img { width: 100%; height: 100%; object-fit: contain; }
+  .brand-image-preview video { width: 100%; height: 100%; object-fit: cover; background: #000; }
+  .brand-media-preview-video { position: relative; }
+  .brand-media-embed-badge {
+    position: absolute; bottom: 4px; left: 4px; right: 4px;
+    padding: 2px 4px; border-radius: 4px;
+    background: rgba(15, 23, 42, 0.72); color: #fff;
+    font-size: 9px; font-weight: 700; text-align: center;
+  }
+  .brand-image-preview span { color: var(--novo-muted); }
+  .brand-image-upload-btn { position: relative; cursor: pointer; }
+  .brand-image-upload-btn input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+  .brand-image-remove-btn { flex-shrink: 0; }
   .brand-textarea { width: 100%; resize: vertical; background: var(--novo-card-hover); border: 1px solid var(--novo-border); border-radius: 8px; padding: 10px 12px; color: var(--novo-text); font-size: 13px; outline: none; }
   .brand-preview-row { display: grid; grid-template-columns: 280px 1fr; gap: 22px; }
   .brand-logo-preview { min-height: 190px; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 8px; border: 1px solid var(--novo-border); border-radius: 14px; padding: 20px; text-align: center; }

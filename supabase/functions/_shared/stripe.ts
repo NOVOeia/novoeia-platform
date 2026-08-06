@@ -7,6 +7,15 @@ type CheckoutSessionParams = {
   cancelUrl: string;
   metadata: Record<string, string>;
   customerEmail?: string;
+  embedded?: boolean;
+  returnUrl?: string;
+  additionalLineItems?: Array<{
+    name: string;
+    unitAmountCents: number;
+    currency: string;
+    billingType?: 'one_time' | 'month' | 'year';
+  }>;
+  /** @deprecated use additionalLineItems */
   oneTimeLineItems?: Array<{
     name: string;
     unitAmountCents: number;
@@ -28,8 +37,14 @@ export async function createStripeCheckoutSession(params: CheckoutSessionParams)
   body.set('line_items[0][price_data][product]', params.stripeProductId);
   body.set('line_items[0][price_data][unit_amount]', String(params.unitAmountCents));
   body.set('line_items[0][price_data][recurring][interval]', params.interval);
-  body.set('success_url', params.successUrl);
-  body.set('cancel_url', params.cancelUrl);
+
+  if (params.embedded) {
+    body.set('ui_mode', 'embedded');
+    body.set('return_url', params.returnUrl || params.successUrl);
+  } else {
+    body.set('success_url', params.successUrl);
+    body.set('cancel_url', params.cancelUrl);
+  }
 
   if (params.customerEmail) {
     body.set('customer_email', params.customerEmail);
@@ -40,12 +55,23 @@ export async function createStripeCheckoutSession(params: CheckoutSessionParams)
     body.set(`subscription_data[metadata][${key}]`, value);
   }
 
-  (params.oneTimeLineItems || []).forEach((item, index) => {
+  const extraLineItems = params.additionalLineItems?.length
+    ? params.additionalLineItems
+    : (params.oneTimeLineItems || []).map(item => ({
+      ...item,
+      billingType: 'one_time' as const,
+    }));
+
+  extraLineItems.forEach((item, index) => {
     const lineIndex = index + 1;
+    const billingType = item.billingType || 'one_time';
     body.set(`line_items[${lineIndex}][quantity]`, '1');
     body.set(`line_items[${lineIndex}][price_data][currency]`, item.currency.toLowerCase());
     body.set(`line_items[${lineIndex}][price_data][product_data][name]`, item.name);
     body.set(`line_items[${lineIndex}][price_data][unit_amount]`, String(item.unitAmountCents));
+    if (billingType !== 'one_time') {
+      body.set(`line_items[${lineIndex}][price_data][recurring][interval]`, billingType);
+    }
   });
 
   const response = await fetch('https://api.stripe.com/v1/checkout/sessions', {
@@ -61,6 +87,12 @@ export async function createStripeCheckoutSession(params: CheckoutSessionParams)
   if (!response.ok) {
     const message = payload?.error?.message || `STRIPE_${response.status}`;
     throw new Error(`STRIPE_CHECKOUT:${message}`);
+  }
+
+  if (!payload?.id) throw new Error('STRIPE_CHECKOUT_ID_MISSING');
+  if (params.embedded) {
+    if (!payload?.client_secret) throw new Error('STRIPE_CLIENT_SECRET_MISSING');
+    return payload as { id: string; client_secret: string };
   }
 
   if (!payload?.url) throw new Error('STRIPE_CHECKOUT_URL_MISSING');

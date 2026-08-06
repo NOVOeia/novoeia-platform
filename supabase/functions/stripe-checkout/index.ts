@@ -5,10 +5,6 @@ import {
   requireRole,
 } from '../_shared/core.ts';
 
-import {
-  createStripeCheckoutSession,
-} from '../_shared/stripe.ts';
-
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', {
@@ -50,6 +46,9 @@ Deno.serve(async (req) => {
     const productId = String(payload.productId || '');
     const clientId = String(payload.clientId || '');
     const retailPrice = Number(payload.retailPrice);
+    const selectedServiceIds = Array.isArray(payload.selectedServiceIds)
+      ? payload.selectedServiceIds.map(String)
+      : [];
 
     if (!clientId) {
       throw new Error('CLIENT_REQUIRED');
@@ -134,13 +133,19 @@ Deno.serve(async (req) => {
       error: partnerError,
     } = await supabase
       .from('partners')
-      .select('id, name')
+      .select('id, name, slug')
       .eq('id', partnerId)
       .single();
 
     if (partnerError || !partner) {
       throw new Error('PARTNER_NOT_FOUND');
     }
+
+    if (!partner.slug) {
+      throw new Error('PARTNER_SLUG_NOT_CONFIGURED');
+    }
+
+    const publicToken = crypto.randomUUID().replace(/-/g, '');
 
     const clientName =
       client.company_name ||
@@ -240,9 +245,12 @@ Deno.serve(async (req) => {
       created_by: profile.id,
       created_by_role: profile.role,
       failure_reason: null,
+      public_token: publicToken,
       metadata: {
         client_status: client.status || null,
         requested_retail_price: retailPrice,
+        selectedServiceIds,
+        checkout_type: 'partner_embedded',
       },
     };
 
@@ -291,38 +299,8 @@ Deno.serve(async (req) => {
     }
 
     /* =====================================================
-       7. PREPARAR METADATA PARA STRIPE
+       7. VALIDAR URL PÚBLICA
     ===================================================== */
-
-    const commissionCents = Math.round(
-      (retailPrice - wholesalePrice) * 100,
-    );
-
-    const metadata: Record<string, string> = {
-      sales_link_id: salesLink.id,
-      partner_id: partnerId,
-      client_id: client.id,
-      offer_id: offer.id,
-      catalog_product_id: product.id,
-      product_name: product.name,
-
-      wholesale_cents: String(
-        Math.round(wholesalePrice * 100),
-      ),
-
-      commission_cents: String(
-        Math.max(commissionCents, 0),
-      ),
-
-      retail_cents: String(
-        Math.round(retailPrice * 100),
-      ),
-    };
-
-    const interval =
-      product.interval === 'year'
-        ? 'year'
-        : 'month';
 
     const publicUrl =
       Deno.env.get('PUBLIC_APP_URL');
@@ -342,63 +320,24 @@ Deno.serve(async (req) => {
     }
 
     /* =====================================================
-       8. CREAR CHECKOUT EN STRIPE
+       8. GENERAR LINK AL CHECKOUT WHITE-LABEL
     ===================================================== */
 
-    let session;
-
-    try {
-      session = await createStripeCheckoutSession({
-        stripeProductId,
-        interval,
-
-        unitAmountCents: Math.round(
-          retailPrice * 100,
-        ),
-
-        currency:
-          product.currency || 'USD',
-
-        successUrl:
-          `${publicUrl}/#checkout/success` +
-          '?session_id={CHECKOUT_SESSION_ID}',
-
-        cancelUrl:
-          `${publicUrl}/#checkout/cancel`,
-
-        metadata,
-
-        customerEmail:
-          client.email || undefined,
-      });
-    } catch (stripeError) {
-      const message =
-        stripeError instanceof Error
-          ? stripeError.message
-          : String(stripeError);
-
-      await supabase
-        .from('sales_links')
-        .update({
-          failure_reason: message,
-        })
-        .eq('id', salesLink.id);
-
-      throw stripeError;
-    }
+    const checkoutUrl =
+      `${publicUrl}/#p/${partner.slug}/checkout/${productId}?link=${encodeURIComponent(
+        salesLink.public_token || salesLink.id,
+      )}`;
 
     /* =====================================================
-       9. ACTUALIZAR OFERTA CON CHECKOUT
+       9. ACTUALIZAR OFERTA
     ===================================================== */
-
-    const offerPatch = {
-      checkout_url: session.url,
-      updated_at: new Date().toISOString(),
-    };
 
     const { error: updateOfferError } = await supabase
       .from('partner_offers')
-      .update(offerPatch)
+      .update({
+        retail_price: retailPrice,
+        updated_at: new Date().toISOString(),
+      })
       .eq('id', offer.id);
 
     if (updateOfferError) {
@@ -419,20 +358,14 @@ Deno.serve(async (req) => {
        10. ACTIVAR LINK DE VENTA
     ===================================================== */
 
-    await supabase
-      .from('sales_links')
-      .update({ stripe_checkout_session_id: null })
-      .eq('stripe_checkout_session_id', session.id)
-      .neq('id', salesLink.id);
-
     const {
       data: activeSalesLink,
       error: updateSalesLinkError,
     } = await supabase
       .from('sales_links')
       .update({
-        checkout_url: session.url,
-        stripe_checkout_session_id: session.id,
+        checkout_url: checkoutUrl,
+        stripe_checkout_session_id: null,
         stripe_product_id: stripeProductId,
         sale_price: retailPrice,
         wholesale_price: wholesalePrice,
@@ -442,7 +375,8 @@ Deno.serve(async (req) => {
         metadata: {
           client_status: client.status || null,
           requested_retail_price: retailPrice,
-          stripe_session_id: session.id,
+          selectedServiceIds,
+          checkout_type: 'partner_embedded',
         },
       })
       .eq('id', salesLink.id)
@@ -486,7 +420,8 @@ Deno.serve(async (req) => {
           offerId: offer.id,
           retailPrice,
           wholesalePrice,
-          sessionId: session.id,
+          selectedServiceIds,
+          checkoutUrl,
         },
       });
 
@@ -525,6 +460,8 @@ Deno.serve(async (req) => {
 
       partnerMargin:
         activeSalesLink.partner_margin,
+
+      selectedServiceIds,
     });
   } catch (error) {
     return handleError(error);

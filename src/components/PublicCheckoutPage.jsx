@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Check,
   ChevronDown,
@@ -10,6 +10,13 @@ import {
   Phone,
   ShieldCheck,
 } from 'lucide-react';
+import StripeEmbeddedCheckout from './StripeEmbeddedCheckout.jsx';
+import {
+  buildCheckoutServiceLineItem,
+  calculateCheckoutDueToday,
+  hasBillingIntervalMismatch,
+  serviceBillingLabel,
+} from '../lib/checkoutLineItems.js';
 
 const DEMO_CHECKOUT_DATA = {
   partner: {
@@ -53,6 +60,7 @@ const DEMO_CHECKOUT_DATA = {
       description:
         'Configuración y preparación inicial de la plataforma.',
       price: 150,
+      compareAtPrice: 199,
       billingType: 'one_time',
       active: true,
     },
@@ -86,12 +94,24 @@ export default function PublicCheckoutPage({
   checkoutData,
   onCheckout,
   busy = false,
+  stripePublishableKey = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || '',
+  initialEmail = '',
+  initialSelectedServices = [],
 }) {
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [showTerms, setShowTerms] = useState(false);
-  const [selectedServices, setSelectedServices] = useState([]);
-  const [email, setEmail] = useState('');
+  const [selectedServices, setSelectedServices] = useState(initialSelectedServices);
+  const [email, setEmail] = useState(initialEmail);
+  const [clientSecret, setClientSecret] = useState('');
   const [notice, setNotice] = useState({ text: '', type: '' });
+
+  useEffect(() => {
+    setEmail(initialEmail || '');
+  }, [initialEmail]);
+
+  useEffect(() => {
+    setSelectedServices(initialSelectedServices || []);
+  }, [initialSelectedServices]);
 
   if (!checkoutData) {
     return (
@@ -114,14 +134,22 @@ export default function PublicCheckoutPage({
     service => service.active !== false,
   );
 
-  const additionalTotal = activeServices
-    .filter(service => selectedServices.includes(service.id))
-    .reduce((total, service) => {
-      return total + Number(service.price || 0);
-    }, 0);
+  const selectedActiveServices = activeServices.filter(service =>
+    selectedServices.includes(service.id),
+  );
 
-  const totalToday =
-    Number(product.price || 0) + additionalTotal;
+  const checkoutTotals = calculateCheckoutDueToday(product, selectedActiveServices);
+  const { dueToday, subscriptionRecurringTotal, oneTimeTotal } = checkoutTotals;
+  const recurringAddonsTotal = selectedActiveServices
+    .filter(service => {
+      const line = buildCheckoutServiceLineItem(service, product.interval);
+      return !line.bundled && line.billingType !== 'one_time';
+    })
+    .reduce((sum, service) => sum + Number(service.price || 0), 0);
+
+  useEffect(() => {
+    setClientSecret('');
+  }, [selectedServices]);
 
   function toggleService(serviceId) {
     setSelectedServices(current =>
@@ -143,11 +171,23 @@ export default function PublicCheckoutPage({
       return;
     }
 
+    if (!stripePublishableKey || stripePublishableKey.startsWith('sk_')) {
+      setNotice({
+        text: 'Configura VITE_STRIPE_PUBLISHABLE_KEY con tu clave pk_test_... de Stripe (no uses la secret key sk_).',
+        type: 'error',
+      });
+      return;
+    }
+
     try {
-      await onCheckout?.({
+      const result = await onCheckout?.({
         email: email.trim(),
         selectedServiceIds: selectedServices,
       });
+      if (!result?.clientSecret) {
+        throw new Error('No se pudo preparar el formulario de pago.');
+      }
+      setClientSecret(result.clientSecret);
     } catch (error) {
       setNotice({
         text: error?.message || 'No fue posible iniciar el pago.',
@@ -245,6 +285,11 @@ export default function PublicCheckoutPage({
                 {activeServices.map(service => {
                   const selected =
                     selectedServices.includes(service.id);
+                  const compareAtPrice = Number(service.compareAtPrice || 0);
+                  const salePrice = Number(service.price || 0);
+                  const showComparePrice = compareAtPrice > salePrice;
+                  const intervalMismatch = hasBillingIntervalMismatch(service, product.interval);
+                  const lineItem = buildCheckoutServiceLineItem(service, product.interval);
 
                   return (
                     <button
@@ -271,11 +316,24 @@ export default function PublicCheckoutPage({
                         <small>
                           {service.description}
                         </small>
+                        {intervalMismatch && (
+                          <small className="checkout-service-note">
+                            Con plan {product.interval === 'year' ? 'anual' : 'mensual'}, se cobra {lineItem.summaryLabel} en este pago.
+                          </small>
+                        )}
                       </span>
 
                       <span className="checkout-service-price">
+                        {showComparePrice && (
+                          <small className="checkout-service-compare-price">
+                            {formatMoney(
+                              compareAtPrice,
+                              product.currency,
+                            )}
+                          </small>
+                        )}
                         {formatMoney(
-                          service.price,
+                          salePrice,
                           product.currency,
                         )}
 
@@ -351,21 +409,26 @@ export default function PublicCheckoutPage({
                   .filter(service =>
                     selectedServices.includes(service.id),
                   )
-                  .map(service => (
+                  .map(service => {
+                    const lineItem = buildCheckoutServiceLineItem(service, product.interval);
+                    return (
                     <div
                       className="checkout-summary-line"
                       key={service.id}
                     >
-                      <span>{service.title}</span>
+                      <span>
+                        {service.title}
+                        <small>{lineItem.summaryLabel}</small>
+                      </span>
 
                       <span>
                         {formatMoney(
-                          service.price,
+                          lineItem.dueToday,
                           product.currency,
                         )}
                       </span>
                     </div>
-                  ))}
+                  );})}
               </div>
             )}
 
@@ -374,14 +437,18 @@ export default function PublicCheckoutPage({
                 <span>Total de hoy</span>
 
                 <small>
-                  La suscripción principal se renovará{' '}
-                  {intervalLabel(product.interval)}.
+                  {recurringAddonsTotal > 0
+                    ? `Incluye suscripción (${formatMoney(subscriptionRecurringTotal, product.currency)}${subscriptionIntervalSuffix(product.interval)})`
+                    : `La suscripción se renovará ${intervalLabel(product.interval)}.`}
+                  {oneTimeTotal > 0 && recurringAddonsTotal > 0 && (
+                    <> + {formatMoney(oneTimeTotal, product.currency)} en cargos únicos.</>
+                  )}
                 </small>
               </div>
 
               <strong>
                 {formatMoney(
-                  totalToday,
+                  dueToday,
                   product.currency,
                 )}
               </strong>
@@ -397,6 +464,7 @@ export default function PublicCheckoutPage({
                   type="email"
                   value={email}
                   placeholder="nombre@empresa.com"
+                  disabled={Boolean(clientSecret)}
                   onChange={event =>
                     setEmail(event.target.value)
                   }
@@ -404,40 +472,49 @@ export default function PublicCheckoutPage({
               </div>
             </div>
 
-            <div className="checkout-payment-placeholder">
-              <CreditCard size={24} />
+            {clientSecret ? (
+              <StripeEmbeddedCheckout
+                publishableKey={stripePublishableKey}
+                clientSecret={clientSecret}
+              />
+            ) : (
+              <div className="checkout-payment-placeholder">
+                <CreditCard size={24} />
 
-              <div>
-                <strong>Formulario de pago</strong>
+                <div>
+                  <strong>Pago seguro con Stripe</strong>
+
+                  <span>
+                    Al continuar, el formulario de tarjeta aparecerá aquí mismo, sin salir de esta página.
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {!clientSecret && (
+              <label className="checkout-acceptance">
+                <input
+                  type="checkbox"
+                  checked={acceptedTerms}
+                  onChange={event =>
+                    setAcceptedTerms(
+                      event.target.checked,
+                    )
+                  }
+                />
 
                 <span>
-                  Aquí se mostrará Stripe Payment Element.
+                  Confirmo que he leído y acepto los{' '}
+                  <button
+                    type="button"
+                    onClick={() => setShowTerms(true)}
+                  >
+                    términos y condiciones
+                  </button>{' '}
+                  establecidos por {partner.businessName}.
                 </span>
-              </div>
-            </div>
-
-            <label className="checkout-acceptance">
-              <input
-                type="checkbox"
-                checked={acceptedTerms}
-                onChange={event =>
-                  setAcceptedTerms(
-                    event.target.checked,
-                  )
-                }
-              />
-
-              <span>
-                Confirmo que he leído y acepto los{' '}
-                <button
-                  type="button"
-                  onClick={() => setShowTerms(true)}
-                >
-                  términos y condiciones
-                </button>{' '}
-                establecidos por {partner.businessName}.
-              </span>
-            </label>
+              </label>
+            )}
 
             {notice.text && (
               <div className={`checkout-notice checkout-notice-${notice.type}`}>
@@ -445,17 +522,19 @@ export default function PublicCheckoutPage({
               </div>
             )}
 
-            <button
-              type="button"
-              className="checkout-pay-button"
-              onClick={handlePayment}
-              disabled={
-                busy || (terms?.required && !acceptedTerms)
-              }
-            >
-              <Lock size={15} />
-              {busy ? 'Redirigiendo a Stripe…' : checkout.buttonText}
-            </button>
+            {!clientSecret && (
+              <button
+                type="button"
+                className="checkout-pay-button"
+                onClick={handlePayment}
+                disabled={
+                  busy || (terms?.required && !acceptedTerms)
+                }
+              >
+                <Lock size={15} />
+                {busy ? 'Preparando pago…' : 'Continuar al pago'}
+              </button>
+            )}
 
             <div className="checkout-security">
               <ShieldCheck size={15} />
@@ -575,6 +654,10 @@ function intervalLabel(interval) {
     month: 'mensualmente',
     year: 'anualmente',
   }[interval] || interval;
+}
+
+function subscriptionIntervalSuffix(interval) {
+  return interval === 'year' ? '/año' : '/mes';
 }
 
 function cleanPhone(value) {
@@ -781,10 +864,24 @@ const checkoutStyles = `
     line-height: 1.4;
   }
 
+  .checkout-service-note {
+    display: block;
+    margin-top: 4px;
+    color: #b45309 !important;
+    font-size: 11px !important;
+  }
+
   .checkout-service-price {
     display: grid;
     text-align: right;
     font-weight: 800;
+  }
+
+  .checkout-service-compare-price {
+    color: var(--checkout-muted);
+    font-size: 12px;
+    font-weight: 500;
+    text-decoration: line-through;
   }
 
   .checkout-service-price small {
@@ -878,6 +975,18 @@ const checkoutStyles = `
     font-size: 12px;
   }
 
+  .checkout-summary-line {
+    color: var(--checkout-muted);
+    font-size: 13px;
+  }
+
+  .checkout-summary-line span small {
+    display: block;
+    margin-top: 2px;
+    font-size: 11px;
+    color: var(--checkout-muted);
+  }
+
   .checkout-selected-services {
     display: grid;
     gap: 9px;
@@ -966,6 +1075,20 @@ const checkoutStyles = `
 
   .checkout-payment-placeholder span {
     font-size: 11px;
+  }
+
+  .checkout-payment-placeholder span {
+    display: block;
+    line-height: 1.45;
+  }
+
+  .checkout-stripe-embed {
+    margin: 8px 0 4px;
+    border-radius: 14px;
+    overflow: hidden;
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    background: #fff;
+    min-height: 420px;
   }
 
   .checkout-acceptance {
