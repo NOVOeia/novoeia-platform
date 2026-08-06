@@ -1757,10 +1757,30 @@ export const platformApi = {
     });
   },
 
+  listPartnerOffers() {
+    return invoke('partner-commerce', {
+      action: 'listOffers',
+    });
+  },
+
   getPartnerStorefront(slug) {
     return invoke('partner-storefront', {
       action: 'getStorefront',
       payload: { slug },
+    });
+  },
+
+  getPartnerCheckout(slug, productId) {
+    return invoke('partner-storefront', {
+      action: 'getCheckout',
+      payload: { slug, productId },
+    });
+  },
+
+  createPartnerCheckoutSession(payload) {
+    return invoke('partner-storefront', {
+      action: 'createCheckoutSession',
+      payload,
     });
   },
 
