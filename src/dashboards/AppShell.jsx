@@ -64,7 +64,7 @@ function defaultSectionForRole(role) {
   return 'dashboard';
 }
 
-export default function AppShell({ role, section }) {
+export default function AppShell({ role, section, go }) {
   const initialSection = section || defaultSectionForRole(role);
   const [active, setActive] = useState(initialSection);
   const [linkProductPreset, setLinkProductPreset] = useState(null);
