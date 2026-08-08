@@ -1,6 +1,12 @@
-import { corsHeaders, handleError, json, requireRole, adminClient } from '../_shared/core.ts';
+import { corsHeaders, handleError, json, requireRole, adminClient, loadStripeConfig } from '../_shared/core.ts';
 import { syncAdditionalServicesToStripe } from '../_shared/additional-services-stripe.ts';
 import { createDeferredAddonSubscriptions } from '../_shared/deferred-addon-subscriptions.ts';
+import {
+  loadEmailTemplates,
+  mergePartnerClientTemplates,
+  PARTNER_CLIENT_EMAIL_CATALOG,
+  sendPartnerClientTemplatedEmail,
+} from '../_shared/email-templates.ts';
 import Stripe from 'https://esm.sh/stripe@17.7.0?target=deno';
 
 const MAX_PARTNER_ADDITIONAL_SERVICES = 4;
@@ -95,7 +101,7 @@ Deno.serve(async (req) => {
       if (productError) throw productError;
       if (Number(payload.retailPrice) < Number(product.wholesale_price)) throw new Error('PRICE_BELOW_WHOLESALE');
 
-      const { data, error } = await supabase.from('partner_offers').upsert({
+      const offerRow: Record<string, unknown> = {
         partner_id: partnerId,
         product_id: payload.productId,
         retail_price: payload.retailPrice,
@@ -104,7 +110,17 @@ Deno.serve(async (req) => {
         currency: product.currency,
         active: payload.active !== false,
         updated_at: new Date().toISOString(),
-      }, { onConflict: 'partner_id,product_id' }).select().single();
+      };
+      if (payload.ghlPriceId !== undefined) {
+        offerRow.ghl_price_id = payload.ghlPriceId
+          ? String(payload.ghlPriceId).trim()
+          : null;
+      }
+
+      const { data, error } = await supabase.from('partner_offers').upsert(
+        offerRow,
+        { onConflict: 'partner_id,product_id' },
+      ).select().single();
       if (error) throw error;
       return json({ offer: data });
     }
@@ -187,6 +203,107 @@ Deno.serve(async (req) => {
       return json({ partner: data });
     }
 
+    if (action === 'getPartnerEmailTemplates') {
+      const { data, error } = await supabase
+        .from('partners')
+        .select('id, name, branding')
+        .eq('id', partnerId)
+        .single();
+      if (error) throw error;
+
+      const branding = (data?.branding || {}) as Record<string, unknown>;
+      const brand = (branding.brand || {}) as Record<string, string>;
+      const emailSettings = (branding.emailSettings || brand.emailSettings || {}) as Record<string, string>;
+      const storedTemplates = (branding.emailTemplates || brand.emailTemplates || {}) as Record<string, Partial<{ subject: string; html: string; enabled: boolean }>>;
+      const platformTemplates = await loadEmailTemplates(supabase);
+      const merged = mergePartnerClientTemplates(storedTemplates, platformTemplates);
+
+      const partnerName = String(brand.businessName || branding.name || data?.name || '').trim();
+      const templates = PARTNER_CLIENT_EMAIL_CATALOG.map(meta => ({
+        ...meta,
+        ...merged[meta.id],
+      }));
+
+      return json({
+        emailSettings: {
+          fromName: emailSettings.fromName || partnerName || '',
+          replyTo: emailSettings.replyTo || brand.contactEmail || '',
+        },
+        templates,
+      });
+    }
+
+    if (action === 'savePartnerEmailTemplates') {
+      const { data: existingPartner, error: readError } = await supabase
+        .from('partners')
+        .select('branding')
+        .eq('id', partnerId)
+        .single();
+      if (readError) throw readError;
+
+      const existingBranding = (existingPartner?.branding || {}) as Record<string, unknown>;
+      const brand = (existingBranding.brand || {}) as Record<string, string>;
+      const emailSettingsInput = (payload.emailSettings || {}) as Record<string, string>;
+      const templatesInput = (payload.templates || {}) as Record<string, Partial<{ subject: string; html: string; enabled: boolean }>>;
+
+      const emailSettings = {
+        fromName: String(emailSettingsInput.fromName || brand.businessName || existingBranding.name || '').trim(),
+        replyTo: String(emailSettingsInput.replyTo || brand.contactEmail || '').trim().toLowerCase(),
+      };
+
+      const branding = {
+        ...existingBranding,
+        emailSettings,
+        emailTemplates: templatesInput,
+      };
+
+      const { data, error } = await supabase
+        .from('partners')
+        .update({
+          branding,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', partnerId)
+        .select('id, name, branding')
+        .single();
+      if (error) throw error;
+
+      await supabase.from('audit_logs').insert({
+        actor_user_id: profile.id,
+        action: 'partner.email_templates_saved',
+        entity_type: 'partner',
+        entity_id: partnerId,
+        metadata: { partnerId, templateIds: Object.keys(templatesInput) },
+      });
+
+      return json({ partner: data });
+    }
+
+    if (action === 'sendPartnerEmailTemplateTest') {
+      const templateId = String(payload.templateId || '').trim();
+      if (!templateId) throw new Error('TEMPLATE_ID_REQUIRED');
+
+      const testTo = String(payload.to || profile.email || '').trim().toLowerCase();
+      if (!testTo) throw new Error('TEST_RECIPIENT_REQUIRED');
+
+      const result = await sendPartnerClientTemplatedEmail(supabase, String(partnerId), templateId, {
+        to: testTo,
+        variables: {
+          clientName: 'Cliente Demo S.A.S.',
+          clientEmail: 'cliente@ejemplo.com',
+          productName: 'Plan Profesional',
+          amount: '199.00',
+          currency: 'USD',
+        },
+      });
+
+      if ((result as { skipped?: boolean }).skipped) {
+        throw new Error(String((result as { reason?: string }).reason || 'SEND_FAILED'));
+      }
+
+      return json({ ok: true, to: testTo, templateId });
+    }
+
     if (action === 'saveAdditionalServices') {
       const services = Array.isArray(payload.additionalServices) ? payload.additionalServices : [];
       assertAdditionalServicesLimit(services);
@@ -246,7 +363,7 @@ Deno.serve(async (req) => {
       const sessionId = String(payload.checkoutSessionId || '').trim();
       if (!sessionId) throw new Error('CHECKOUT_SESSION_ID_REQUIRED');
 
-      const stripeSecret = Deno.env.get('STRIPE_SECRET_KEY');
+      const { secretKey: stripeSecret } = await loadStripeConfig(supabase);
       if (!stripeSecret) throw new Error('STRIPE_NOT_CONFIGURED');
 
       const stripe = new Stripe(stripeSecret, { apiVersion: '2023-10-16' });
@@ -292,6 +409,13 @@ Deno.serve(async (req) => {
       const productOverrides = payload.productOverrides !== undefined
         ? payload.productOverrides
         : (existingBranding.productOverrides || {});
+      const brandRecord = (brand || {}) as Record<string, unknown>;
+      const emailSettings = payload.emailSettings !== undefined
+        ? payload.emailSettings
+        : (existingBranding.emailSettings || brandRecord.emailSettings || {});
+      const emailTemplates = payload.emailTemplates !== undefined
+        ? payload.emailTemplates
+        : (existingBranding.emailTemplates || brandRecord.emailTemplates || {});
 
       const branding = {
         ...existingBranding,
@@ -301,6 +425,8 @@ Deno.serve(async (req) => {
         terms,
         additionalServices,
         productOverrides,
+        emailSettings,
+        emailTemplates,
         name: brand.businessName || payload.name || existingBranding.name || null,
         domain: payload.domain || brand.websiteUrl || existingBranding.domain || null,
         logoUrl: brand.logoUrl || payload.logoUrl || existingBranding.logoUrl || null,

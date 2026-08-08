@@ -1,4 +1,5 @@
 import { supabase } from './supabase.js';
+import { listPartnerClientTemplatesForUi } from './partnerEmailTemplateDefaults.js';
 
 const GHL_OAUTH_STATE_KEY = 'novoeia_ghl_oauth_state';
 
@@ -143,10 +144,16 @@ const ERROR_HINTS = {
     'Perfil de usuario no encontrado. Vuelve a iniciar sesión.',
 
   STRIPE_NOT_CONFIGURED:
-    'Falta STRIPE_SECRET_KEY en Supabase → Edge Functions → Secrets.',
+    'Falta Stripe Secret Key. Configúrala en Super Admin → Configuración → Stripe o en Supabase secrets (STRIPE_SECRET_KEY).',
+
+  STRIPE_WEBHOOK_NOT_CONFIGURED:
+    'Falta Stripe Webhook Secret. Configúralo en Super Admin → Configuración → Stripe o en Supabase secrets (STRIPE_WEBHOOK_SECRET).',
+
+  STRIPE_PUBLISHABLE_NOT_CONFIGURED:
+    'Falta Stripe Publishable Key. Configúrala en Super Admin → Configuración → Stripe.',
 
   PUBLIC_APP_URL_NOT_CONFIGURED:
-    'Falta PUBLIC_APP_URL en Supabase Secrets.',
+    'Falta la URL pública de la app. Configúrala en Super Admin → Configuración → App y Webhooks.',
 
   STRIPE_PRODUCT_NOT_CONFIGURED:
     'El producto no tiene stripe_product_id.',
@@ -240,6 +247,9 @@ const ERROR_HINTS = {
 
   RESOURCE_DELETE_FAILED:
     'No se pudo eliminar el recurso.',
+
+  UNKNOWN_ACTION:
+    'Esta función aún no está desplegada en el servidor. Ejecuta: supabase functions deploy partner-commerce --project-ref jwtymqtwlbifojtvxwpx',
 };
 
 function translateKnownError(rawError) {
@@ -316,10 +326,90 @@ async function parseFunctionError(error, data, functionName = 'edge-function') {
   return translateKnownError(error?.message);
 }
 
+function isUnknownActionError(error) {
+  const message = String(error?.message || '');
+  return message.includes('UNKNOWN_ACTION') || message.includes('supabase functions deploy partner-commerce');
+}
+
+function extractPartnerEmailBranding(partner) {
+  const branding = partner?.branding || {};
+  const brand = branding.brand || {};
+  const emailSettings = branding.emailSettings || brand.emailSettings || {};
+  const storedTemplates = branding.emailTemplates || brand.emailTemplates || {};
+  const partnerName = String(brand.businessName || branding.name || partner?.name || '').trim();
+
+  return {
+    emailSettings: {
+      fromName: String(emailSettings.fromName || partnerName || '').trim(),
+      replyTo: String(emailSettings.replyTo || brand.contactEmail || '').trim(),
+    },
+    storedTemplates,
+    brand,
+  };
+}
+
+async function getPartnerEmailTemplatesFromBranding() {
+  const data = await invoke('partner-commerce', { action: 'getBranding' });
+  const { emailSettings, storedTemplates } = extractPartnerEmailBranding(data?.partner);
+  return {
+    emailSettings,
+    templates: listPartnerClientTemplatesForUi(storedTemplates),
+  };
+}
+
+async function savePartnerEmailTemplatesViaBranding(payload) {
+  const current = await invoke('partner-commerce', { action: 'getBranding' });
+  const { brand } = extractPartnerEmailBranding(current?.partner);
+  const emailSettings = payload.emailSettings || {};
+  const emailTemplates = payload.templates || {};
+
+  await invoke('partner-commerce', {
+    action: 'saveBranding',
+    payload: {
+      brand: {
+        ...brand,
+        emailSettings,
+        emailTemplates,
+      },
+      emailSettings,
+      emailTemplates,
+    },
+  });
+
+  return getPartnerEmailTemplatesFromBranding();
+}
+
+const IMPERSONATION_STORAGE_KEY = 'novo_impersonate_partner';
+
+function readImpersonation() {
+  try {
+    const raw = sessionStorage.getItem(IMPERSONATION_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
 async function invoke(functionName, body = {}) {
+  let finalBody = body;
+  const impersonation = readImpersonation();
+  if (
+    impersonation?.partnerId
+    && !body.payload?.partnerId
+    && (functionName === 'partner-commerce' || functionName === 'stripe-checkout')
+  ) {
+    finalBody = {
+      ...body,
+      payload: {
+        ...(body.payload || {}),
+        partnerId: impersonation.partnerId,
+      },
+    };
+  }
+
   const { data, error } =
     await supabase.functions.invoke(functionName, {
-      body,
+      body: finalBody,
     });
 
   if (error) {
@@ -348,12 +438,42 @@ function roleToDashboard(role) {
   return 'client-dashboard';
 }
 
+function defaultDashboardSection(roleOrPage) {
+  if (roleOrPage === 'partner' || roleOrPage === 'partner-dashboard') {
+    return 'partner-center';
+  }
+  return 'dashboard';
+}
+
 export const platformApi = {
   getSession: () => supabase.auth.getSession(),
 
   signOut: () => supabase.auth.signOut(),
 
   roleToDashboard,
+
+  defaultDashboardSection,
+
+  getImpersonation: readImpersonation,
+
+  startImpersonatingPartner(partner) {
+    if (!partner?.id) {
+      throw new Error('Partner inválido.');
+    }
+    sessionStorage.setItem(
+      IMPERSONATION_STORAGE_KEY,
+      JSON.stringify({
+        partnerId: partner.id,
+        partnerName: partner.name || 'Partner',
+        partnerSlug: partner.slug || null,
+        startedAt: new Date().toISOString(),
+      }),
+    );
+  },
+
+  clearImpersonation() {
+    sessionStorage.removeItem(IMPERSONATION_STORAGE_KEY);
+  },
 
   async getMyProfile() {
     const { data: sessionData } =
@@ -418,10 +538,166 @@ export const platformApi = {
     });
   },
 
+  sendTestEmail(to = null) {
+    return invoke('platform-admin', {
+      action: 'sendTestEmail',
+      payload: { to },
+    });
+  },
+
+  getEmailTemplates() {
+    return invoke('platform-admin', {
+      action: 'getEmailTemplates',
+    });
+  },
+
+  saveEmailTemplates(templates) {
+    return invoke('platform-admin', {
+      action: 'saveEmailTemplates',
+      payload: { templates },
+    });
+  },
+
+  sendTemplateTestEmail(templateId, to = null) {
+    return invoke('platform-admin', {
+      action: 'sendTemplateTestEmail',
+      payload: { templateId, to },
+    });
+  },
+
   getIntegrationSettings() {
     return invoke('platform-admin', {
       action: 'getIntegrationSettings',
     });
+  },
+
+  async getAdminSystemHealth() {
+    const profile = await this.getMyProfile();
+    if (profile?.role !== 'super_admin') {
+      throw new Error(ERROR_HINTS.FORBIDDEN);
+    }
+
+    const [ghlResult, integrationsResult, failedResult, pendingPartnersResult] = await Promise.all([
+      supabase
+        .from('ghl_connections')
+        .select('scopes, company_id, status, updated_at')
+        .eq('connection_type', 'agency')
+        .eq('status', 'active')
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      supabase
+        .from('platform_integrations')
+        .select('provider, status, public_config')
+        .in('provider', ['ghl', 'stripe']),
+      supabase
+        .from('partner_clients')
+        .select('id', { count: 'exact', head: true })
+        .eq('ghl_sync_status', 'failed'),
+      supabase
+        .from('partners')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'pending'),
+    ]);
+
+    if (ghlResult.error) throw ghlResult.error;
+    if (integrationsResult.error) throw integrationsResult.error;
+    if (failedResult.error) throw failedResult.error;
+    if (pendingPartnersResult.error) throw pendingPartnersResult.error;
+
+    const ghlConn = ghlResult.data;
+    const ghlScopes = ghlConn?.scopes || [];
+    const integrationsByProvider = Object.fromEntries(
+      (integrationsResult.data || []).map((row) => [row.provider, row]),
+    );
+    const ghlIntegration = integrationsByProvider.ghl;
+    const stripeIntegration = integrationsByProvider.stripe;
+    const ghlConnected = Boolean(ghlConn?.company_id || ghlIntegration?.status === 'connected');
+
+    return {
+      ghl: {
+        connected: ghlConnected,
+        provisionReady: ghlConnected && ghlScopes.includes('locations.write'),
+        scopes: ghlScopes,
+        companyId: ghlConn?.company_id || ghlIntegration?.public_config?.companyId || null,
+        updatedAt: ghlConn?.updated_at || ghlIntegration?.public_config?.connectedAt || null,
+      },
+      stripe: {
+        status: stripeIntegration?.status || 'unknown',
+        configured: stripeIntegration?.status === 'connected',
+        publishableConfigured: Boolean(stripeIntegration?.public_config?.publishableKey),
+        priceMode: stripeIntegration?.public_config?.priceMode || 'test',
+      },
+      clientsGhlFailed: failedResult.count || 0,
+      partnersPending: pendingPartnersResult.count || 0,
+    };
+  },
+
+  async listPendingPartnerRegistrations() {
+    await this.requireSuperAdmin();
+
+    const { data, error } = await supabase
+      .from('partners')
+      .select(`
+        id,
+        name,
+        slug,
+        status,
+        plan_name,
+        branding,
+        created_at,
+        owner_user_id
+      `)
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    const ownerIds = [...new Set((data || []).map(row => row.owner_user_id).filter(Boolean))];
+    let ownersById = {};
+    if (ownerIds.length > 0) {
+      const { data: profiles, error: profilesError } = await supabase
+        .from('profiles')
+        .select('id, email, full_name, phone')
+        .in('id', ownerIds);
+      if (profilesError) throw profilesError;
+      ownersById = Object.fromEntries((profiles || []).map(profile => [profile.id, profile]));
+    }
+
+    return {
+      registrations: (data || []).map(row => ({
+        ...row,
+        owner: ownersById[row.owner_user_id] || null,
+      })),
+    };
+  },
+
+  reviewPartnerRegistration(partnerId, decision, note = null) {
+    return invoke('platform-admin', {
+      action: 'reviewPartnerRegistration',
+      payload: { partnerId, decision, note },
+    });
+  },
+
+  async listAuditLogs({
+    actionPrefix = null,
+    entityType = null,
+    limit = 100,
+  } = {}) {
+    await this.requireSuperAdmin();
+
+    let query = supabase
+      .from('audit_logs')
+      .select('id, actor_user_id, action, entity_type, entity_id, metadata, created_at')
+      .order('created_at', { ascending: false })
+      .limit(Math.min(limit, 200));
+
+    if (actionPrefix) query = query.like('action', `${actionPrefix}%`);
+    if (entityType) query = query.eq('entity_type', entityType);
+
+    const { data, error } = await query;
+    if (error) throw error;
+    return { logs: data || [] };
   },
 
   testIntegration(provider) {
@@ -590,6 +866,13 @@ export const platformApi = {
     return { partner: data };
   },
 
+  createPartnerAccount(payload) {
+    return invoke('platform-admin', {
+      action: 'createPartnerAccount',
+      payload,
+    });
+  },
+
   async updatePartner(payload) {
     await this.requireSuperAdmin();
 
@@ -738,6 +1021,54 @@ export const platformApi = {
     return invoke('partner-commerce', {
       action: 'saveOffer',
       payload,
+    });
+  },
+
+  async listPartnerOffersForAdmin(partnerId) {
+    await this.requireSuperAdmin();
+    if (!partnerId) throw new Error('Partner requerido.');
+
+    const [productsResult, offersResult] = await Promise.all([
+      supabase
+        .from('catalog_products')
+        .select('id, name, description, wholesale_price, suggested_price, currency, interval, ghl_product_id, ghl_price_id, active')
+        .order('name'),
+      supabase
+        .from('partner_offers')
+        .select('id, product_id, retail_price, ghl_price_id, currency, active, display_name, display_description')
+        .eq('partner_id', partnerId),
+    ]);
+
+    if (productsResult.error) throw productsResult.error;
+    if (offersResult.error) throw offersResult.error;
+
+    const offerByProduct = new Map(
+      (offersResult.data || []).map(offer => [String(offer.product_id), offer]),
+    );
+
+    const products = (productsResult.data || []).map(product => {
+      const offer = offerByProduct.get(String(product.id));
+      return {
+        ...product,
+        offerId: offer?.id || null,
+        retailPrice: offer?.retail_price ?? product.suggested_price ?? null,
+        ghlPriceId: offer?.ghl_price_id || product.ghl_price_id || '',
+        catalogGhlPriceId: product.ghl_price_id || '',
+        offerActive: offer?.active ?? false,
+        displayName: offer?.display_name || product.name,
+      };
+    });
+
+    return { products };
+  },
+
+  savePartnerOfferForAdmin(partnerId, payload) {
+    return invoke('partner-commerce', {
+      action: 'saveOffer',
+      payload: {
+        ...payload,
+        partnerId,
+      },
     });
   },
 
@@ -919,6 +1250,7 @@ export const platformApi = {
   async listAllClients({
     partnerId = null,
     status = null,
+    ghlSyncStatus = null,
   } = {}) {
     const profile = await this.getMyProfile();
     if (profile?.role !== 'super_admin') {
@@ -950,6 +1282,7 @@ export const platformApi = {
 
     if (partnerId) query = query.eq('partner_id', partnerId);
     if (status) query = query.eq('status', status);
+    if (ghlSyncStatus) query = query.eq('ghl_sync_status', ghlSyncStatus);
 
     const { data, error } = await query;
     if (error) throw error;
@@ -1876,6 +2209,37 @@ export const platformApi = {
     return invoke('partner-commerce', {
       action: 'saveBranding',
       payload,
+    });
+  },
+
+  getPartnerEmailTemplates() {
+    return invoke('partner-commerce', {
+      action: 'getPartnerEmailTemplates',
+    }).catch(async (error) => {
+      if (!isUnknownActionError(error)) throw error;
+      return getPartnerEmailTemplatesFromBranding();
+    });
+  },
+
+  savePartnerEmailTemplates(payload) {
+    return invoke('partner-commerce', {
+      action: 'savePartnerEmailTemplates',
+      payload,
+    }).catch(async (error) => {
+      if (!isUnknownActionError(error)) throw error;
+      return savePartnerEmailTemplatesViaBranding(payload);
+    });
+  },
+
+  sendPartnerEmailTemplateTest(templateId, to = null) {
+    return invoke('partner-commerce', {
+      action: 'sendPartnerEmailTemplateTest',
+      payload: { templateId, to },
+    }).catch((error) => {
+      if (!isUnknownActionError(error)) throw error;
+      throw new Error(
+        'El envío de prueba requiere desplegar partner-commerce. Ejecuta: supabase functions deploy partner-commerce --project-ref jwtymqtwlbifojtvxwpx',
+      );
     });
   },
 

@@ -178,7 +178,7 @@ export default function PublicCheckoutPage({
 
     if (!stripePublishableKey || stripePublishableKey.startsWith('sk_')) {
       setNotice({
-        text: 'Configura VITE_STRIPE_PUBLISHABLE_KEY con tu clave pk_test_... de Stripe (no uses la secret key sk_).',
+        text: 'Falta la Publishable key de Stripe. Configúrala en Super Admin → Configuración → Stripe.',
         type: 'error',
       });
       return;

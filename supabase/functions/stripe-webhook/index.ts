@@ -1,16 +1,17 @@
 import Stripe from 'https://esm.sh/stripe@17.7.0?target=deno';
-import { adminClient, corsHeaders, formatErrorMessage, handleError, json } from '../_shared/core.ts';
+import { adminClient, corsHeaders, formatErrorMessage, handleError, json, loadStripeConfig } from '../_shared/core.ts';
 import { createDeferredAddonSubscriptions } from '../_shared/deferred-addon-subscriptions.ts';
 import { provisionPartnerClientInGhl } from '../_shared/ghl-provision.ts';
+import { trySendTemplatedEmail, trySendPartnerClientTemplatedEmail } from '../_shared/email-templates.ts';
 
-function stripeClient() {
-  const secret = Deno.env.get('STRIPE_SECRET_KEY');
-  if (!secret) throw new Error('STRIPE_NOT_CONFIGURED');
-  return new Stripe(secret, { apiVersion: '2023-10-16' });
+async function stripeClient(supabase: ReturnType<typeof adminClient>) {
+  const { secretKey } = await loadStripeConfig(supabase);
+  if (!secretKey) throw new Error('STRIPE_NOT_CONFIGURED');
+  return new Stripe(secretKey, { apiVersion: '2023-10-16' });
 }
 
-function webhookSecret() {
-  const secret = Deno.env.get('STRIPE_WEBHOOK_SECRET');
+async function webhookSecret(supabase: ReturnType<typeof adminClient>) {
+  const { webhookSecret: secret } = await loadStripeConfig(supabase);
   if (!secret) throw new Error('STRIPE_WEBHOOK_NOT_CONFIGURED');
   return secret;
 }
@@ -42,6 +43,11 @@ async function fulfillCheckoutSession(
   );
 
   const currency = (session.currency || 'usd').toUpperCase();
+  const gross = retailCents > 0 ? retailCents / 100 : Number(session.amount_total || 0) / 100;
+  const wholesale = wholesaleCents / 100;
+  const commission = commissionCents > 0 ? commissionCents / 100 : Math.max(gross - wholesale, 0);
+  const amountLabel = gross.toFixed(2);
+  const commissionLabel = commission.toFixed(2);
   const subscriptionId = typeof session.subscription === 'string'
     ? session.subscription
     : session.subscription?.id || null;
@@ -100,10 +106,6 @@ async function fulfillCheckoutSession(
   }
 
   if (partnerId && session.id) {
-    const gross = retailCents > 0 ? retailCents / 100 : Number(session.amount_total || 0) / 100;
-    const wholesale = wholesaleCents / 100;
-    const commission = commissionCents > 0 ? commissionCents / 100 : Math.max(gross - wholesale, 0);
-
     await supabase.from('partner_commissions').upsert({
       partner_id: partnerId,
       sales_link_id: salesLinkId,
@@ -190,6 +192,118 @@ async function fulfillCheckoutSession(
     }
   }
 
+  if (clientId) {
+    const { data: clientRow } = await supabase
+      .from('partner_clients')
+      .select('id, email, name, company_name, partner_id')
+      .eq('id', clientId)
+      .maybeSingle();
+
+    let partnerName = '';
+    let productName = metadata.product_name || metadata.catalog_product_name || 'Plan NOVO';
+    let ownerEmail: string | null = null;
+
+    if (partnerId) {
+      const { data: partnerRow } = await supabase
+        .from('partners')
+        .select('id, name, owner_user_id, branding')
+        .eq('id', partnerId)
+        .maybeSingle();
+      partnerName = partnerRow?.name || '';
+      if (partnerRow?.owner_user_id) {
+        const { data: ownerProfile } = await supabase
+          .from('profiles')
+          .select('email')
+          .eq('id', partnerRow.owner_user_id)
+          .maybeSingle();
+        ownerEmail = ownerProfile?.email || null;
+      }
+      if (!ownerEmail) {
+        ownerEmail = ((partnerRow?.branding || {}) as Record<string, string>).contactEmail || null;
+      }
+    }
+
+    if (offerId && productName === 'Plan NOVO') {
+      const { data: offerRow } = await supabase
+        .from('partner_offers')
+        .select('display_name, catalog_products(name)')
+        .eq('id', offerId)
+        .maybeSingle();
+      productName = offerRow?.display_name
+        || (offerRow?.catalog_products as { name?: string } | null)?.name
+        || productName;
+    }
+
+    const clientName = clientRow?.company_name || clientRow?.name || 'Cliente';
+    const clientEmail = clientRow?.email || session.customer_details?.email || session.customer_email || null;
+
+    if (clientEmail) {
+      if (partnerId) {
+        await trySendPartnerClientTemplatedEmail(supabase, String(partnerId), 'client_payment_success', {
+          to: String(clientEmail),
+          variables: {
+            clientName,
+            clientEmail: String(clientEmail),
+            productName,
+            amount: amountLabel,
+            currency,
+            partnerName,
+          },
+        });
+      } else {
+        await trySendTemplatedEmail(supabase, 'client_payment_success', {
+          to: String(clientEmail),
+          variables: {
+            clientName,
+            clientEmail: String(clientEmail),
+            productName,
+            amount: amountLabel,
+            currency,
+            partnerName,
+          },
+        });
+      }
+    }
+
+    if (ownerEmail) {
+      await trySendTemplatedEmail(supabase, 'partner_sale_notification', {
+        to: String(ownerEmail),
+        variables: {
+          partnerName,
+          clientName,
+          productName,
+          amount: amountLabel,
+          currency,
+          commission: commissionLabel,
+        },
+      });
+    }
+
+    if (ghlProvision && !(ghlProvision as { skipped?: boolean }).skipped && clientEmail) {
+      if (partnerId) {
+        await trySendPartnerClientTemplatedEmail(supabase, String(partnerId), 'ghl_provision_success', {
+          to: String(clientEmail),
+          variables: {
+            clientName,
+            clientEmail: String(clientEmail),
+            productName,
+            partnerName,
+          },
+        });
+      } else {
+        await trySendTemplatedEmail(supabase, 'ghl_provision_success', {
+          to: String(clientEmail),
+          variables: {
+            clientName,
+            clientEmail: String(clientEmail),
+            productName,
+            partnerName,
+          },
+        });
+      }
+    }
+  }
+
   return {
     salesLinkId,
     clientId,
@@ -214,14 +328,13 @@ Deno.serve(async (req) => {
     if (!signature) throw new Error('STRIPE_SIGNATURE_MISSING');
 
     const body = await req.text();
-    const stripe = stripeClient();
+    const supabase = adminClient();
+    const stripe = await stripeClient(supabase);
     const event = await stripe.webhooks.constructEventAsync(
       body,
       signature,
-      webhookSecret(),
+      await webhookSecret(supabase),
     );
-
-    const supabase = adminClient();
 
     const { data: existing } = await supabase
       .from('webhook_events')

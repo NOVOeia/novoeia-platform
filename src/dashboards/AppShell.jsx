@@ -14,6 +14,11 @@ import {
   Moon,
   Link2,
   Activity,
+  UserPlus,
+  ScrollText,
+  Shield,
+  Mail,
+  ClipboardList,
 } from 'lucide-react';
 
 import { Logo } from '../components/ui.jsx';
@@ -23,39 +28,67 @@ import {
   PartnerConsole,
 } from '../components/PlatformConsole.jsx';
 import PartnerBrandConsole from '../components/PartnerBrandConsole.jsx';
+import PartnerEmailTemplates from '../components/PartnerEmailTemplates.jsx';
+import { platformApi } from '../lib/platformApi.js';
 
 import '../styles/dashboard-clean.css';
 
 const adminMenu = [
   ['dashboard', 'Dashboard', LayoutDashboard],
   ['partners', 'Partners', Users],
+  ['registrations', 'Registros partner', UserPlus],
   ['clients', 'Clientes', Building2],
   ['products', 'Productos', Package],
   ['links', 'Links de venta', Link2],
   ['subscriptions', 'Suscripciones', Activity],
   ['payments', 'Pagos', CreditCard],
-  ['settings', 'ConfiguraciÃ³n', Settings],
+  ['email-templates', 'Plantillas email', Mail],
+  ['audit', 'Auditoría', ScrollText],
+  ['settings', 'Configuración', Settings],
 ];
 
 const partnerMenu = [
+  ['partner-center', 'Partner Center', ClipboardList],
   ['dashboard', 'Mi negocio', LayoutDashboard],
   ['clients', 'Mis clientes', Users],
   ['products', 'Productos y servicios', Package],
   ['links', 'Links de venta', Link2],
   ['commissions', 'Comisiones', CreditCard],
   ['brand', 'Mi marca y páginas', Settings],
+  ['client-emails', 'Emails a clientes', Mail],
   ['support', 'Soporte', Bell],
 ];
 
-export default function AppShell({ role, go }) {
-  const [active, setActive] = useState('dashboard');
-  const [linkProductPreset, setLinkProductPreset] = useState(null);
+function defaultSectionForRole(role) {
+  if (role === 'partner') return 'partner-center';
+  return 'dashboard';
+}
 
-  function navigatePartner(section, options = {}) {
+export default function AppShell({ role, section }) {
+  const initialSection = section || defaultSectionForRole(role);
+  const [active, setActive] = useState(initialSection);
+  const [linkProductPreset, setLinkProductPreset] = useState(null);
+  const [impersonation, setImpersonation] = useState(() => platformApi.getImpersonation());
+
+  useEffect(() => {
+    setActive(section || defaultSectionForRole(role));
+  }, [section, role]);
+
+  useEffect(() => {
+    setImpersonation(platformApi.getImpersonation());
+  }, [role, section]);
+
+  function navigatePartner(nextSection, options = {}) {
     if (options.productId) {
       setLinkProductPreset(options.productId);
     }
-    setActive(section);
+    setActive(nextSection);
+  }
+
+  function exitImpersonation() {
+    platformApi.clearImpersonation();
+    setImpersonation(null);
+    go?.('admin-dashboard/partners');
   }
 
   const [theme, setTheme] = useState(() => {
@@ -67,7 +100,14 @@ export default function AppShell({ role, go }) {
   }, [theme]);
 
   const menu = role === 'admin' ? adminMenu : partnerMenu;
-  const roleLabel = role === 'admin' ? 'SUPER ADMIN' : role === 'partner' ? 'PARTNER NOVO' : 'CLIENTE NOVO';
+  const isImpersonating = role === 'partner' && Boolean(impersonation?.partnerId);
+  const roleLabel = role === 'admin'
+    ? 'SUPER ADMIN'
+    : isImpersonating
+      ? `SOPORTE · ${impersonation.partnerName}`
+      : role === 'partner'
+        ? 'PARTNER NOVO'
+        : 'CLIENTE NOVO';
   const initial = role === 'admin' ? 'N' : role === 'partner' ? 'P' : 'C';
 
   function toggleTheme() {
@@ -129,13 +169,43 @@ export default function AppShell({ role, go }) {
         </header>
 
         <div className="novo-content">
-          {role === 'admin' && <SuperAdminConsole section={active} />}
+          {isImpersonating && (
+            <div
+              className="novo-card"
+              style={{
+                margin: '0 0 16px',
+                border: '1px solid rgba(245,158,11,.35)',
+                background: 'rgba(245,158,11,.08)',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <Shield size={18} style={{ color: '#f59e0b', flexShrink: 0 }} />
+                  <div>
+                    <strong style={{ color: 'var(--novo-text)' }}>
+                      Modo soporte — viendo como {impersonation.partnerName}
+                    </strong>
+                    <p style={{ margin: '4px 0 0', color: 'var(--novo-muted)', fontSize: 13 }}>
+                      Las acciones se ejecutan en el contexto de este partner.
+                    </p>
+                  </div>
+                </div>
+                <button type="button" className="novo-btn novo-btn-ghost" onClick={exitImpersonation}>
+                  Volver a Super Admin
+                </button>
+              </div>
+            </div>
+          )}
+          {role === 'admin' && <SuperAdminConsole section={active} go={go} />}
           {role === 'partner' && (
             <>
               <div style={{ display: active === 'brand' ? 'block' : 'none' }}>
                 <PartnerBrandConsole />
               </div>
-              {active !== 'brand' && (
+              <div style={{ display: active === 'client-emails' ? 'block' : 'none' }}>
+                <PartnerEmailTemplates />
+              </div>
+              {active !== 'brand' && active !== 'client-emails' && (
                 <PartnerConsole
                   section={active}
                   onNavigate={navigatePartner}
@@ -156,7 +226,7 @@ function ClientPlaceholder() {
   return (
     <div className="novo-page">
       <h1>Panel Cliente</h1>
-      <p>PrÃ³ximamente disponible.</p>
+      <p>Próximamente disponible.</p>
     </div>
   );
 }

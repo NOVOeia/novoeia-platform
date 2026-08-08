@@ -22,7 +22,7 @@ function parseRoute() {
   if (page?.endsWith('-dashboard')) {
     return {
       page,
-      section: parts[1] || 'dashboard',
+      section: parts[1] || platformApi.defaultDashboardSection(page),
       slug: null,
       productId: null,
     };
@@ -98,10 +98,12 @@ export default function App() {
     const resolvedSection = nextSection || parts[1] || null;
     setPage(routePage);
     if (routePage.endsWith('-dashboard')) {
-      setSection(resolvedSection || 'dashboard');
+      const fallbackSection = platformApi.defaultDashboardSection(routePage);
+      const sectionValue = resolvedSection || fallbackSection;
+      setSection(sectionValue);
       setLandingSlug(null);
       setCheckoutProductId(null);
-      location.hash = `${routePage}/${resolvedSection || 'dashboard'}`;
+      location.hash = `${routePage}/${sectionValue}`;
     } else if (routePage === 'checkout') {
       setSection(resolvedSection || 'success');
       setLandingSlug(null);
@@ -164,9 +166,15 @@ export default function App() {
       const profile = await platformApi.getMyProfile();
       if (cancelled) return;
 
+      const impersonation = platformApi.getImpersonation();
       const allowed = platformApi.roleToDashboard(profile?.role || 'client');
-      if (page !== allowed) {
-        go(`${allowed}/dashboard`);
+      const canAccessPartnerAsAdmin =
+        page === 'partner-dashboard'
+        && profile?.role === 'super_admin'
+        && Boolean(impersonation?.partnerId);
+
+      if (!canAccessPartnerAsAdmin && page !== allowed) {
+        go(`${allowed}/${platformApi.defaultDashboardSection(allowed)}`);
       }
     })();
 

@@ -1,36 +1,43 @@
 import { Fragment, useEffect, useState, useCallback } from 'react';
 import {
-  Settings, ShieldCheck, PlugZap, CreditCard, RefreshCw, Save,
+  Settings, PlugZap, CreditCard, RefreshCw, Save,
   Users, Building2, Package, CheckCircle2, AlertCircle, Plus,
   DollarSign, Activity, Link2, Copy, ExternalLink,
   Eye, Edit2, X, ArrowUpRight, Search, BarChart2,
-  LifeBuoy, KeyRound, Webhook, Trash2, Globe, Phone,
+  LifeBuoy, KeyRound, Webhook, Trash2, Globe, Phone, Mail,
   MapPin, User, FileText, Image, UploadCloud, Loader2,
-  Archive, Power, PowerOff
+  Archive, Power, PowerOff, UserPlus, ScrollText, Check, XCircle, LogIn
 } from 'lucide-react';
 import { platformApi } from '../lib/platformApi.js';
+import {
+  EMAIL_API_PROVIDERS,
+  EMAIL_ENCRYPTION_OPTIONS,
+  EMAIL_PROVIDER_PRESETS,
+  EMAIL_TRANSPORT_OPTIONS,
+} from '../lib/emailProviderPresets.js';
 import { calculateCheckoutDueToday } from '../lib/checkoutLineItems.js';
 import { notifyPartnerCatalogUpdated, subscribePartnerCatalogUpdated } from '../lib/partnerCatalogEvents.js';
 import { MAX_PARTNER_ADDITIONAL_SERVICES } from '../lib/storefrontDefaults.js';
 import { supabase } from '../lib/supabase.js';
-import {
-  AdminResources,
-  PartnerResources,
-} from './ResourcesConsole.jsx';
 import PartnerBrandConsole from './PartnerBrandConsole.jsx';
+import AdminPartnerCreateForm from './partner-registration/AdminPartnerCreateForm.jsx';
+import AdminEmailTemplates from './AdminEmailTemplates.jsx';
+import PartnerRegistrationEmbed from './PartnerRegistrationEmbed.jsx';
 
 /* ================================
    SUPER ADMIN ROUTER
 ================================ */
-export function SuperAdminConsole({ section }) {
+export function SuperAdminConsole({ section, go }) {
   if (section === 'dashboard') return <AdminDashboard />;
-  if (section === 'partners') return <AdminPartners />;
+  if (section === 'partners') return <AdminPartners go={go} />;
+  if (section === 'registrations') return <AdminPartnerRegistrations />;
   if (section === 'clients') return <AdminClients />;
   if (section === 'products') return <AdminProducts />;
   if (section === 'links') return <AdminSalesLinks />;
   if (section === 'subscriptions') return <AdminSubscriptions />;
   if (section === 'payments') return <AdminPayments />;
-  if (section === 'resources') return <AdminResources />;
+  if (section === 'email-templates') return <AdminEmailTemplates />;
+  if (section === 'audit') return <AdminAuditLogs />;
   if (section === 'settings') return <AdminSettings />;
   return <AdminDashboard />;
 }
@@ -44,17 +51,19 @@ function AdminDashboard() {
   const [clientCount, setClientCount] = useState(null);
   const [activeSubs, setActiveSubs] = useState(null);
   const [pendingCommissions, setPendingCommissions] = useState(null);
+  const [systemHealth, setSystemHealth] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function load() {
       try {
-        const [pd, cd, clientsData, subsData, commData] = await Promise.all([
+        const [pd, cd, clientsData, subsData, commData, health] = await Promise.all([
           platformApi.listPartners().catch(() => ({ partners: [] })),
           platformApi.listCatalogProducts().catch(() => ({ products: [] })),
           platformApi.listAllClients().catch(() => ({ clients: [] })),
           platformApi.listActiveSubscriptions().catch(() => ({ subscriptions: [] })),
           platformApi.listCommissions({ status: 'pending' }).catch(() => ({ commissions: [] })),
+          platformApi.getAdminSystemHealth().catch(() => null),
         ]);
         setPartners(pd?.partners || []);
         setProducts(cd?.products || []);
@@ -65,12 +74,42 @@ function AdminDashboard() {
           count: pending.length,
           total: pending.reduce((sum, row) => sum + Number(row.commission_amount || 0), 0),
         });
+        setSystemHealth(health);
       } finally { setLoading(false); }
     }
     load();
   }, []);
 
   const active = partners.filter(p => p.status === 'active').length;
+  const integrationRows = [
+    ['Supabase Auth + RLS', true, 'Activo'],
+    ['Catálogo de productos', products.length > 0, products.length > 0 ? `${products.length} productos` : 'Pendiente'],
+    ['Partners registrados', partners.length > 0, partners.length > 0 ? `${partners.length} partners` : 'Pendiente'],
+    [
+      'GHL agencia conectada',
+      Boolean(systemHealth?.ghl?.connected),
+      systemHealth?.ghl?.connected
+        ? (systemHealth.ghl.companyId ? `Company ${String(systemHealth.ghl.companyId).slice(0, 10)}…` : 'Conectada')
+        : 'Pendiente',
+    ],
+    [
+      'GHL provisioning (locations.write)',
+      Boolean(systemHealth?.ghl?.provisionReady),
+      systemHealth?.ghl?.provisionReady
+        ? 'Listo'
+        : (systemHealth?.ghl?.connected ? 'Falta scope write' : 'Pendiente'),
+    ],
+    [
+      'Stripe Checkout',
+      (activeSubs ?? 0) > 0 || Boolean(systemHealth?.stripe?.configured),
+      (activeSubs ?? 0) > 0 ? `${activeSubs} suscripciones` : (systemHealth?.stripe?.configured ? 'Configurado' : 'Pendiente'),
+    ],
+    [
+      'Registros partner pendientes',
+      (systemHealth?.partnersPending ?? 0) === 0,
+      (systemHealth?.partnersPending ?? 0) > 0 ? `${systemHealth.partnersPending} por revisar` : 'Al día',
+    ],
+  ];
 
   return (
     <div className="novo-page">
@@ -94,6 +133,36 @@ function AdminDashboard() {
           </div>
         ))}
       </div>
+      {!loading && (systemHealth?.clientsGhlFailed ?? 0) > 0 && (
+        <div className="novo-card" style={{ marginBottom: 16, border: '1px solid rgba(239,68,68,.25)', background: 'rgba(239,68,68,.05)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <AlertCircle size={18} style={{ color: 'var(--novo-danger, #ef4444)', flexShrink: 0 }} />
+            <div>
+              <strong style={{ color: 'var(--novo-text)' }}>
+                {systemHealth.clientsGhlFailed} cliente{systemHealth.clientsGhlFailed === 1 ? '' : 's'} con activación GHL fallida
+              </strong>
+              <p style={{ margin: '4px 0 0', color: 'var(--novo-muted)', fontSize: 13 }}>
+                Revisa Clientes → filtro GHL = Fallido y usa «Reintentar activación GHL».
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+      {!loading && (systemHealth?.partnersPending ?? 0) > 0 && (
+        <div className="novo-card" style={{ marginBottom: 16, border: '1px solid rgba(245,158,11,.25)', background: 'rgba(245,158,11,.05)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <UserPlus size={18} style={{ color: '#f59e0b', flexShrink: 0 }} />
+            <div>
+              <strong style={{ color: 'var(--novo-text)' }}>
+                {systemHealth.partnersPending} registro{systemHealth.partnersPending === 1 ? '' : 's'} partner pendiente{systemHealth.partnersPending === 1 ? '' : 's'} de aprobación
+              </strong>
+              <p style={{ margin: '4px 0 0', color: 'var(--novo-muted)', fontSize: 13 }}>
+                Revisa Registros partner para aprobar o rechazar solicitudes.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="novo-grid-2">
         <div className="novo-card">
           <div className="novo-card-header">
@@ -122,17 +191,13 @@ function AdminDashboard() {
             <div><div className="novo-card-title">Estado del sistema</div><div className="novo-card-sub">Integraciones activas</div></div>
             <Activity size={18} style={{ color: 'var(--novo-muted)' }} />
           </div>
-          {[
-            ['Supabase Auth + RLS', true],
-            ['Edge Functions', true],
-            ['Catálogo de productos', products.length > 0],
-            ['Partners registrados', partners.length > 0],
-            ['GHL OAuth', false],
-            ['Stripe Checkout', activeSubs > 0],
-          ].map(([label, ok]) => (
+          {integrationRows.map(([label, ok, detail]) => (
             <div key={label} className="status-row">
               <span>{label}</span>
-              <Badge status={ok ? 'active' : 'pending'} label={ok ? 'Activo' : 'Pendiente'} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <small style={{ color: 'var(--novo-muted)' }}>{detail}</small>
+                <Badge status={ok ? 'active' : 'pending'} label={ok ? 'Activo' : 'Pendiente'} />
+              </div>
             </div>
           ))}
         </div>
@@ -144,8 +209,9 @@ function AdminDashboard() {
 /* ================================
    ADMIN PARTNERS
 ================================ */
-function AdminPartners() {
+function AdminPartners({ go }) {
   const [partners, setPartners] = useState([]);
+  const [ownersById, setOwnersById] = useState({});
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(null);
   const [showForm, setShowForm] = useState(false);
@@ -156,19 +222,51 @@ function AdminPartners() {
   const [search, setSearch] = useState('');
 
   const load = useCallback(async () => {
-    try { setLoading(true); const data = await platformApi.listPartners(); setPartners(data?.partners || []); }
+    try {
+      setLoading(true);
+      const data = await platformApi.listPartners();
+      const rows = data?.partners || [];
+      setPartners(rows);
+
+      const ownerIds = [...new Set(rows.map(row => row.owner_user_id).filter(Boolean))];
+      if (ownerIds.length === 0) {
+        setOwnersById({});
+        return;
+      }
+
+      const { data: profiles, error } = await supabase
+        .from('profiles')
+        .select('id, email, full_name, phone')
+        .in('id', ownerIds);
+      if (error) throw error;
+      setOwnersById(Object.fromEntries((profiles || []).map(profile => [profile.id, profile])));
+    }
     catch (e) { setNotice({ type: 'error', text: e.message }); }
     finally { setLoading(false); }
   }, []);
 
   useEffect(() => { load(); }, [load]);
 
+  function openPartnerPanel(partner) {
+    if (partner.status !== 'active') {
+      setNotice({ type: 'error', text: 'Solo puedes impersonar partners activos.' });
+      return;
+    }
+    platformApi.startImpersonatingPartner(partner);
+    go?.('partner-dashboard/dashboard');
+  }
+
   async function savePartner() {
+    if (!editMode || !selected) return;
     try {
       setBusy(true);
-      if (editMode && selected) { await platformApi.updatePartner({ ...form, id: selected.id }); setNotice({ type: 'success', text: 'Partner actualizado.' }); }
-      else { await platformApi.createPartner(form); setNotice({ type: 'success', text: 'Partner creado.' }); }
-      setShowForm(false); setEditMode(false); setForm({ name: '', slug: '', plan_name: 'partner', status: 'pending' }); setSelected(null); load();
+      await platformApi.updatePartner({ ...form, id: selected.id });
+      setNotice({ type: 'success', text: 'Partner actualizado.' });
+      setShowForm(false);
+      setEditMode(false);
+      setForm({ name: '', slug: '', plan_name: 'partner', status: 'pending' });
+      setSelected(null);
+      load();
     } catch (e) { setNotice({ type: 'error', text: e.message }); }
     finally { setBusy(false); }
   }
@@ -184,15 +282,25 @@ function AdminPartners() {
     <div className="novo-page">
       <div className="novo-page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div><span className="kicker">GESTIÓN</span><h1>Partners</h1><p>Administra los partners del ecosistema NOVO.</p></div>
-        <button className="novo-btn novo-btn-primary" onClick={() => { setShowForm(!showForm); setEditMode(false); setForm({ name: '', slug: '', plan_name: 'partner', status: 'pending' }); }}>
+        <button className="novo-btn novo-btn-primary" onClick={() => { setShowForm(true); setEditMode(false); setSelected(null); }}>
           <Plus size={15} /> Nuevo partner
         </button>
       </div>
       {notice && <Notice {...notice} onClose={() => setNotice(null)} />}
-      {showForm && (
+      {showForm && !editMode && (
+        <AdminPartnerCreateForm
+          onCancel={() => setShowForm(false)}
+          onSuccess={() => {
+            setShowForm(false);
+            setNotice({ type: 'success', text: 'Partner creado con cuenta y perfil vinculados.' });
+            load();
+          }}
+        />
+      )}
+      {showForm && editMode && (
         <div className="novo-card" style={{ marginBottom: 20, border: '1px solid rgba(124,58,237,.3)' }}>
           <div className="novo-card-header">
-            <div className="novo-card-title">{editMode ? `Editando: ${selected?.name}` : 'Crear nuevo partner'}</div>
+            <div className="novo-card-title">Editando: {selected?.name}</div>
             <button className="novo-btn novo-btn-ghost" style={{ padding: '4px 8px' }} onClick={() => setShowForm(false)}><X size={14} /></button>
           </div>
           <div className="novo-grid-2">
@@ -216,7 +324,7 @@ function AdminPartners() {
             </div>
           </div>
           <div style={{ display: 'flex', gap: 10 }}>
-            <button className="novo-btn novo-btn-primary" onClick={savePartner} disabled={busy}><Save size={14} /> {editMode ? 'Actualizar' : 'Crear partner'}</button>
+            <button className="novo-btn novo-btn-primary" onClick={savePartner} disabled={busy}><Save size={14} /> Actualizar</button>
             <button className="novo-btn novo-btn-ghost" onClick={() => setShowForm(false)}>Cancelar</button>
           </div>
         </div>
@@ -235,7 +343,9 @@ function AdminPartners() {
           <table className="novo-table">
             <thead><tr><th>Partner</th><th>Plan</th><th>GHL</th><th>Estado</th><th>Creado</th><th>Acciones</th></tr></thead>
             <tbody>
-              {filtered.map(p => (
+              {filtered.map(p => {
+                const owner = ownersById[p.owner_user_id] || null;
+                return (
                 <Fragment key={p.id}>
                   <tr>
                     <td><strong style={{ color: 'var(--novo-text)' }}>{p.name}</strong><br /><small style={{ color: 'var(--novo-muted)', fontSize: 11 }}>/{p.slug}</small></td>
@@ -256,20 +366,364 @@ function AdminPartners() {
                         <div style={{ background: 'rgba(124,58,237,.05)', border: '1px solid rgba(124,58,237,.15)', borderRadius: 10, margin: '4px 0', padding: '18px 20px' }}>
                           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16, marginBottom: 16 }}>
                             <Info label="ID" value={p.id.slice(0,8)+'…'} />
-                            <Info label="Owner" value={p.owner_user_id ? p.owner_user_id.slice(0,8)+'…' : 'Sin vincular'} />
+                            <Info label="Owner" value={owner?.email || (p.owner_user_id ? p.owner_user_id.slice(0,8)+'…' : 'Sin vincular')} />
                             <Info label="GHL Location" value={p.ghl_location_id || 'Sin asignar'} />
                             <Info label="Creado" value={new Date(p.created_at).toLocaleDateString()} />
                           </div>
-                          <div style={{ display: 'flex', gap: 10 }}>
+                          <AdminPartnerOffers partnerId={p.id} partnerName={p.name} />
+                          <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
                             <button className="novo-btn novo-btn-primary" onClick={() => openEdit(p)}><Edit2 size={13} /> Editar partner</button>
-                            <button className="novo-btn novo-btn-secondary"><Eye size={13} /> Ver panel partner</button>
+                            <button
+                              className="novo-btn novo-btn-secondary"
+                              onClick={() => openPartnerPanel(p)}
+                              disabled={p.status !== 'active'}
+                              title={p.status !== 'active' ? 'El partner debe estar activo' : 'Abrir panel como este partner'}
+                            >
+                              <LogIn size={13} /> Ver panel partner
+                            </button>
                           </div>
                         </div>
                       </td>
                     </tr>
                   )}
                 </Fragment>
-              ))}
+              );})}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ================================
+   ADMIN OFERTAS PARTNER
+================================ */
+function AdminPartnerOffers({ partnerId, partnerName }) {
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState(null);
+  const [drafts, setDrafts] = useState({});
+
+  const load = useCallback(async () => {
+    try {
+      setLoading(true);
+      const data = await platformApi.listPartnerOffersForAdmin(partnerId);
+      const rows = data?.products || [];
+      setProducts(rows);
+      setDrafts(() => {
+        const next = {};
+        rows.forEach(product => {
+          next[product.id] = {
+            retailPrice: product.retailPrice != null ? String(product.retailPrice) : '',
+            ghlPriceId: product.ghlPriceId || '',
+          };
+        });
+        return next;
+      });
+    } catch (error) {
+      setNotice({ type: 'error', text: error.message });
+    } finally {
+      setLoading(false);
+    }
+  }, [partnerId]);
+
+  useEffect(() => { load(); }, [load]);
+
+  function updateDraft(productId, field, value) {
+    setDrafts(current => ({
+      ...current,
+      [productId]: {
+        ...current[productId],
+        [field]: value,
+      },
+    }));
+  }
+
+  async function saveOffer(product) {
+    const draft = drafts[product.id] || {};
+    const retailPrice = Number(draft.retailPrice);
+    if (!Number.isFinite(retailPrice) || retailPrice <= 0) {
+      setNotice({ type: 'error', text: `Define un precio retail válido para ${product.name}.` });
+      return;
+    }
+    if (retailPrice < Number(product.wholesale_price || 0)) {
+      setNotice({ type: 'error', text: 'El precio retail no puede ser menor al mayorista.' });
+      return;
+    }
+
+    try {
+      setBusy(true);
+      await platformApi.savePartnerOfferForAdmin(partnerId, {
+        productId: product.id,
+        retailPrice,
+        displayName: product.displayName || product.name,
+        ghlPriceId: draft.ghlPriceId?.trim() || null,
+        active: true,
+      });
+      setNotice({ type: 'success', text: `Oferta de ${product.name} guardada para ${partnerName}.` });
+      await load();
+    } catch (error) {
+      setNotice({ type: 'error', text: error.message });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div style={{ borderTop: '1px solid rgba(124,58,237,.12)', paddingTop: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <div>
+          <strong style={{ color: 'var(--novo-text)' }}>Ofertas y GHL price</strong>
+          <p style={{ margin: '4px 0 0', color: 'var(--novo-muted)', fontSize: 13 }}>
+            Precio retail y GHL Price ID por producto para provisioning SaaS.
+          </p>
+        </div>
+        <button className="novo-btn novo-btn-ghost" onClick={load} disabled={loading || busy}>
+          <RefreshCw size={13} />
+        </button>
+      </div>
+      {notice && <Notice {...notice} onClose={() => setNotice(null)} />}
+      {loading && <div className="novo-empty">Cargando ofertas…</div>}
+      {!loading && products.length === 0 && <div className="novo-empty">No hay productos en catálogo.</div>}
+      {!loading && products.length > 0 && (
+        <table className="novo-table">
+          <thead>
+            <tr>
+              <th>Producto</th>
+              <th>Mayorista</th>
+              <th>Retail</th>
+              <th>GHL Price ID</th>
+              <th>Catálogo GHL</th>
+              <th>Estado</th>
+              <th>Acción</th>
+            </tr>
+          </thead>
+          <tbody>
+            {products.map(product => {
+              const draft = drafts[product.id] || {};
+              return (
+                <tr key={product.id}>
+                  <td>
+                    <strong style={{ color: 'var(--novo-text)' }}>{product.name}</strong>
+                    {!product.active && <><br /><small style={{ color: 'var(--novo-muted)' }}>Inactivo en catálogo</small></>}
+                  </td>
+                  <td>{money(product.wholesale_price, product.currency)}</td>
+                  <td>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={draft.retailPrice ?? ''}
+                      onChange={e => updateDraft(product.id, 'retailPrice', e.target.value)}
+                      style={{ width: 90, padding: '4px 8px', fontSize: 12 }}
+                    />
+                  </td>
+                  <td>
+                    <input
+                      type="text"
+                      value={draft.ghlPriceId ?? ''}
+                      onChange={e => updateDraft(product.id, 'ghlPriceId', e.target.value)}
+                      placeholder={product.catalogGhlPriceId || 'price_…'}
+                      style={{ width: 140, padding: '4px 8px', fontSize: 12 }}
+                    />
+                  </td>
+                  <td style={{ fontSize: 11, color: 'var(--novo-muted)' }}>
+                    {product.ghl_product_id || '—'}
+                    {product.catalogGhlPriceId && <><br />{product.catalogGhlPriceId}</>}
+                  </td>
+                  <td>
+                    <Badge
+                      status={product.offerActive ? 'active' : 'pending'}
+                      label={product.offerActive ? 'Publicada' : 'Sin oferta'}
+                    />
+                  </td>
+                  <td>
+                    <button
+                      className="novo-btn novo-btn-primary"
+                      style={{ padding: '4px 10px', fontSize: 11 }}
+                      onClick={() => saveOffer(product)}
+                      disabled={busy}
+                    >
+                      <Save size={12} /> Guardar
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
+
+/* ================================
+   ADMIN REGISTROS PARTNER
+================================ */
+function AdminPartnerRegistrations() {
+  const [registrations, setRegistrations] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState(null);
+  const [reviewNote, setReviewNote] = useState('');
+  const [expandedId, setExpandedId] = useState(null);
+
+  const load = useCallback(async () => {
+    try {
+      setLoading(true);
+      const data = await platformApi.listPendingPartnerRegistrations();
+      setRegistrations(data?.registrations || []);
+    } catch (e) {
+      setNotice({ type: 'error', text: e.message });
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function review(partnerId, decision) {
+    try {
+      setBusy(true);
+      await platformApi.reviewPartnerRegistration(partnerId, decision, reviewNote.trim() || null);
+      setNotice({
+        type: 'success',
+        text: decision === 'approve' ? 'Partner aprobado y activado.' : 'Registro rechazado.',
+      });
+      setReviewNote('');
+      setExpandedId(null);
+      await load();
+    } catch (e) {
+      setNotice({ type: 'error', text: e.message });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="novo-page">
+      <div className="novo-page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div>
+          <span className="kicker">ONBOARDING</span>
+          <h1>Registros partner</h1>
+          <p>Solicitudes desde la landing pública pendientes de aprobación.</p>
+        </div>
+        <button className="novo-btn novo-btn-ghost" onClick={load} disabled={loading}>
+          <RefreshCw size={13} />
+        </button>
+      </div>
+      {notice && <Notice {...notice} onClose={() => setNotice(null)} />}
+
+      <div className="novo-card">
+        <div className="novo-card-header">
+          <div>
+            <div className="novo-card-title">Pendientes ({loading ? '…' : registrations.length})</div>
+            <div className="novo-card-sub">Al aprobar, el partner pasa a estado activo y puede operar</div>
+          </div>
+        </div>
+        {loading && <div className="novo-empty">Cargando…</div>}
+        {!loading && registrations.length === 0 && (
+          <div className="novo-empty">No hay registros pendientes.</div>
+        )}
+        {!loading && registrations.length > 0 && (
+          <table className="novo-table">
+            <thead>
+              <tr>
+                <th>Empresa</th>
+                <th>Contacto</th>
+                <th>Precios</th>
+                <th>Solicitud</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {registrations.map(row => {
+                const owner = row.owner || {};
+                const branding = row.branding || {};
+                const prices = branding.prices || {};
+                const expanded = expandedId === row.id;
+                return (
+                  <Fragment key={row.id}>
+                    <tr>
+                      <td>
+                        <strong style={{ color: 'var(--novo-text)' }}>{row.name}</strong>
+                        <br />
+                        <small style={{ color: 'var(--novo-muted)' }}>/{row.slug}</small>
+                      </td>
+                      <td>
+                        {owner.full_name || '—'}
+                        <br />
+                        <small style={{ color: 'var(--novo-muted)' }}>{owner.email || branding.contactEmail || '—'}</small>
+                        {(owner.phone || branding.contactPhone) && (
+                          <>
+                            <br />
+                            <small style={{ color: 'var(--novo-muted)' }}>{owner.phone || branding.contactPhone}</small>
+                          </>
+                        )}
+                      </td>
+                      <td style={{ fontSize: 12 }}>
+                        {prices.basic != null && <div>Básico: ${prices.basic}</div>}
+                        {prices.pro != null && <div>Pro: ${prices.pro}</div>}
+                        {prices.basic == null && prices.pro == null && '—'}
+                      </td>
+                      <td style={{ fontSize: 12, color: 'var(--novo-muted)' }}>{formatDate(row.created_at)}</td>
+                      <td>
+                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                          <button
+                            className="novo-btn novo-btn-primary"
+                            style={{ padding: '4px 10px', fontSize: 11 }}
+                            onClick={() => setExpandedId(expanded ? null : row.id)}
+                            disabled={busy}
+                          >
+                            {expanded ? 'Cerrar' : 'Revisar'}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                    {expanded && (
+                      <tr>
+                        <td colSpan={5} style={{ background: 'rgba(124,58,237,.04)' }}>
+                          <div style={{ padding: '12px 4px' }}>
+                            <div className="novo-grid-2" style={{ marginBottom: 12 }}>
+                              <InfoField label="Plan" value={row.plan_name || 'Partner'} />
+                              <InfoField label="Color marca" value={branding.primaryColor || '—'} />
+                            </div>
+                            <div className="novo-field" style={{ marginBottom: 12 }}>
+                              <label>Nota interna (opcional)</label>
+                              <textarea
+                                rows={2}
+                                value={reviewNote}
+                                onChange={e => setReviewNote(e.target.value)}
+                                placeholder="Motivo de aprobación o rechazo…"
+                                style={{ width: '100%', resize: 'vertical' }}
+                              />
+                            </div>
+                            <div style={{ display: 'flex', gap: 10 }}>
+                              <button
+                                className="novo-btn novo-btn-primary"
+                                onClick={() => review(row.id, 'approve')}
+                                disabled={busy}
+                              >
+                                <Check size={14} /> Aprobar
+                              </button>
+                              <button
+                                className="novo-btn novo-btn-ghost"
+                                onClick={() => review(row.id, 'reject')}
+                                disabled={busy}
+                                style={{ color: 'var(--novo-danger, #ef4444)' }}
+                              >
+                                <XCircle size={14} /> Rechazar
+                              </button>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                );
+              })}
             </tbody>
           </table>
         )}
@@ -289,7 +743,7 @@ function AdminClients() {
   const [notice, setNotice] = useState(null);
   const [busy, setBusy] = useState(false);
   const [search, setSearch] = useState('');
-  const [filters, setFilters] = useState({ partnerId: '', status: '' });
+  const [filters, setFilters] = useState({ partnerId: '', status: '', ghlSyncStatus: '' });
   const [formPartnerId, setFormPartnerId] = useState('');
   const [retryingClientId, setRetryingClientId] = useState(null);
 
@@ -301,6 +755,7 @@ function AdminClients() {
         platformApi.listAllClients({
           partnerId: filters.partnerId || null,
           status: filters.status || null,
+          ghlSyncStatus: filters.ghlSyncStatus || null,
         }),
       ]);
       const rows = partnersData?.partners || [];
@@ -312,7 +767,7 @@ function AdminClients() {
     } finally {
       setLoading(false);
     }
-  }, [filters.partnerId, filters.status]);
+  }, [filters.partnerId, filters.status, filters.ghlSyncStatus]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -401,17 +856,24 @@ function AdminClients() {
       {notice && <Notice {...notice} onClose={() => setNotice(null)} />}
 
       <div className="novo-card" style={{ marginBottom: 16 }}>
-        <div className="novo-grid-3" style={{ marginBottom: 0 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 16 }}>
           <SelectField label="Filtrar por Partner" value={filters.partnerId} onChange={value => setFilters(current => ({ ...current, partnerId: value }))}>
             <option value="">Todos los Partners</option>
             {partners.map(partner => <option key={partner.id} value={partner.id}>{partner.name}</option>)}
           </SelectField>
-          <SelectField label="Estado" value={filters.status} onChange={value => setFilters(current => ({ ...current, status: value }))}>
+          <SelectField label="Estado cliente" value={filters.status} onChange={value => setFilters(current => ({ ...current, status: value }))}>
             <option value="">Todos</option>
             <option value="pending">Pendiente</option>
             <option value="active">Activo</option>
             <option value="inactive">Inactivo</option>
             <option value="cancelled">Cancelado</option>
+          </SelectField>
+          <SelectField label="Estado GHL" value={filters.ghlSyncStatus} onChange={value => setFilters(current => ({ ...current, ghlSyncStatus: value }))}>
+            <option value="">Todos</option>
+            <option value="provisioned">Activo GHL</option>
+            <option value="failed">Fallido</option>
+            <option value="pending_agency">Sin agencia</option>
+            <option value="pending">Pendiente</option>
           </SelectField>
           <div className="novo-field">
             <label>Buscar cliente</label>
@@ -963,7 +1425,6 @@ function AdminSubscriptions() {
    ADMIN PAGOS
 ================================ */
 function AdminPayments() {
-  const [keys, setKeys] = useState({ stripeSecretKey: '', stripeWebhookSecret: '' });
   const [commissions, setCommissions] = useState([]);
   const [partners, setPartners] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -992,12 +1453,6 @@ function AdminPayments() {
 
   useEffect(() => { loadCommissions(); }, [loadCommissions]);
 
-  async function save() {
-    try { setBusy(true); await platformApi.saveIntegrationSettings(keys); setNotice({ type: 'success', text: 'Claves guardadas.' }); }
-    catch (e) { setNotice({ type: 'error', text: e.message }); }
-    finally { setBusy(false); }
-  }
-
   async function markPaid(commission) {
     try {
       setBusy(true);
@@ -1017,7 +1472,7 @@ function AdminPayments() {
 
   return (
     <div className="novo-page">
-      <div className="novo-page-header"><span className="kicker">FINANZAS</span><h1>Pagos y comisiones</h1><p>Comisiones de partners y configuración Stripe.</p></div>
+      <div className="novo-page-header"><span className="kicker">FINANZAS</span><h1>Pagos y comisiones</h1><p>Gestión de comisiones de partners. Las claves Stripe están en Configuración.</p></div>
       {notice && <Notice {...notice} onClose={() => setNotice(null)} />}
 
       <div className="novo-stats" style={{ gridTemplateColumns: 'repeat(3,1fr)' }}>
@@ -1103,13 +1558,136 @@ function AdminPayments() {
         )}
       </div>
 
-      <div className="novo-card">
-        <div className="novo-card-header"><div><div className="novo-card-title">Configuración Stripe</div><div className="novo-card-sub">Claves para procesar pagos</div></div><Badge status="pending" label="Pendiente" /></div>
-        <div className="novo-grid-2">
-          <NField label="Secret key" secret value={keys.stripeSecretKey} onChange={v => setKeys({ ...keys, stripeSecretKey: v })} />
-          <NField label="Webhook secret" secret value={keys.stripeWebhookSecret} onChange={v => setKeys({ ...keys, stripeWebhookSecret: v })} />
+      <div className="novo-card" style={{ marginTop: 16, border: '1px dashed rgba(124,58,237,.25)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <CreditCard size={18} style={{ color: 'var(--novo-purple)', flexShrink: 0 }} />
+          <div>
+            <strong style={{ color: 'var(--novo-text)' }}>Configuración Stripe</strong>
+            <p style={{ margin: '4px 0 0', color: 'var(--novo-muted)', fontSize: 13 }}>
+              Secret key y webhook secret se configuran en Configuración → Stripe.
+            </p>
+          </div>
         </div>
-        <button className="novo-btn novo-btn-primary" onClick={save} disabled={busy}><Save size={14} /> Guardar</button>
+      </div>
+    </div>
+  );
+}
+
+/* ================================
+   ADMIN AUDITORÍA
+================================ */
+function AdminAuditLogs() {
+  const [logs, setLogs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [notice, setNotice] = useState(null);
+  const [filters, setFilters] = useState({ actionPrefix: '', entityType: '' });
+
+  const load = useCallback(async () => {
+    try {
+      setLoading(true);
+      const data = await platformApi.listAuditLogs({
+        actionPrefix: filters.actionPrefix || null,
+        entityType: filters.entityType || null,
+        limit: 100,
+      });
+      setLogs(data?.logs || []);
+    } catch (e) {
+      setNotice({ type: 'error', text: e.message });
+    } finally {
+      setLoading(false);
+    }
+  }, [filters.actionPrefix, filters.entityType]);
+
+  useEffect(() => { load(); }, [load]);
+
+  function formatMetadata(metadata) {
+    if (!metadata || typeof metadata !== 'object') return '—';
+    const parts = [];
+    if (metadata.error) parts.push(String(metadata.error));
+    if (metadata.partnerName) parts.push(`Partner: ${metadata.partnerName}`);
+    if (metadata.email) parts.push(metadata.email);
+    if (metadata.note) parts.push(`Nota: ${metadata.note}`);
+    if (metadata.companyName) parts.push(metadata.companyName);
+    return parts.length > 0 ? parts.join(' · ') : JSON.stringify(metadata);
+  }
+
+  return (
+    <div className="novo-page">
+      <div className="novo-page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div>
+          <span className="kicker">TRAZABILIDAD</span>
+          <h1>Auditoría</h1>
+          <p>Registro de acciones del sistema: partners, GHL, Stripe e integraciones.</p>
+        </div>
+        <button className="novo-btn novo-btn-ghost" onClick={load} disabled={loading}>
+          <RefreshCw size={13} />
+        </button>
+      </div>
+      {notice && <Notice {...notice} onClose={() => setNotice(null)} />}
+
+      <div className="novo-card">
+        <div className="novo-card-header">
+          <div>
+            <div className="novo-card-title">Eventos recientes</div>
+            <div className="novo-card-sub">Últimos 100 registros según filtros</div>
+          </div>
+        </div>
+        <div className="novo-grid-2" style={{ marginBottom: 16 }}>
+          <SelectField
+            label="Tipo de acción"
+            value={filters.actionPrefix}
+            onChange={value => setFilters(current => ({ ...current, actionPrefix: value }))}
+          >
+            <option value="">Todas</option>
+            <option value="partner.">Partners</option>
+            <option value="ghl.">GHL</option>
+            <option value="stripe.">Stripe</option>
+            <option value="integrations.">Integraciones</option>
+          </SelectField>
+          <SelectField
+            label="Entidad"
+            value={filters.entityType}
+            onChange={value => setFilters(current => ({ ...current, entityType: value }))}
+          >
+            <option value="">Todas</option>
+            <option value="partner">Partner</option>
+            <option value="client">Cliente</option>
+            <option value="platform">Plataforma</option>
+            <option value="subscription">Suscripción</option>
+          </SelectField>
+        </div>
+        {loading && <div className="novo-empty">Cargando…</div>}
+        {!loading && logs.length === 0 && <div className="novo-empty">No hay eventos con estos filtros.</div>}
+        {!loading && logs.length > 0 && (
+          <table className="novo-table">
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th>Acción</th>
+                <th>Entidad</th>
+                <th>Detalle</th>
+              </tr>
+            </thead>
+            <tbody>
+              {logs.map(row => (
+                <tr key={row.id}>
+                  <td style={{ fontSize: 12, color: 'var(--novo-muted)', whiteSpace: 'nowrap' }}>{formatDate(row.created_at)}</td>
+                  <td><code style={{ fontSize: 11 }}>{row.action}</code></td>
+                  <td style={{ fontSize: 12 }}>
+                    {row.entity_type || '—'}
+                    {row.entity_id && (
+                      <>
+                        <br />
+                        <small style={{ color: 'var(--novo-muted)' }}>{String(row.entity_id).slice(0, 8)}…</small>
+                      </>
+                    )}
+                  </td>
+                  <td style={{ fontSize: 12, color: 'var(--novo-muted)', maxWidth: 360 }}>{formatMetadata(row.metadata)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
     </div>
   );
@@ -1130,45 +1708,142 @@ function AdminSettings() {
     ghlLocationId: '',
     ghlUserType: '',
     ghlConnectedAt: '',
+    ghlSaasEnabled: false,
+    ghlSaasV2: true,
+    ghlDefaultTimezone: 'America/New_York',
+    ghlDefaultSaasPlanId: '',
+    ghlDefaultSaasPriceId: '',
+    stripePublishableKey: '',
+    stripePriceMode: 'test',
     stripeSecretKey: '',
     stripeWebhookSecret: '',
-    supabaseServiceRoleKey: '',
+    publicAppUrl: typeof window !== 'undefined' ? window.location.origin : '',
     webhookBaseUrl: '',
+    superAdminEmails: '',
+    emailTransport: 'api',
+    emailProvider: 'resend',
+    emailApiProvider: 'resend',
+    emailSmtpHost: 'smtp.resend.com',
+    emailSmtpPort: '587',
+    emailSmtpEncryption: 'starttls',
+    emailSmtpUser: '',
+    emailSmtpPassword: '',
+    emailApiKey: '',
+    emailFromEmail: '',
+    emailFromName: 'NOVO',
+    emailReplyTo: '',
+    emailMailgunDomain: '',
+    emailSesRegion: 'us-east-1',
+    emailTestTo: '',
   });
+  const [health, setHealth] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState(null);
+  const [secretsLoaded, setSecretsLoaded] = useState({
+    ghlClientSecret: false,
+    stripeSecretKey: false,
+    stripeWebhookSecret: false,
+    emailSmtpPassword: false,
+    emailApiKey: false,
+  });
 
-  useEffect(() => {
-    platformApi.getIntegrationSettings()
-      .then((data) => {
-        const saved = data?.settings;
-        if (!saved) return;
+  const loadSettings = useCallback(async () => {
+    try {
+      setLoading(true);
+      const [settingsData, healthData] = await Promise.all([
+        platformApi.getIntegrationSettings(),
+        platformApi.getAdminSystemHealth().catch(() => null),
+      ]);
+      const saved = settingsData?.settings;
+      if (saved) {
         setSettings(current => ({
           ...current,
           ghlClientId: saved.ghlClientId || current.ghlClientId,
           ghlRedirectUri: saved.ghlRedirectUri || current.ghlRedirectUri,
           ghlScopes: saved.ghlScopes || current.ghlScopes,
-          ghlClientSecret: saved.ghlClientSecret || current.ghlClientSecret,
-          stripeSecretKey: saved.stripeSecretKey || current.stripeSecretKey,
-          stripeWebhookSecret: saved.stripeWebhookSecret || current.stripeWebhookSecret,
-          supabaseServiceRoleKey: saved.supabaseServiceRoleKey || current.supabaseServiceRoleKey,
+          ghlClientSecret: saved.ghlClientSecret || '',
           webhookBaseUrl: saved.webhookBaseUrl || current.webhookBaseUrl,
           ghlCompanyId: saved.ghlCompanyId || '',
           ghlLocationId: saved.ghlLocationId || '',
           ghlUserType: saved.ghlUserType || '',
           ghlConnectedAt: saved.ghlConnectedAt || '',
+          ghlSaasEnabled: saved.ghlSaasEnabled === true,
+          ghlSaasV2: saved.ghlSaasV2 !== false,
+          ghlDefaultTimezone: saved.ghlDefaultTimezone || 'America/New_York',
+          ghlDefaultSaasPlanId: saved.ghlDefaultSaasPlanId || '',
+          ghlDefaultSaasPriceId: saved.ghlDefaultSaasPriceId || '',
+          stripePublishableKey: saved.stripePublishableKey || '',
+          stripePriceMode: saved.stripePriceMode || 'test',
+          stripeSecretKey: saved.stripeSecretKey || '',
+          stripeWebhookSecret: saved.stripeWebhookSecret || '',
+          publicAppUrl: saved.publicAppUrl || current.publicAppUrl,
+          webhookBaseUrl: saved.webhookBaseUrl || current.webhookBaseUrl,
+          superAdminEmails: saved.superAdminEmails || '',
+          emailTransport: saved.emailTransport || 'api',
+          emailProvider: saved.emailProvider || 'resend',
+          emailApiProvider: saved.emailApiProvider || 'resend',
+          emailSmtpHost: saved.emailSmtpHost || '',
+          emailSmtpPort: saved.emailSmtpPort || '587',
+          emailSmtpEncryption: saved.emailSmtpEncryption || 'starttls',
+          emailSmtpUser: saved.emailSmtpUser || '',
+          emailSmtpPassword: saved.emailSmtpPassword || '',
+          emailApiKey: saved.emailApiKey || '',
+          emailFromEmail: saved.emailFromEmail || '',
+          emailFromName: saved.emailFromName || 'NOVO',
+          emailReplyTo: saved.emailReplyTo || '',
+          emailMailgunDomain: saved.emailMailgunDomain || '',
+          emailSesRegion: saved.emailSesRegion || 'us-east-1',
         }));
-      })
-      .catch(() => {});
+        setSecretsLoaded({
+          ghlClientSecret: Boolean(saved.ghlClientSecret),
+          stripeSecretKey: Boolean(saved.stripeSecretKey),
+          stripeWebhookSecret: Boolean(saved.stripeWebhookSecret),
+          emailSmtpPassword: Boolean(saved.emailSmtpPassword),
+          emailApiKey: Boolean(saved.emailApiKey),
+        });
+      }
+      setHealth(healthData);
+    } catch (e) {
+      setNotice({ type: 'error', text: e.message });
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
+  useEffect(() => { loadSettings(); }, [loadSettings]);
+
   async function save() {
-    try { setBusy(true); await platformApi.saveIntegrationSettings(settings); setNotice({ type: 'success', text: 'Configuración guardada.' }); }
+    try {
+      setBusy(true);
+      await platformApi.saveIntegrationSettings(settings);
+      setNotice({ type: 'success', text: 'Configuración guardada.' });
+      await loadSettings();
+    }
     catch (e) { setNotice({ type: 'error', text: e.message }); }
     finally { setBusy(false); }
   }
 
+  async function syncGhl() {
+    try {
+      setBusy(true);
+      const data = await platformApi.syncGhlLocations();
+      setNotice({
+        type: 'success',
+        text: `Sync GHL completado: ${data?.count ?? 0} location(s) procesadas.`,
+      });
+    } catch (e) {
+      setNotice({ type: 'error', text: e.message });
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function connectGhl() {
+    if (!settings.ghlClientId?.trim()) {
+      setNotice({ type: 'error', text: 'Completa Client ID de la app GHL Marketplace.' });
+      return;
+    }
     if (!settings.ghlRedirectUri?.trim()) {
       setNotice({ type: 'error', text: 'Completa Redirect URI (ej. http://localhost:5173/).' });
       return;
@@ -1190,7 +1865,7 @@ function AdminSettings() {
       if (!String(data.requestedScopes || []).includes('locations.write')) {
         setNotice({
           type: 'error',
-          text: 'OAuth no incluye locations.write. Actualiza el secret GHL_SCOPES en Supabase y vuelve a conectar.',
+          text: 'OAuth no incluye locations.write. Completa Scopes en este panel, guarda y vuelve a conectar.',
         });
         setBusy(false);
         return;
@@ -1199,60 +1874,421 @@ function AdminSettings() {
     } catch (e) { setNotice({ type: 'error', text: e.message }); setBusy(false); }
   }
 
-  const tabs = [['ghl','HighLevel',PlugZap],['stripe','Stripe',CreditCard],['supabase','Supabase',ShieldCheck],['webhooks','Webhooks',Webhook],['security','Seguridad',KeyRound]];
+  async function sendTestEmail() {
+    try {
+      setBusy(true);
+      await platformApi.saveIntegrationSettings(settings);
+      await platformApi.sendTestEmail(settings.emailTestTo?.trim() || null);
+      setNotice({ type: 'success', text: `Correo de prueba enviado${settings.emailTestTo ? ` a ${settings.emailTestTo}` : ''}.` });
+    } catch (e) {
+      setNotice({ type: 'error', text: e.message });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function applyEmailProvider(providerId) {
+    const preset = EMAIL_PROVIDER_PRESETS[providerId] || EMAIL_PROVIDER_PRESETS.custom;
+    setSettings(current => ({
+      ...current,
+      emailProvider: providerId,
+      emailTransport: preset.transport,
+      emailApiProvider: preset.apiProvider,
+      emailSmtpHost: preset.smtpHost,
+      emailSmtpPort: preset.smtpPort,
+      emailSmtpEncryption: preset.smtpEncryption,
+      ...(preset.sesRegion ? { emailSesRegion: preset.sesRegion } : {}),
+    }));
+  }
+
+  const ghlConnected = Boolean(health?.ghl?.connected || settings.ghlCompanyId);
+  const ghlProvisionReady = Boolean(health?.ghl?.provisionReady);
+  const stripeConfigured = Boolean(
+    (health?.stripe?.configured && health?.stripe?.publishableConfigured)
+    || (secretsLoaded.stripeSecretKey && settings.stripePublishableKey),
+  );
+  const stripePublishableConfigured = Boolean(
+    settings.stripePublishableKey?.startsWith('pk_')
+    || health?.stripe?.publishableConfigured,
+  );
+  const stripeWebhookConfigured = Boolean(secretsLoaded.stripeWebhookSecret);
+  const superAdminConfigured = Boolean(
+    settings.superAdminEmails?.split(/[,;\n]+/).map(e => e.trim()).filter(Boolean).length,
+  );
+  const emailConfigured = Boolean(
+    settings.emailFromEmail
+    && (
+      (settings.emailTransport === 'api' && (secretsLoaded.emailApiKey || settings.emailApiKey))
+      || (settings.emailTransport === 'smtp'
+        && settings.emailSmtpHost
+        && settings.emailSmtpUser
+        && (secretsLoaded.emailSmtpPassword || settings.emailSmtpPassword))
+    ),
+  );
+
+  const tabs = [['ghl','HighLevel',PlugZap],['stripe','Stripe',CreditCard],['email','Correo',Mail],['webhooks','App y Webhooks',Webhook],['security','Seguridad',KeyRound]];
 
   return (
     <div className="novo-page">
       <div className="novo-page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div><span className="kicker">SISTEMA</span><h1>Configuración</h1><p>Conexiones, integraciones y seguridad.</p></div>
         <div style={{ display: 'flex', gap: 10 }}>
-          <button className="novo-btn novo-btn-secondary" onClick={() => platformApi.syncGhlLocations().catch(()=>{})} disabled={busy}><RefreshCw size={14} /> Sync GHL</button>
-          <button className="novo-btn novo-btn-primary" onClick={save} disabled={busy}><Save size={14} /> Guardar todo</button>
+          <button className="novo-btn novo-btn-secondary" onClick={syncGhl} disabled={busy || loading || !ghlConnected}><RefreshCw size={14} /> Sync GHL</button>
+          <button className="novo-btn novo-btn-primary" onClick={save} disabled={busy || loading}><Save size={14} /> Guardar todo</button>
         </div>
       </div>
       {notice && <Notice {...notice} onClose={() => setNotice(null)} />}
+      {loading && <div className="novo-empty" style={{ marginBottom: 16 }}>Cargando configuración…</div>}
       <div className="pc-tabs" style={{ marginBottom: 20 }}>
         {tabs.map(([id,label,Icon]) => <button key={id} className={tab===id?'active':''} onClick={()=>setTab(id)}><Icon size={13}/> {label}</button>)}
       </div>
       {tab==='ghl' && (
-        <div className="novo-card">
-          <div className="novo-card-header"><div><div className="novo-card-title">HighLevel OAuth</div><div className="novo-card-sub">Conexión principal con GoHighLevel</div></div><button className="novo-btn novo-btn-primary" onClick={connectGhl} disabled={busy}><PlugZap size={14}/> Conectar OAuth</button></div>
-          <div className="novo-grid-2">
-            <NField label="Client ID" value={settings.ghlClientId} onChange={v=>setSettings({...settings,ghlClientId:v})} placeholder="6a6b6070...-ms7m9fh5 (desde GHL Marketplace)" />
-            <NField label="Client Secret" secret value={settings.ghlClientSecret} onChange={v=>setSettings({...settings,ghlClientSecret:v})} />
-            <NField label="Redirect URI" value={settings.ghlRedirectUri} onChange={v=>setSettings({...settings,ghlRedirectUri:v})} placeholder="http://localhost:5173/" />
-            <NField label="Scopes" value={settings.ghlScopes} onChange={v=>setSettings({...settings,ghlScopes:v})} />
-          </div>
-          <p style={{ color: 'var(--novo-muted)', fontSize: 12, margin: '0 0 16px' }}>
-            Debe incluir <code>locations.write</code>. Al conectar OAuth se combinan estos scopes con el secret <code>GHL_SCOPES</code> de Supabase.
-            {settings.ghlCompanyId && (
-              <> Agencia conectada: <code>{settings.ghlCompanyId}</code>{settings.ghlUserType ? ` (${settings.ghlUserType})` : ''}.</>
+        <>
+          <div className="novo-card" style={{ marginBottom: 16 }}>
+            <div className="novo-card-header">
+              <div><div className="novo-card-title">Estado GHL</div><div className="novo-card-sub">Conexión activa y scopes del token</div></div>
+              <Badge
+                status={ghlProvisionReady ? 'active' : ghlConnected ? 'pending' : 'inactive'}
+                label={ghlProvisionReady ? 'Listo' : ghlConnected ? 'Conectado (sin write)' : 'Desconectado'}
+              />
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+              <InfoField label="Agencia" value={settings.ghlCompanyId || health?.ghl?.companyId || '—'} />
+              <InfoField label="Tipo" value={settings.ghlUserType || '—'} />
+              <InfoField label="Conectado" value={settings.ghlConnectedAt ? formatDate(settings.ghlConnectedAt) : '—'} />
+            </div>
+            {ghlConnected && !ghlProvisionReady && (
+              <p style={{ color: 'var(--novo-warning, #f59e0b)', fontSize: 13, margin: '12px 0 0' }}>
+                El token no incluye <code>locations.write</code>. Reconecta OAuth con los scopes correctos.
+              </p>
             )}
-          </p>
-        </div>
+          </div>
+          <div className="novo-card">
+            <div className="novo-card-header"><div><div className="novo-card-title">HighLevel OAuth</div><div className="novo-card-sub">Credenciales guardadas en plataforma (OAuth las usa al conectar)</div></div><button className="novo-btn novo-btn-primary" onClick={connectGhl} disabled={busy || loading}><PlugZap size={14}/> Conectar OAuth</button></div>
+            <div className="novo-grid-2">
+              <NField label="Client ID" value={settings.ghlClientId} onChange={v=>setSettings({...settings,ghlClientId:v})} placeholder="6a6b6070...-ms7m9fh5 (desde GHL Marketplace)" />
+              <NField label="Client Secret" secret value={settings.ghlClientSecret} onChange={v=>setSettings({...settings,ghlClientSecret:v})} placeholder={secretsLoaded.ghlClientSecret ? '•••••••• (dejar vacío para mantener)' : ''} />
+              <NField label="Redirect URI" value={settings.ghlRedirectUri} onChange={v=>setSettings({...settings,ghlRedirectUri:v})} placeholder="http://localhost:5173/" />
+              <NField label="Scopes" value={settings.ghlScopes} onChange={v=>setSettings({...settings,ghlScopes:v})} />
+            </div>
+            <p style={{ color: 'var(--novo-muted)', fontSize: 12, margin: '0 0 16px' }}>
+              Debe incluir <code>locations.write</code>. OAuth usa <strong>solo estos scopes del panel</strong> (fallback: secret <code>GHL_SCOPES</code> en Supabase si el campo está vacío).
+            </p>
+          </div>
+          <div className="novo-card" style={{ marginTop: 16 }}>
+            <div className="novo-card-header">
+              <div><div className="novo-card-title">Provisioning SaaS</div><div className="novo-card-sub">Control de activación GHL al registrar clientes</div></div>
+              <Badge status={settings.ghlSaasEnabled ? 'active' : 'pending'} label={settings.ghlSaasEnabled ? 'SaaS activo' : 'Solo location'} />
+            </div>
+            <div className="novo-grid-2" style={{ marginBottom: 16 }}>
+              <label className="novo-field" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <input
+                  type="checkbox"
+                  checked={settings.ghlSaasEnabled}
+                  onChange={e => setSettings({ ...settings, ghlSaasEnabled: e.target.checked })}
+                />
+                <span>Activar SaaS al provisionar (<code>GHL_SAAS_ENABLED</code>)</span>
+              </label>
+              <label className="novo-field" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <input
+                  type="checkbox"
+                  checked={settings.ghlSaasV2}
+                  onChange={e => setSettings({ ...settings, ghlSaasV2: e.target.checked })}
+                />
+                <span>Usar API SaaS v2 (<code>GHL_SAAS_V2</code>)</span>
+              </label>
+            </div>
+            <div className="novo-grid-2">
+              <SelectField
+                label="Timezone default (GHL_DEFAULT_TIMEZONE)"
+                value={settings.ghlDefaultTimezone}
+                onChange={value => setSettings(current => ({ ...current, ghlDefaultTimezone: value }))}
+              >
+                <option value="America/New_York">America/New_York (EST)</option>
+                <option value="America/Bogota">America/Bogota (COT)</option>
+                <option value="America/Mexico_City">America/Mexico_City (CST)</option>
+                <option value="America/Lima">America/Lima (PET)</option>
+                <option value="America/Santiago">America/Santiago (CLT)</option>
+                <option value="UTC">UTC</option>
+              </SelectField>
+              <NField
+                label="Plan GHL fallback (GHL_DEFAULT_SAAS_PLAN_ID)"
+                value={settings.ghlDefaultSaasPlanId}
+                onChange={v => setSettings({ ...settings, ghlDefaultSaasPlanId: v })}
+                placeholder="Opcional — preferir Productos → GHL Plan ID"
+              />
+              <NField
+                label="Price GHL fallback (GHL_DEFAULT_SAAS_PRICE_ID)"
+                value={settings.ghlDefaultSaasPriceId}
+                onChange={v => setSettings({ ...settings, ghlDefaultSaasPriceId: v })}
+                placeholder="Opcional — preferir ofertas partner"
+              />
+            </div>
+          </div>
+        </>
       )}
       {tab==='stripe' && (
         <div className="novo-card">
-          <div className="novo-card-header"><div><div className="novo-card-title">Stripe</div></div><Badge status="pending" label="Pendiente"/></div>
+          <div className="novo-card-header">
+            <div><div className="novo-card-title">Stripe</div><div className="novo-card-sub">Toda la configuración Stripe centralizada aquí</div></div>
+            <Badge
+              status={stripeConfigured ? 'active' : 'pending'}
+              label={stripeConfigured ? 'Listo' : 'Pendiente'}
+            />
+          </div>
+          <div className="novo-grid-2" style={{ marginBottom: 16 }}>
+            <SelectField
+              label="Modo"
+              value={settings.stripePriceMode}
+              onChange={value => setSettings(current => ({ ...current, stripePriceMode: value }))}
+            >
+              <option value="test">Test (pk_test_ / sk_test_)</option>
+              <option value="live">Live (pk_live_ / sk_live_)</option>
+            </SelectField>
+            <InfoField
+              label="Estado"
+              value={
+                stripeConfigured
+                  ? `Configurado (${settings.stripePriceMode === 'live' ? 'producción' : 'test'})`
+                  : 'Faltan claves por configurar'
+              }
+            />
+          </div>
           <div className="novo-grid-2">
-            <NField label="Secret key" secret value={settings.stripeSecretKey} onChange={v=>setSettings({...settings,stripeSecretKey:v})} />
-            <NField label="Webhook secret" secret value={settings.stripeWebhookSecret} onChange={v=>setSettings({...settings,stripeWebhookSecret:v})} />
+            <NField
+              label="Publishable key (STRIPE_PUBLISHABLE_KEY)"
+              value={settings.stripePublishableKey}
+              onChange={v=>setSettings({...settings,stripePublishableKey:v.trim()})}
+              placeholder="pk_test_... o pk_live_..."
+            />
+            <NField
+              label="Secret key (STRIPE_SECRET_KEY)"
+              secret
+              value={settings.stripeSecretKey}
+              onChange={v=>setSettings({...settings,stripeSecretKey:v})}
+              placeholder={secretsLoaded.stripeSecretKey ? '•••••••• (dejar vacío para mantener)' : 'sk_test_... o sk_live_...'}
+            />
+            <NField
+              label="Webhook secret (STRIPE_WEBHOOK_SECRET)"
+              secret
+              value={settings.stripeWebhookSecret}
+              onChange={v=>setSettings({...settings,stripeWebhookSecret:v})}
+              placeholder={secretsLoaded.stripeWebhookSecret ? '•••••••• (dejar vacío para mantener)' : 'whsec_...'}
+            />
+          </div>
+          <div style={{ marginTop: 12, fontSize: 12, color: 'var(--novo-muted)', lineHeight: 1.6 }}>
+            <p style={{ margin: '0 0 8px' }}>
+              <strong style={{ color: 'var(--novo-text)' }}>Dónde obtenerlas en Stripe Dashboard → Developers:</strong>
+            </p>
+            <ul style={{ margin: 0, paddingLeft: 18 }}>
+              <li><strong>Publishable + Secret key</strong> → API keys</li>
+              <li><strong>Webhook secret</strong> → Webhooks → endpoint → Signing secret</li>
+            </ul>
+            <p style={{ margin: '12px 0 0' }}>
+              Webhook endpoint: <code>{settings.webhookBaseUrl || 'https://TU-PROYECTO.supabase.co/functions/v1'}/stripe-webhook</code>
+            </p>
+            <p style={{ margin: '8px 0 0' }}>
+              El checkout embebido usa la <strong>Publishable key</strong> desde aquí. Las Edge Functions usan Secret + Webhook secret. Guarda y pulsa <strong>Guardar todo</strong>.
+            </p>
           </div>
         </div>
       )}
-      {tab==='supabase' && (<div className="novo-card"><div className="novo-card-header"><div className="novo-card-title">Supabase</div></div><NField label="Service role key" secret value={settings.supabaseServiceRoleKey} onChange={v=>setSettings({...settings,supabaseServiceRoleKey:v})} /></div>)}
-      {tab==='webhooks' && (<div className="novo-card"><div className="novo-card-header"><div className="novo-card-title">Webhooks</div></div><NField label="Webhook base URL" value={settings.webhookBaseUrl} onChange={v=>setSettings({...settings,webhookBaseUrl:v})} /></div>)}
-      {tab==='security' && (
+      {tab==='email' && (
         <div className="novo-card">
-          <div className="novo-card-header"><div className="novo-card-title">Checklist de seguridad</div></div>
-          {[['Supabase Auth con roles',true],['RLS en todas las tablas',true],['Secretos en Edge Functions',true],['OAuth con refresh token',true],['Webhooks con firma Ed25519',true],['Variables de entorno en Netlify',false],['Stripe webhook conectado',false],['GHL OAuth configurado',false]].map(([label,ok])=>(
-            <div key={label} className="status-row">
-              {ok?<CheckCircle2 size={15} style={{color:'var(--novo-success)',flexShrink:0}}/>:<AlertCircle size={15} style={{color:'var(--novo-warning)',flexShrink:0}}/>}
-              <span style={{fontSize:13}}>{label}</span>
-              <Badge status={ok?'active':'pending'} label={ok?'OK':'Pendiente'} />
+          <div className="novo-card-header">
+            <div>
+              <div className="novo-card-title">Correo transaccional</div>
+              <div className="novo-card-sub">Notificaciones, bienvenidas y alertas del sistema</div>
             </div>
-          ))}
+            <Badge status={emailConfigured ? 'active' : 'pending'} label={emailConfigured ? 'Listo' : 'Pendiente'} />
+          </div>
+
+          <div className="novo-grid-2" style={{ marginBottom: 16 }}>
+            <SelectField
+              label="Proveedor (preset)"
+              value={settings.emailProvider}
+              onChange={value => applyEmailProvider(value)}
+            >
+              {Object.entries(EMAIL_PROVIDER_PRESETS).map(([id, preset]) => (
+                <option key={id} value={id}>{preset.label}</option>
+              ))}
+            </SelectField>
+            <SelectField
+              label="Protocolo / transporte"
+              value={settings.emailTransport}
+              onChange={value => setSettings(current => ({ ...current, emailTransport: value }))}
+            >
+              {EMAIL_TRANSPORT_OPTIONS.map(option => (
+                <option key={option.id} value={option.id}>{option.label}</option>
+              ))}
+            </SelectField>
+          </div>
+
+          <p style={{ margin: '0 0 16px', color: 'var(--novo-muted)', fontSize: 12, lineHeight: 1.6 }}>
+            {EMAIL_TRANSPORT_OPTIONS.find(option => option.id === settings.emailTransport)?.hint}
+            {' '}En Supabase Edge Functions, <strong>API HTTP</strong> (Resend, SendGrid, Mailgun, Postmark) suele ser más fiable que SMTP.
+          </p>
+
+          <div className="novo-grid-2" style={{ marginBottom: 16 }}>
+            <NField label="Remitente (From email)" value={settings.emailFromEmail} onChange={v => setSettings({ ...settings, emailFromEmail: v.trim() })} placeholder="noreply@tudominio.com" />
+            <NField label="Nombre remitente" value={settings.emailFromName} onChange={v => setSettings({ ...settings, emailFromName: v })} placeholder="NOVO" />
+            <NField label="Reply-To (opcional)" value={settings.emailReplyTo} onChange={v => setSettings({ ...settings, emailReplyTo: v.trim() })} placeholder="soporte@tudominio.com" />
+          </div>
+
+          {settings.emailTransport === 'api' && (
+            <div className="novo-grid-2" style={{ marginBottom: 16 }}>
+              <SelectField
+                label="API provider"
+                value={settings.emailApiProvider}
+                onChange={value => setSettings(current => ({ ...current, emailApiProvider: value }))}
+              >
+                {EMAIL_API_PROVIDERS.map(provider => (
+                  <option key={provider.id} value={provider.id}>{provider.label}</option>
+                ))}
+              </SelectField>
+              <NField
+                label="API Key"
+                secret
+                value={settings.emailApiKey}
+                onChange={v => setSettings({ ...settings, emailApiKey: v })}
+                placeholder={secretsLoaded.emailApiKey ? '•••••••• (dejar vacío para mantener)' : 're_... / SG....'}
+              />
+              {settings.emailApiProvider === 'mailgun' && (
+                <NField
+                  label="Mailgun domain"
+                  value={settings.emailMailgunDomain}
+                  onChange={v => setSettings({ ...settings, emailMailgunDomain: v.trim() })}
+                  placeholder="mg.tudominio.com"
+                />
+              )}
+            </div>
+          )}
+
+          {settings.emailTransport === 'smtp' && (
+            <div className="novo-grid-2" style={{ marginBottom: 16 }}>
+              <NField label="SMTP Host" value={settings.emailSmtpHost} onChange={v => setSettings({ ...settings, emailSmtpHost: v.trim() })} placeholder="smtp.resend.com" />
+              <NField label="SMTP Port" value={settings.emailSmtpPort} onChange={v => setSettings({ ...settings, emailSmtpPort: v.trim() })} placeholder="587" />
+              <SelectField
+                label="Cifrado"
+                value={settings.emailSmtpEncryption}
+                onChange={value => setSettings(current => ({ ...current, emailSmtpEncryption: value }))}
+              >
+                {EMAIL_ENCRYPTION_OPTIONS.map(option => (
+                  <option key={option.id} value={option.id}>{option.label}</option>
+                ))}
+              </SelectField>
+              <NField label="SMTP User" value={settings.emailSmtpUser} onChange={v => setSettings({ ...settings, emailSmtpUser: v })} placeholder="apikey o usuario SMTP" />
+              <NField
+                label="SMTP Password"
+                secret
+                value={settings.emailSmtpPassword}
+                onChange={v => setSettings({ ...settings, emailSmtpPassword: v })}
+                placeholder={secretsLoaded.emailSmtpPassword ? '•••••••• (dejar vacío para mantener)' : 'Contraseña o API key SMTP'}
+              />
+              {settings.emailProvider === 'ses' && (
+                <NField label="Región SES" value={settings.emailSesRegion} onChange={v => setSettings({ ...settings, emailSesRegion: v })} placeholder="us-east-1" />
+              )}
+            </div>
+          )}
+
+          <div style={{ marginTop: 12, fontSize: 12, color: 'var(--novo-muted)', lineHeight: 1.6, marginBottom: 16 }}>
+            <p style={{ margin: '0 0 8px' }}><strong style={{ color: 'var(--novo-text)' }}>Protocolos recomendados:</strong></p>
+            <ul style={{ margin: 0, paddingLeft: 18 }}>
+              <li><strong>API HTTP</strong> — Resend, SendGrid, Mailgun, Postmark (mejor en serverless)</li>
+              <li><strong>SMTP + STARTTLS</strong> — puerto <code>587</code> (estándar más usado)</li>
+              <li><strong>SMTP + SSL</strong> — puerto <code>465</code> (legacy, aún soportado)</li>
+              <li><strong>Evitar puerto 25</strong> — suele estar bloqueado en cloud/serverless</li>
+            </ul>
+          </div>
+
+          <div className="novo-grid-2" style={{ alignItems: 'end' }}>
+            <NField
+              label="Enviar prueba a"
+              value={settings.emailTestTo}
+              onChange={v => setSettings({ ...settings, emailTestTo: v.trim() })}
+              placeholder="tu@email.com (vacío = tu usuario admin)"
+            />
+            <button type="button" className="novo-btn novo-btn-secondary" onClick={sendTestEmail} disabled={busy || loading}>
+              <Mail size={14} /> Enviar correo de prueba
+            </button>
+          </div>
         </div>
+      )}
+      {tab==='webhooks' && (
+        <div className="novo-card">
+          <div className="novo-card-header">
+            <div><div className="novo-card-title">App y Webhooks</div><div className="novo-card-sub">URLs públicas para checkout y endpoints de functions</div></div>
+          </div>
+          <div className="novo-grid-2">
+            <NField
+              label="App URL (PUBLIC_APP_URL)"
+              value={settings.publicAppUrl}
+              onChange={v=>setSettings({...settings,publicAppUrl:v.trim().replace(/\/$/, '')})}
+              placeholder="http://localhost:5173 o https://app.tudominio.com"
+            />
+            <NField
+              label="Functions base URL"
+              value={settings.webhookBaseUrl}
+              onChange={v=>setSettings({...settings,webhookBaseUrl:v.trim().replace(/\/$/, '')})}
+              placeholder="https://tu-proyecto.supabase.co/functions/v1"
+            />
+          </div>
+          <div style={{ marginTop: 12, fontSize: 12, color: 'var(--novo-muted)', lineHeight: 1.6 }}>
+            <p style={{ margin: '0 0 8px' }}><strong style={{ color: 'var(--novo-text)' }}>Preview de URLs generadas:</strong></p>
+            <ul style={{ margin: 0, paddingLeft: 18 }}>
+              <li>Checkout partner: <code>{settings.publicAppUrl || '…'}/#p/&#123;slug&#125;/checkout/&#123;productId&#125;</code></li>
+              <li>Stripe webhook: <code>{settings.webhookBaseUrl || '…'}/stripe-webhook</code></li>
+            </ul>
+          </div>
+        </div>
+      )}
+      {tab==='security' && (
+        <>
+          <div className="novo-card" style={{ marginBottom: 16 }}>
+            <div className="novo-card-header">
+              <div>
+                <div className="novo-card-title">Super Admin allowlist</div>
+                <div className="novo-card-sub">Emails que reciben rol super_admin al iniciar sesión con GHL</div>
+              </div>
+              <Badge status={superAdminConfigured ? 'active' : 'pending'} label={superAdminConfigured ? 'Configurado' : 'Vacío'} />
+            </div>
+            <NField
+              label="Emails super admin (GHL_SUPER_ADMIN_EMAILS)"
+              value={settings.superAdminEmails}
+              onChange={v => setSettings({ ...settings, superAdminEmails: v })}
+              placeholder="tu@email.com, otro@empresa.com"
+            />
+            <p style={{ color: 'var(--novo-muted)', fontSize: 12, margin: '12px 0 0', lineHeight: 1.6 }}>
+              Separa con comas, punto y coma o saltos de línea. OAuth GHL y <code>syncRole</code> usan
+              {' '}<strong>primero este campo del panel</strong>; si está vacío, caen al secret{' '}
+              <code>GHL_SUPER_ADMIN_EMAILS</code> en Supabase. Guarda y vuelve a iniciar sesión con GHL para aplicar.
+            </p>
+          </div>
+          <div className="novo-card">
+            <div className="novo-card-header"><div className="novo-card-title">Checklist de seguridad</div></div>
+            {[
+              ['Supabase Auth con roles', true],
+              ['RLS en todas las tablas', true],
+              ['Secretos en Edge Functions', true],
+              ['OAuth con refresh token', ghlConnected],
+              ['Webhooks con firma Ed25519', true],
+              ['GHL OAuth configurado', ghlConnected],
+              ['GHL provisioning (locations.write)', ghlProvisionReady],
+              ['GHL SaaS provisioning', settings.ghlSaasEnabled],
+              ['App URL configurada', Boolean(settings.publicAppUrl)],
+              ['Super admin allowlist', superAdminConfigured],
+              ['Correo transaccional', emailConfigured],
+              ['Stripe publishable key', stripePublishableConfigured],
+              ['Stripe secret + webhook', stripeConfigured && stripeWebhookConfigured],
+            ].map(([label, ok])=>(
+              <div key={label} className="status-row">
+                {ok?<CheckCircle2 size={15} style={{color:'var(--novo-success)',flexShrink:0}}/>:<AlertCircle size={15} style={{color:'var(--novo-warning)',flexShrink:0}}/>}
+                <span style={{fontSize:13}}>{label}</span>
+                <Badge status={ok?'active':'pending'} label={ok?'OK':'Pendiente'} />
+              </div>
+            ))}
+          </div>
+        </>
       )}
     </div>
   );
@@ -1349,10 +2385,10 @@ export function PartnerConsole({ section, onNavigate, linkProductPreset, onClear
     );
   }
   if (section === 'commissions') return <PartnerCommissions />;
-  if (section === 'resources') return <PartnerResources />;
+  if (section === 'partner-center' || section === 'partner-registration') return <PartnerRegistrationEmbed />;
   if (section === 'brand')     return null;
   if (section === 'support')   return <PartnerSupport />;
-  return <PartnerDashboard />;
+  return <PartnerRegistrationEmbed />;
 }
 
 /* ================================
@@ -2821,11 +3857,11 @@ function SectionLabel({ icon: Icon, label }) {
   );
 }
 
-function NField({ label, value = '', onChange, secret = false, type = 'text' }) {
+function NField({ label, value = '', onChange, secret = false, type = 'text', placeholder = '' }) {
   return (
     <div className="novo-field">
       <label>{label}</label>
-      <input type={secret ? 'password' : type} value={value} onChange={e => onChange?.(e.target.value)} autoComplete="off" />
+      <input type={secret ? 'password' : type} value={value} placeholder={placeholder} onChange={e => onChange?.(e.target.value)} autoComplete="off" />
     </div>
   );
 }
@@ -2837,6 +3873,10 @@ function Info({ label, value }) {
       <div style={{ fontSize: 13, color: 'var(--novo-text)', fontWeight: 500 }}>{String(value)}</div>
     </div>
   );
+}
+
+function InfoField(props) {
+  return Info(props);
 }
 
 function Badge({ status, label }) {

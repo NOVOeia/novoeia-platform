@@ -1,3 +1,5 @@
+import { adminClient, loadStripeConfig } from './core.ts';
+
 type CheckoutSessionParams = {
   stripeProductId: string;
   interval: 'month' | 'year';
@@ -25,17 +27,18 @@ type CheckoutSessionParams = {
   }>;
 };
 
-function stripeSecretKey() {
-  const secret = Deno.env.get('STRIPE_SECRET_KEY');
-  if (!secret) throw new Error('STRIPE_NOT_CONFIGURED');
-  return secret;
+async function stripeSecretKey() {
+  const { secretKey } = await loadStripeConfig(adminClient());
+  if (!secretKey) throw new Error('STRIPE_NOT_CONFIGURED');
+  return secretKey;
 }
 
 async function stripeRequest(path: string, method: string, body?: URLSearchParams) {
+  const secret = await stripeSecretKey();
   const response = await fetch(`https://api.stripe.com/v1${path}`, {
     method,
     headers: {
-      Authorization: `Bearer ${stripeSecretKey()}`,
+      Authorization: `Bearer ${secret}`,
       'Content-Type': 'application/x-www-form-urlencoded',
     },
     body,
@@ -141,10 +144,11 @@ export async function createStripeCheckoutSession(params: CheckoutSessionParams)
     }
   });
 
+  const secret = await stripeSecretKey();
   const response = await fetch('https://api.stripe.com/v1/checkout/sessions', {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${stripeSecretKey()}`,
+      Authorization: `Bearer ${secret}`,
       'Content-Type': 'application/x-www-form-urlencoded',
     },
     body,
@@ -178,10 +182,11 @@ export async function createStripePaymentLink(params: CheckoutSessionParams) {
     body.set(`metadata[${key}]`, value);
   }
 
+  const secret = await stripeSecretKey();
   const response = await fetch('https://api.stripe.com/v1/payment_links', {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${stripeSecretKey()}`,
+      Authorization: `Bearer ${secret}`,
       'Content-Type': 'application/x-www-form-urlencoded',
     },
     body,

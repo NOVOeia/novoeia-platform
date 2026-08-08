@@ -35,7 +35,7 @@ export default function LoginPage({ go }) {
       setError('');
       const { profile } = await platformApi.signInWithPassword(email.trim(), password);
       const dashboard = platformApi.roleToDashboard(profile?.role || 'client');
-      go(`${dashboard}/dashboard`);
+      go(`${dashboard}/${platformApi.defaultDashboardSection(profile?.role || 'client')}`);
     } catch (err) {
       setError(err.message || 'Correo o contraseña incorrectos.');
       setBusy(false);

@@ -1,20 +1,5 @@
-import { adminClient, corsHeaders, handleError, json } from '../_shared/core.ts';
-
-function slugify(value: string) {
-  return value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'partner';
-}
-
-async function uniquePartnerSlug(supabase: ReturnType<typeof adminClient>, base: string) {
-  let slug = slugify(base);
-  let attempt = 0;
-  while (attempt < 20) {
-    const candidate = attempt === 0 ? slug : `${slug}-${attempt + 1}`;
-    const { data } = await supabase.from('partners').select('id').eq('slug', candidate).maybeSingle();
-    if (!data) return candidate;
-    attempt += 1;
-  }
-  return `${slug}-${crypto.randomUUID().slice(0, 8)}`;
-}
+import { adminClient, corsHeaders, handleError, json, loadSuperAdminEmails } from '../_shared/core.ts';
+import { createPartnerAccount } from '../_shared/partner-account.ts';
 
 async function verifyPassword(email: string, password: string) {
   const url = Deno.env.get('SUPABASE_URL');
@@ -41,67 +26,6 @@ async function findUserIdByEmail(supabase: ReturnType<typeof adminClient>, email
   return data.user?.id || null;
 }
 
-async function createPartnerAccount(params: {
-  supabase: ReturnType<typeof adminClient>;
-  userId: string;
-  email: string;
-  fullName: string;
-  phone: string;
-  companyName: string;
-  payload: Record<string, unknown>;
-}) {
-  const { supabase, userId, email, fullName, phone, companyName, payload } = params;
-  const role = 'partner';
-
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('id, partner_id, role')
-    .eq('id', userId)
-    .maybeSingle();
-
-  if (profile?.partner_id) {
-    throw new Error('EMAIL_ALREADY_REGISTERED');
-  }
-
-  const slug = await uniquePartnerSlug(supabase, companyName);
-  const { data: partner, error: partnerError } = await supabase.from('partners').insert({
-    owner_user_id: userId,
-    name: companyName,
-    slug,
-    status: 'pending',
-    plan_name: 'Partner',
-    branding: {
-      primaryColor: payload.primaryColor || '#1e90ff',
-      contactEmail: email,
-      contactPhone: phone || null,
-      prices: {
-        basic: Number(payload.basicPrice) || null,
-        pro: Number(payload.proPrice) || null,
-      },
-    },
-  }).select().single();
-  if (partnerError) throw new Error(`PARTNER_CREATE:${partnerError.message}`);
-
-  const { error: profileError } = await supabase.from('profiles').upsert({
-    id: userId,
-    role,
-    email,
-    full_name: fullName,
-    partner_id: partner.id,
-  }, { onConflict: 'id' });
-  if (profileError) throw new Error(`PROFILE_CREATE:${profileError.message}`);
-
-  await supabase.from('audit_logs').insert({
-    actor_user_id: userId,
-    action: profile?.id ? 'partner.registration_recovered' : 'partner.registered',
-    entity_type: 'partner',
-    entity_id: partner.id,
-    metadata: { email, companyName },
-  });
-
-  return { role, email, partnerId: partner.id };
-}
-
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
@@ -117,10 +41,7 @@ Deno.serve(async (req) => {
       if (authError || !authData.user) throw new Error('UNAUTHORIZED');
 
       const email = String(authData.user.email || '').trim().toLowerCase();
-      const allowlist = (Deno.env.get('GHL_SUPER_ADMIN_EMAILS') || '')
-        .split(',')
-        .map((value) => value.trim().toLowerCase())
-        .filter(Boolean);
+      const allowlist = await loadSuperAdminEmails(supabase);
 
       if (!email || !allowlist.includes(email)) {
         return json({ ok: true, promoted: false });
