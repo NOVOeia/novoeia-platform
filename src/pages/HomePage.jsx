@@ -17,8 +17,18 @@ import {
 import PublicHeader from "../components/PublicHeader.jsx";
 import Footer from "../components/Footer.jsx";
 import PartnerModule from "../components/PartnerModule.jsx";
+import {
+  HomeHuman,
+  HomeMarquee,
+  HomePaths,
+  HomeProcess,
+  HomeProof,
+  HomeSplitScene,
+} from "../components/landing/HomeSections.jsx";
+import { HomeServices } from "../components/landing/HomeServices.jsx";
 import { Button, Badge } from "../components/ui.jsx";
 import "../styles/home-wow.css";
+import "../styles/home-sections.css";
 
 const rotatingWords = [
   "inteligentes",
@@ -84,8 +94,8 @@ export default function HomePage({ go }) {
   }
 
   return (
-    <>
-      <PublicHeader go={go} />
+    <div className="home-v2">
+      <PublicHeader go={go} active="home" />
 
       <section
         ref={heroRef}
@@ -254,188 +264,33 @@ export default function HomePage({ go }) {
         </div>
       </section>
 
-      <section className="home-proof-strip wow-proof-strip">
-        <div className="proof-track">
-          {[
-            "CRM",
-            "Automatizaciones",
-            "Webs Inteligentes",
-            "Marca Blanca",
-            "Ingresos Recurrentes",
-            "CRM",
-            "Automatizaciones",
-            "Webs Inteligentes",
-            "Marca Blanca",
-            "Ingresos Recurrentes",
-          ].map((item, index) => (
-            <span key={`${item}-${index}`}>
-              {item}
-              <i />
-            </span>
-          ))}
+      <HomeMarquee />
+
+      <HomeServices go={go} />
+
+      <div className="hx-seam hx-seam-beam" />
+      <HomeSplitScene go={go} />
+
+      <HomeProcess />
+
+      <HomeHuman go={go} />
+
+      <div className="hx-seam hx-seam-wave" />
+      <section className="hx-calculator">
+        <div className="hx-calc-aura" />
+        <div className="hx-calc-head">
+          <span className="hx-eyebrow">MODELO PARTNER</span>
+          <h2>Visualiza el negocio <em>antes de empezar.</em></h2>
+          <p>Ajusta el plan, tu precio de venta, el número de clientes y la identidad de tu marca. Todo cambia en tiempo real.</p>
         </div>
-      </section>
-
-      <section
-        className="section home-products wow-section"
-        data-reveal
-      >
-        <div className="section-heading-row">
-          <div>
-            <div className="eyebrow">DOS PRODUCTOS, UN ECOSISTEMA</div>
-            <h2>Vende tecnología sin tener que construirla desde cero</h2>
-          </div>
-
-          <p>
-            NOVO centraliza la operación mientras las Webs Inteligentes dan
-            autonomía real a cada negocio.
-          </p>
-        </div>
-
-        <div className="grid-2">
-          <article className="product product-premium card wow-product-card">
-            <div className="card-light" />
-            <div className="product-icon">
-              <Layers3 />
-            </div>
-
-            <span className="product-number">01</span>
-            <h3>NOVO Platform</h3>
-
-            <p>
-              CRM, automatizaciones, calendarios, seguimiento, comunicaciones y
-              marketing en una sola plataforma.
-            </p>
-
-            <ul>
-              {[
-                "CRM y pipeline de ventas",
-                "Automatizaciones multicanal",
-                "WhatsApp, email y calendarios",
-                "Panel administrativo centralizado",
-              ].map((item) => (
-                <li key={item}>
-                  <Check />
-                  {item}
-                </li>
-              ))}
-            </ul>
-
-            <button className="text-link" onClick={() => go("clientes")}>
-              Conocer NOVO
-              <MoveRight />
-            </button>
-          </article>
-
-          <article className="product product-premium purple card wow-product-card">
-            <div className="card-light purple-light" />
-            <div className="product-icon">
-              <MonitorSmartphone />
-            </div>
-
-            <span className="product-number">02</span>
-            <h3>Webs Inteligentes</h3>
-
-            <p>
-              Páginas con dashboard propio para actualizar contenido,
-              promociones, redes, WhatsApp y productos sin depender de un
-              diseñador.
-            </p>
-
-            <ul>
-              {[
-                "Dashboard fácil de administrar",
-                "Pop-ups promocionales",
-                "Productos, precios y ubicaciones",
-                "Conexión directa con NOVO",
-              ].map((item) => (
-                <li key={item}>
-                  <Check />
-                  {item}
-                </li>
-              ))}
-            </ul>
-
-            <button className="text-link" onClick={() => go("webs")}>
-              Explorar Webs Inteligentes
-              <MoveRight />
-            </button>
-          </article>
-        </div>
-      </section>
-
-      <section
-        className="section calculator-section wow-section"
-        data-reveal
-      >
-        <div className="calculator-copy">
-          <div className="eyebrow">MODELO PARTNER</div>
-          <h2>Visualiza el negocio antes de empezar</h2>
-          <p>
-            Ajusta el plan, tu precio de venta, el número de clientes y la
-            identidad de tu marca. Todo cambia en tiempo real.
-          </p>
-        </div>
-
         <PartnerModule />
       </section>
 
-      <section className="home-paths">
-        <div className="section path-heading wow-section" data-reveal>
-          <div className="eyebrow">ELIGE TU CAMINO</div>
-          <h2>¿Cómo quieres crecer con NOVO?</h2>
-        </div>
+      <HomeProof />
 
-        <div
-          className="section grid-2 paths-grid wow-section"
-          data-reveal
-        >
-          <article className="path-card client-path wow-path-card">
-            <div className="path-orbit" />
-            <div className="path-icon">
-              <Building2 />
-            </div>
-
-            <span>PARA EMPRESAS</span>
-            <h3>Administra todo desde una sola plataforma</h3>
-
-            <p>
-              Obtén NOVO por USD 97 al mes y centraliza clientes, ventas,
-              comunicación y marketing.
-            </p>
-
-            <Button onClick={() => go("registro-cliente")}>
-              Crear mi cuenta
-              <ArrowRight size={17} />
-            </Button>
-          </article>
-
-          <article className="path-card partner-path wow-path-card">
-            <div className="path-orbit purple-orbit" />
-            <div className="path-icon">
-              <Users />
-            </div>
-
-            <span>PARA PARTNERS</span>
-            <h3>Crea una nueva fuente de ingresos recurrentes</h3>
-
-            <p>
-              Adquiere cuentas desde USD 47, define tu precio de reventa y
-              administra a tus clientes bajo tu propia marca.
-            </p>
-
-            <Button
-              variant="secondary"
-              onClick={() => go("registro-partner")}
-            >
-              Convertirme en Partner
-              <ArrowRight size={17} />
-            </Button>
-          </article>
-        </div>
-      </section>
+      <HomePaths go={go} />
 
       <Footer go={go} />
-    </>
+    </div>
   );
 }

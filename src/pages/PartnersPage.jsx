@@ -1,401 +1,260 @@
-import { useEffect, useRef } from "react";
+import '../styles/nx-page.css';
+import { useMemo, useState } from "react";
 import {
   ArrowRight,
-  BadgeDollarSign,
-  BarChart3,
-  Check,
-  Globe2,
-  Layers3,
+  Award,
+  Banknote,
+  Building2,
+  Calculator,
+  Layers,
   Palette,
   Rocket,
   ShieldCheck,
-  Sparkles,
-  Store,
-  Users,
-  Workflow,
+  TrendingUp,
+  Users
 } from "lucide-react";
 import PublicHeader from "../components/PublicHeader.jsx";
 import Footer from "../components/Footer.jsx";
-import PartnerModule from "../components/PartnerModule.jsx";
-import { Button, Badge } from "../components/ui.jsx";
-import "../styles/partners-wow.css";
-
-const benefits = [
+import { PageHero } from "../components/landing/site/PageHero.jsx";
+import { PartnersHeroVisual } from "../components/landing/site/HeroVisuals.jsx";
+import {
+  BillingToggle,
+  CtaBand,
+  FaqList,
+  IconGrid,
+  NxButton,
+  PriceCard,
+  Reveal,
+  SectionHead,
+  StatBand
+} from "../components/landing/site/Sections.jsx";
+import { PartnerModel } from "../components/landing/PartnerModel.jsx";
+import { money } from "../lib/format.js";
+const tiers = [
   {
-    icon: BadgeDollarSign,
-    title: "Ingresos recurrentes",
-    text: "Compra cuentas desde USD 47 y define libremente tu precio de venta mensual.",
+    name: "NOVO Esencial",
+    tagline: "Impulsa y organiza tu negocio para crecer.",
+    monthly: 47,
+    annual: 39,
+    unit: "cuenta/mes",
+    features: ["CRM y pipeline por cliente", "Bandeja unificada", "Calendarios y formularios", "Panel Partner y link de venta", "Precio de reventa libre"],
+    cta: "Activar NOVO Esencial",
+    note: "Costo base para el Partner. Solo pagas las cuentas que vendes."
   },
   {
-    icon: Palette,
-    title: "Tu propia marca",
-    text: "Personaliza logo, colores, presentación comercial y experiencia del cliente.",
+    name: "NOVO Avanzado",
+    tagline: "Automatiza, escala y lidera tu mercado.",
+    monthly: 97,
+    annual: 81,
+    unit: "cuenta/mes",
+    features: ["Todo lo de NOVO Esencial", "Automatizaciones avanzadas", "WhatsApp conectado", "Web Inteligente integrable", "Marca blanca completa con dominio", "Prioridad en soporte"],
+    cta: "Activar NOVO Avanzado",
+    featured: true,
+    note: "Recomendado para clientes que ya operan con varios canales."
   },
   {
-    icon: Users,
-    title: "Administra tus clientes",
-    text: "Controla cuentas, planes, solicitudes y estado comercial desde un solo panel.",
-  },
-  {
-    icon: Globe2,
-    title: "Webs Inteligentes",
-    text: "Revende páginas administrables con dashboard, promociones, redes y WhatsApp.",
-  },
-  {
-    icon: Workflow,
-    title: "Automatización",
-    text: "Activa CRM, seguimiento, calendarios y comunicaciones sin construir desde cero.",
-  },
-  {
-    icon: ShieldCheck,
-    title: "Operación respaldada",
-    text: "NOVO administra la infraestructura mientras tú desarrollas tu negocio.",
-  },
+    name: "NOVO Profesional",
+    tagline: "Dise\xF1ado a la medida del cliente, la empresa o el proyecto.",
+    monthly: 0,
+    annual: 0,
+    unit: "cuenta/mes",
+    custom: "Se cotiza seg\xFAn el alcance",
+    features: [
+      "Levantamiento previo de necesidades",
+      "M\xF3dulos y automatizaciones a medida",
+      "Integraciones con sistemas propios del cliente",
+      "Migraci\xF3n de datos y procesos existentes",
+      "Acompa\xF1amiento en la implementaci\xF3n",
+      "Costo base y tu margen definidos por proyecto"
+    ],
+    cta: "Cotizar un proyecto",
+    note: "Ideal para empresas con operaciones complejas o varias sedes."
+  }
 ];
-
-const steps = [
-  "Crea tu cuenta Partner",
-  "Configura tu marca",
-  "Define tus precios",
-  "Genera tu link de venta",
-  "Registra nuevos clientes",
-  "Recibe ingresos mensuales",
-];
-
 export default function PartnersPage({ go }) {
-  const heroRef = useRef(null);
+  const [billing, setBilling] = useState("monthly");
+  const [clients, setClients] = useState(20);
+  const [price, setPrice] = useState(97);
+  const [tier, setTier] = useState("esencial");
+  const cost = tier === "esencial" ? billing === "monthly" ? 47 : 39 : billing === "monthly" ? 97 : 81;
+  const safePrice = Math.max(price, cost + 10);
+  const fee = safePrice * 0.07;
+  const margin = safePrice - cost - fee;
+  const monthly = margin * clients;
+  const projection = useMemo(() => {
+    return [3, 6, 12, 24].map((month) => {
+      const growth = Math.round(clients * (1 + month / 14));
+      return { month, clients: growth, profit: margin * growth };
+    });
+  }, [clients, margin]);
+  return <div className="nx-page nx-page-partners">
+      <PublicHeader go={go} active="partners" />
 
-  useEffect(() => {
-    const elements = document.querySelectorAll("[data-partner-reveal]");
+      <PageHero
+    tone="violet"
+    eyebrow="PARA PARTNERS"
+    title={<>Vende tecnología<br /><em>bajo tu propia marca.</em></>}
+    text="Tu inversión inicial es cero. Creas tu cuenta gratis, defines tu precio y la venta activa el servicio. Nosotros ponemos la plataforma, el soporte técnico y las actualizaciones. Tú pones la marca y la relación con el cliente."
+    actions={<>
+          <NxButton onClick={() => go("registro-partner")}>Quiero ser Partner <ArrowRight size={16} /></NxButton>
+          <NxButton tone="line" onClick={() => {
+      document.getElementById("modelo")?.scrollIntoView({ behavior: "smooth" });
+    }}>
+            Ver cómo funciona el modelo
+          </NxButton>
+        </>}
+    chips={[[Palette, "Marca blanca"], [Banknote, "Sin inversi\xF3n inicial"], [ShieldCheck, "Sin desarrollo propio"]]}
+    visual={<PartnersHeroVisual />}
+    mirrored
+  />
+      
 
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            entry.target.classList.add("is-visible");
-            observer.unobserve(entry.target);
-          }
-        });
-      },
-      { threshold: 0.14 }
-    );
+      <StatBand items={[["USD 0", "de inversi\xF3n inicial"], ["100%", "de la relaci\xF3n es tuya"], ["0", "l\xEDneas de c\xF3digo"], ["USD 47", "costo base por cuenta"]]} />
 
-    elements.forEach((element) => observer.observe(element));
+      <PartnerModel onRegister={() => go("registro-partner")} />
 
-    return () => observer.disconnect();
-  }, []);
+      <section className="nx-section tint-violet" id="calculadora">
+        <SectionHead
+    eyebrow="PROYECCIÓN"
+    title={<>Calcula tu negocio <em>antes de empezar.</em></>}
+    text="Ajusta el nivel, tu precio de venta y el número de clientes para ver tu ganancia real."
+  />
+        
 
-  function handleMouseMove(event) {
-    const hero = heroRef.current;
-    if (!hero) return;
-
-    const rect = hero.getBoundingClientRect();
-    const x = (event.clientX - rect.left) / rect.width - 0.5;
-    const y = (event.clientY - rect.top) / rect.height - 0.5;
-
-    hero.style.setProperty("--partner-x", `${x * 18}px`);
-    hero.style.setProperty("--partner-y", `${y * 18}px`);
-    hero.style.setProperty("--partner-rx", `${y * -3.5}deg`);
-    hero.style.setProperty("--partner-ry", `${x * 4.5}deg`);
-  }
-
-  function resetMouseMove() {
-    const hero = heroRef.current;
-    if (!hero) return;
-
-    hero.style.setProperty("--partner-x", "0px");
-    hero.style.setProperty("--partner-y", "0px");
-    hero.style.setProperty("--partner-rx", "0deg");
-    hero.style.setProperty("--partner-ry", "0deg");
-  }
-
-  return (
-    <>
-      <PublicHeader go={go} />
-
-      <section
-        ref={heroRef}
-        className="partners-hero"
-        onMouseMove={handleMouseMove}
-        onMouseLeave={resetMouseMove}
-      >
-        <div className="partners-noise" />
-        <div className="partners-grid" />
-        <div className="partners-orb partners-orb-one" />
-        <div className="partners-orb partners-orb-two" />
-
-        <div className="partners-hero-copy">
-          <Badge>PROGRAMA PARTNER NOVO</Badge>
-
-          <h1>
-            Crea una nueva línea de negocio
-            <span> bajo tu propia marca.</span>
-          </h1>
-
-          <p>
-            Revende plataformas, automatización y Webs Inteligentes sin tener
-            que desarrollar toda la tecnología desde cero.
-          </p>
-
-          <div className="partners-actions">
-            <Button onClick={() => go("registro-partner")}>
-              Empezar como Partner
-              <ArrowRight size={17} />
-            </Button>
-
-            <Button variant="secondary" onClick={() => go("precios")}>
-              Ver planes
-            </Button>
-          </div>
-
-          <div className="partners-trust">
-            <span>
-              <Check /> Precio mayorista
-            </span>
-            <span>
-              <Check /> Marca blanca
-            </span>
-            <span>
-              <Check /> Ingresos recurrentes
-            </span>
-          </div>
-        </div>
-
-        <div className="partners-hero-visual">
-          <div className="partner-ring partner-ring-one" />
-          <div className="partner-ring partner-ring-two" />
-
-          <div className="partner-floating-card partner-float-one">
-            <BarChart3 />
-            <div>
-              <small>Margen mensual</small>
-              <strong>USD 1.200</strong>
-            </div>
-          </div>
-
-          <div className="partner-floating-card partner-float-two">
-            <Store />
-            <div>
-              <small>Clientes activos</small>
-              <strong>18</strong>
-            </div>
-          </div>
-
-          <div className="partner-floating-card partner-float-three">
-            <Rocket />
-            <div>
-              <small>Cuenta nueva</small>
-              <strong>Activada</strong>
-            </div>
-          </div>
-
-          <div className="partner-business-screen">
-            <div className="partner-screen-shine" />
-
-            <header>
-              <div className="partner-screen-brand">
-                <b>N</b>
-                <span>Tu Agencia</span>
+        <Reveal>
+          <div className="nx-calc">
+            <div className="nx-calc-controls">
+              <div className="nx-calc-field">
+                <label>Plan del cliente</label>
+                <div className="nx-seg">
+                  <button type="button" className={tier === "esencial" ? "on" : ""} onClick={() => setTier("esencial")}>NOVO Esencial</button>
+                  <button type="button" className={tier === "avanzado" ? "on" : ""} onClick={() => setTier("avanzado")}>NOVO Avanzado</button>
+                </div>
               </div>
 
-              <div className="partner-screen-status">
-                <i />
-                Plataforma activa
+              <div className="nx-calc-field">
+                <label>Ciclo de pago</label>
+                <BillingToggle value={billing} onChange={setBilling} save="ahorra 17%" />
               </div>
-            </header>
 
-            <div className="partner-screen-layout">
-              <aside>
-                {[
-                  "Dashboard",
-                  "Clientes",
-                  "Cuentas",
-                  "Ingresos",
-                  "Links de venta",
-                ].map((item, index) => (
-                  <span className={index === 0 ? "active" : ""} key={item}>
-                    {item}
-                  </span>
-                ))}
-              </aside>
+              <div className="nx-calc-field">
+                <label>Tu precio de venta <b>{money(safePrice)}</b></label>
+                <input type="range" min={cost + 10} max={297} step={5} value={safePrice} onChange={(event) => setPrice(Number(event.target.value))} />
+              </div>
 
-              <main>
-                <div className="partner-screen-heading">
-                  <div>
-                    <small>Resumen del negocio</small>
-                    <strong>Panel Partner</strong>
+              <div className="nx-calc-field">
+                <label>Clientes activos <b>{clients}</b></label>
+                <input type="range" min={1} max={100} value={clients} onChange={(event) => setClients(Number(event.target.value))} />
+              </div>
+            </div>
+
+            <div className="nx-calc-result">
+              <div className="nx-calc-main">
+                <small>Ganancia mensual</small>
+                <strong>{money(monthly)}</strong>
+                <i><TrendingUp size={14} /> {money(margin)} netos por cliente</i>
+              </div>
+
+              <div className="nx-calc-rows">
+                <div><span>Cobras a tus clientes</span><b>{money(safePrice * clients)}</b></div>
+                <div><span>Costo NOVOeia</span><b>{money(cost * clients)}</b></div>
+                <div><span>Procesamiento (7%)</span><b>{money(fee * clients)}</b></div>
+                <div className="win"><span>Te queda</span><b>{money(monthly)}</b></div>
+                <div><span>Al año</span><b>{money(monthly * 12)}</b></div>
+              </div>
+
+              <div className="nx-calc-proj">
+                <span className="nx-calc-proj-title">Proyección estimada</span>
+                {projection.map(
+    (row) => <div key={row.month}>
+                    <small>{row.month} meses</small>
+                    <i style={{ width: `${Math.min(100, row.profit / (projection[3].profit || 1) * 100)}%` }} />
+                    <b>{money(row.profit)}</b>
                   </div>
-
-                  <button>+ Crear cliente</button>
-                </div>
-
-                <div className="partner-screen-kpis">
-                  {[
-                    ["USD 4.8k", "Ingresos"],
-                    ["18", "Clientes"],
-                    ["22", "Subcuentas"],
-                    ["91%", "Retención"],
-                  ].map(([value, label], index) => (
-                    <div
-                      key={label}
-                      style={{ "--partner-kpi-delay": `${index * 0.12}s` }}
-                    >
-                      <small>{label}</small>
-                      <strong>{value}</strong>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="partner-screen-bottom">
-                  <div className="partner-income-chart">
-                    <span>Ingresos recurrentes</span>
-                    <div className="partner-chart-grid" />
-
-                    <div className="partner-chart-bars">
-                      {[28, 43, 38, 57, 52, 69, 62, 76, 71, 86, 81, 94].map(
-                        (height, index) => (
-                          <i
-                            key={`${height}-${index}`}
-                            style={{
-                              height: `${height}%`,
-                              "--chart-delay": `${index * 0.06}s`,
-                            }}
-                          />
-                        )
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="partner-latest-sales">
-                    <span>Ventas recientes</span>
-
-                    {[
-                      ["Basic", "USD 97"],
-                      ["Pro", "USD 147"],
-                      ["Web Inteligente", "USD 997"],
-                    ].map(([name, price]) => (
-                      <p key={name}>
-                        <i />
-                        <b>{name}</b>
-                        <small>{price}</small>
-                      </p>
-                    ))}
-                  </div>
-                </div>
-              </main>
+  )}
+                <p>Estimación referencial basada en crecimiento sostenido de cartera. No constituye una garantía de ingresos.</p>
+              </div>
             </div>
           </div>
+        </Reveal>
+      </section>
+
+      <section className="nx-section">
+        <SectionHead eyebrow="QUÉ RECIBES" title={<>Todo lo que necesitas <em>para operar.</em></>} />
+        <IconGrid
+    items={[
+      [Palette, "Marca blanca real", "Tu logo, tus colores y tu dominio. El cliente nunca ve NOVOeia."],
+      [Layers, "Panel de control", "Gestiona clientes, precios, cuentas y links desde un solo lugar."],
+      [Banknote, "Precio libre", "Nadie te impone tarifas. El margen lo defines t\xFA."],
+      [Rocket, "Producto listo", "Sin desarrollo, sin servidores, sin mantenimiento."],
+      [Users, "Soporte t\xE9cnico", "Nosotros resolvemos lo t\xE9cnico mientras t\xFA vendes."],
+      [Award, "Materiales de venta", "Demos, argumentos y ejemplos listos para presentar."]
+    ]}
+  />
+        
+      </section>
+
+      <div className="nx-seam wave" />
+
+      <section className="nx-section tint-cyan" id="niveles">
+        <SectionHead
+    eyebrow="PLANES QUE PUEDES VENDER"
+    title={<>Dos productos, <em>tu precio.</em></>}
+    text="Estos son los costos base para el Partner. Solo pagas por las cuentas que vendes: si un mes no activas cuentas, no pagas por ellas."
+  />
+        
+        <Reveal><div className="nx-billing-wrap"><BillingToggle value={billing} onChange={setBilling} save="ahorra 17%" /></div></Reveal>
+        <div className="nx-prices">
+          {tiers.map(
+    (tierData, index) => <Reveal key={tierData.name} delay={index * 0.08}>
+              <PriceCard data={tierData} billing={billing} onSelect={() => go("registro-partner")} />
+            </Reveal>
+  )}
         </div>
       </section>
 
-      <section
-        className="section partner-intro partner-reveal"
-        data-partner-reveal
-      >
-        <div>
-          <div className="eyebrow">TU MODELO DE NEGOCIO</div>
-          <h2>Tú vendes la solución. NOVO opera la tecnología.</h2>
-        </div>
-
-        <p>
-          Define tu precio, presenta la plataforma bajo tu marca y administra
-          toda tu cartera de clientes desde un panel central.
-        </p>
-      </section>
-
-      <section
-        className="section partner-benefits partner-reveal"
-        data-partner-reveal
-      >
-        {benefits.map(({ icon: Icon, title, text }, index) => (
-          <article
-            key={title}
-            className="partner-benefit-card"
-            style={{ "--benefit-delay": `${index * 0.08}s` }}
-          >
-            <div className="benefit-glow" />
-            <Icon />
-            <span>{String(index + 1).padStart(2, "0")}</span>
-            <h3>{title}</h3>
-            <p>{text}</p>
-          </article>
-        ))}
-      </section>
-
-      <section
-        className="section partner-calculator-section partner-reveal"
-        data-partner-reveal
-      >
-        <div className="partner-calculator-copy">
-          <div className="eyebrow">SIMULADOR EN VIVO</div>
-          <h2>Calcula tu margen y visualiza tu plataforma</h2>
-          <p>
-            Cambia el plan, el precio de reventa, la cantidad de clientes, el
-            nombre y el color de tu marca. El dashboard se actualiza en tiempo
-            real.
-          </p>
-
-          <div className="partner-calculator-points">
-            <span>
-              <Sparkles /> Experiencia interactiva
-            </span>
-            <span>
-              <Layers3 /> Dashboard marca blanca
-            </span>
-            <span>
-              <BadgeDollarSign /> Ganancia estimada
-            </span>
-          </div>
-        </div>
-
-        <PartnerModule />
-      </section>
-
-      <section
-        className="section partner-process partner-reveal"
-        data-partner-reveal
-      >
-        <div className="partner-process-heading">
-          <div className="eyebrow">CÓMO FUNCIONA</div>
-          <h2>De tu registro a tu primera venta</h2>
-        </div>
-
-        <div className="partner-process-track">
-          {steps.map((step, index) => (
-            <article key={step}>
-              <div>
-                <span>{index + 1}</span>
-                <i />
-              </div>
-
-              <strong>{step}</strong>
-            </article>
-          ))}
+      <section className="nx-section">
+        <SectionHead eyebrow="QUIÉN SE VUELVE PARTNER" title={<>Perfiles que <em>ya lo están haciendo.</em></>} />
+        <div className="nx-profiles">
+          {[
+    [Building2, "Agencias de marketing", "Suman un ingreso recurrente a servicios que hoy cobran por proyecto."],
+    [Users, "Consultores independientes", "Convierten su cartera de contactos en clientes con suscripci\xF3n."],
+    [Calculator, "Contadores y gestores", "Ofrecen tecnolog\xEDa a los negocios que ya asesoran cada mes."],
+    [Rocket, "Emprendedores digitales", "Arrancan un negocio SaaS sin construir el producto."]
+  ].map(([Icon, title, text], index) => {
+    const Ico = Icon;
+    return <Reveal key={title} delay={index * 0.07}>
+                <article className="nx-profile"><i><Ico size={18} /></i><h3>{title}</h3><p>{text}</p></article>
+              </Reveal>;
+  })}
         </div>
       </section>
 
-      <section
-        className="section partner-final-cta partner-reveal"
-        data-partner-reveal
-      >
-        <div className="partner-cta-orb" />
-
-        <div>
-          <div className="eyebrow">EMPIEZA A CONSTRUIR TU NEGOCIO</div>
-          <h2>Tu marca. Tus precios. Tus clientes.</h2>
-          <p>
-            Crea tu cuenta Partner y comienza a vender tecnología con ingresos
-            recurrentes.
-          </p>
-        </div>
-
-        <Button onClick={() => go("registro-partner")}>
-          Crear cuenta Partner
-          <ArrowRight size={17} />
-        </Button>
+      <section className="nx-section">
+        <SectionHead eyebrow="PREGUNTAS FRECUENTES" title={<>Lo que <em>siempre nos preguntan.</em></>} />
+        <Reveal>
+          <FaqList items={[
+    ["\xBFCu\xE1nto necesito invertir para empezar?", `Nada. Crear tu cuenta Partner es gratis y no tiene mensualidad. Solo se descuenta el costo del plan cuando la venta se concreta: ${money(47)} al mes en NOVO Esencial.`],
+    ["\xBFPuedo cobrar el precio que yo quiera?", "S\xED. T\xFA defines el precio de reventa. De cada venta se descuenta el costo del plan y un 7% estimado de procesamiento y administraci\xF3n; el resto es tu ganancia."],
+    ["\xBFMi cliente sabe que existe NOVOeia?", "No. La plataforma opera con tu marca, tu logo y tu dominio. La relaci\xF3n comercial es tuya."],
+    ["\xBFQui\xE9n atiende los problemas t\xE9cnicos?", "Nosotros. T\xFA acompa\xF1as comercialmente y escalas los casos t\xE9cnicos a nuestro equipo."],
+    ["\xBFPuedo pagar anual?", "S\xED. Si activas la cuenta de un cliente en ciclo anual, el costo base baja alrededor de un 17% y tu margen sube."],
+    ["\xBFQu\xE9 pasa si un cliente cancela?", "Desactivas su cuenta y dejas de pagarla en el siguiente ciclo. No hay penalidad."]
+  ]} />
+        </Reveal>
       </section>
+
+      <CtaBand
+    eyebrow="EMPIEZA A VENDER"
+    title={<>Tu propio negocio de tecnología, <em>sin construir el producto.</em></>}
+    text="Activa tu cuenta Partner y empieza con tu primer cliente esta semana."
+    actions={<>
+          <NxButton onClick={() => go("registro-partner")}>Quiero ser Partner <ArrowRight size={16} /></NxButton>
+          <NxButton tone="line" onClick={() => document.getElementById("niveles")?.scrollIntoView({ behavior: "smooth" })}>Comparar niveles</NxButton>
+        </>}
+  />
+      
 
       <Footer go={go} />
-    </>
-  );
+    </div>;
 }
