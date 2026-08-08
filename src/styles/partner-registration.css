@@ -6,6 +6,11 @@ body.partner-registration-active {
   color: #16181d;
 }
 
+body.partner-registration-active .public-header,
+body.partner-registration-active footer {
+  display: none !important;
+}
+
 body.partner-registration-active .app {
   background: transparent;
 }
