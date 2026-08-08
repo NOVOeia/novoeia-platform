@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import { Logo } from '../ui.jsx';
 import { platformApi } from '../../lib/platformApi.js';
 import {
   ACTIVITIES,
@@ -168,9 +167,13 @@ export default function PartnerRegistrationForm({ go }) {
     <div className="partner-registration-page">
       <main className="page">
         <header className="topbar">
-          <button type="button" className="brand" onClick={() => go('partners')} style={{ border: 0, background: 'none', cursor: 'pointer', textAlign: 'left' }}>
-            <Logo small />
-          </button>
+          <div className="brand">
+            <div className="brand-mark">Ne</div>
+            <div>
+              <div className="brand-name">NOVO Partners</div>
+              <span className="brand-sub">by NOVOeia</span>
+            </div>
+          </div>
           <div className="secure-label">🔒 Registro seguro de Partner</div>
         </header>
 
