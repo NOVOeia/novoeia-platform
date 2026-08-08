@@ -14,6 +14,7 @@ export default function PartnerCheckoutPage({ slug, productId, go }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [checkoutData, setCheckoutData] = useState(null);
+  const [stripePublishableKey, setStripePublishableKey] = useState('');
   const [salesLink, setSalesLink] = useState(null);
   const [published, setPublished] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -25,6 +26,11 @@ export default function PartnerCheckoutPage({ slug, productId, go }) {
         setError(null);
         const data = await platformApi.getPartnerCheckout(slug, productId, linkToken);
         setCheckoutData(data?.checkout || null);
+        setStripePublishableKey(
+          data?.stripePublishableKey
+          || import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY
+          || '',
+        );
         setSalesLink(data?.salesLink || null);
         setPublished(data?.published !== false);
       } catch (err) {
@@ -109,6 +115,7 @@ export default function PartnerCheckoutPage({ slug, productId, go }) {
         checkoutData={checkoutData}
         onCheckout={startCheckout}
         busy={busy}
+        stripePublishableKey={stripePublishableKey}
         initialEmail={salesLink?.clientEmail || ''}
         initialSelectedServices={salesLink?.preselectedServiceIds || []}
       />

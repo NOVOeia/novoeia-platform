@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { platformApi } from '../../lib/platformApi.js';
+import { buildPartnerRegistrationPayload } from '../../lib/partnerRegistrationPayload.js';
 import {
   ACTIVITIES,
   COUNTRIES,
@@ -81,43 +82,10 @@ export default function PartnerRegistrationForm({ go }) {
       setBusy(true);
       setError('');
 
-      const fullName = `${form.firstName} ${form.lastName}`.trim();
-      const payload = {
-        type: 'partner',
-        companyName: form.businessName.trim(),
-        fullName,
-        email: form.email.trim().toLowerCase(),
-        phone: form.phone.trim(),
-        password: form.password,
-        primaryColor: '#5b5df0',
-        onboarding: {
-          country: form.country,
-          partnerType: form.partnerType,
-          website: form.website || null,
-          social: form.social || null,
-          activity: form.activity,
-          hasClients: form.hasClients,
-          clientCount: form.clientCount,
-          crmExperience: form.crmExperience,
-          ghlExperience: form.ghlExperience,
-          experienceLevel: form.experienceLevel,
-          goals: form.goals,
-          targetClients: form.targetClients,
-          targetMarket: form.targetMarket,
-          estimatedClients: form.estimatedClients,
-          source: form.source,
-          referralCode: form.referralCode || null,
-          acceptances: {
-            truthfulInformation: form.truth,
-            acceptedTerms: form.terms,
-            understoodTransactionFees: form.fees,
-            acceptedPrivacy: form.privacy,
-          },
-          termsVersion: 'NOVO-PARTNERS-1.0',
-          privacyVersion: 'NOVO-PRIVACY-1.0',
-          acceptedAt: new Date().toISOString(),
-        },
-      };
+      const payload = buildPartnerRegistrationPayload(form, {
+        status: 'pending',
+        planName: 'partner',
+      });
 
       await platformApi.registerAccount(payload);
       await platformApi.signInWithPassword(payload.email, payload.password);
@@ -514,7 +482,7 @@ export default function PartnerRegistrationForm({ go }) {
                   </p>
                 </div>
                 <div style={{ marginTop: 28 }}>
-                  <button type="button" className="btn btn-primary" onClick={() => go('partner-dashboard/dashboard')}>
+                  <button type="button" className="btn btn-primary" onClick={() => go('partner-dashboard/partner-center')}>
                     Ir a mi panel Partner
                   </button>
                 </div>

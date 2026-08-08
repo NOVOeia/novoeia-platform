@@ -1,4 +1,4 @@
-import { adminClient, corsHeaders, handleError, json } from '../_shared/core.ts';
+import { adminClient, corsHeaders, handleError, json, loadPlatformUrls, loadStripeConfig } from '../_shared/core.ts';
 import { createStripeCheckoutSession } from '../_shared/stripe.ts';
 import { buildAdditionalLineItems, getDeferredAddonServiceIds } from '../_shared/checkout-line-items.ts';
 
@@ -510,6 +510,7 @@ Deno.serve(async (req) => {
             preselectedServiceIds,
           }
           : null,
+        stripePublishableKey: (await loadStripeConfig(supabase)).publishableKey || null,
       });
     }
 
@@ -562,7 +563,7 @@ Deno.serve(async (req) => {
       const stripeProductId = String(product.stripe_product_id || '');
       if (!stripeProductId) throw new Error('STRIPE_PRODUCT_NOT_CONFIGURED');
 
-      const publicUrl = Deno.env.get('PUBLIC_APP_URL');
+      const { publicAppUrl: publicUrl } = await loadPlatformUrls(supabase);
       if (!publicUrl) throw new Error('PUBLIC_APP_URL_NOT_CONFIGURED');
 
       const activeServices = (storefront.additionalServices as Array<Record<string, unknown>>)
@@ -685,6 +686,7 @@ Deno.serve(async (req) => {
       return json({
         clientSecret: session.client_secret,
         sessionId: session.id,
+        stripePublishableKey: (await loadStripeConfig(supabase)).publishableKey || null,
       });
     }
 

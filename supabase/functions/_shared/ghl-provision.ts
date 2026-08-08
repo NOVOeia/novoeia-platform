@@ -1,4 +1,4 @@
-import { adminClient, formatErrorMessage, ghlApiErrorMessage, ghlRequest, refreshGhlAccessToken } from './core.ts';
+import { adminClient, formatErrorMessage, ghlApiErrorMessage, ghlRequest, loadGhlPlatformConfig, refreshGhlAccessToken } from './core.ts';
 
 type SupabaseAdmin = ReturnType<typeof adminClient>;
 
@@ -126,8 +126,9 @@ async function loadSaasConfig(
   offerId: string | null,
   catalogProductId: string | null,
 ) {
-  let saasPlanId = Deno.env.get('GHL_DEFAULT_SAAS_PLAN_ID') || null;
-  let priceId = Deno.env.get('GHL_DEFAULT_SAAS_PRICE_ID') || null;
+  const platform = await loadGhlPlatformConfig(supabase);
+  let saasPlanId = platform.defaultSaasPlanId;
+  let priceId = platform.defaultSaasPriceId;
 
   if (offerId) {
     const { data: offer } = await supabase
@@ -166,12 +167,13 @@ async function createGhlLocation(
   token: string,
   companyId: string,
   client: PartnerClientRow,
+  timezone: string,
 ): Promise<string> {
   const locationName = String(client.company_name || client.name || client.email || 'NOVO Client').trim();
   const body: Record<string, unknown> = {
     name: locationName,
     companyId,
-    timezone: Deno.env.get('GHL_DEFAULT_TIMEZONE') || 'America/New_York',
+    timezone,
   };
 
   if (client.email) body.email = client.email;
@@ -197,14 +199,14 @@ async function enableGhlSaas(params: {
   stripeCustomerId: string | null;
   saasPlanId: string | null;
   priceId: string | null;
+  saasV2: boolean;
 }) {
-  const isV2 = Deno.env.get('GHL_SAAS_V2') !== 'false';
   const body: Record<string, unknown> = {
     companyId: params.companyId,
-    isSaaSV2: isV2,
+    isSaaSV2: params.saasV2,
   };
 
-  if (isV2) {
+  if (params.saasV2) {
     if (params.saasPlanId) body.saasPlanId = params.saasPlanId;
     if (params.priceId) body.priceId = params.priceId;
   } else {
@@ -268,12 +270,18 @@ export async function provisionPartnerClientInGhl(
   }
 
   const { token, companyId } = await resolveAgencyToken(supabase, connection);
-  const shouldEnableSaas = Deno.env.get('GHL_SAAS_ENABLED') === 'true';
+  const platformConfig = await loadGhlPlatformConfig(supabase);
+  const shouldEnableSaas = platformConfig.saasEnabled;
   assertAgencyScopes(connection, shouldEnableSaas);
 
   let locationId: string;
   try {
-    locationId = await createGhlLocation(token, companyId, row);
+    locationId = await createGhlLocation(
+      token,
+      companyId,
+      row,
+      platformConfig.defaultTimezone,
+    );
   } catch (error) {
     throw new Error(`GHL_CREATE_LOCATION_FAILED: ${formatErrorMessage(error)}`);
   }
@@ -297,6 +305,7 @@ export async function provisionPartnerClientInGhl(
           stripeCustomerId: params.stripeCustomerId || null,
           saasPlanId,
           priceId,
+          saasV2: platformConfig.saasV2,
         });
         saasEnabled = true;
       } catch (error) {

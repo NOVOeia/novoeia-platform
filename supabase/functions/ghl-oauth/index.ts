@@ -5,51 +5,27 @@ import {
   fetchGhlUser,
   handleError,
   json,
+  loadGhlOAuthConfig,
+  loadSuperAdminEmails,
   requireRole,
-  resolveAppRole,
+  resolveAppRoleWithAllowlist,
+  resolveGhlOAuthScopes,
 } from '../_shared/core.ts';
 
-function normalizeScopeList(raw: string | null | undefined): string[] {
-  if (!raw) return [];
-  return [...new Set(
-    raw
-      .replace(/,/g, ' ')
-      .split(/\s+/)
-      .map((scope) => scope.trim())
-      .filter(Boolean),
-  )];
-}
-
-function ghlEnv() {
-  const clientId = Deno.env.get('GHL_CLIENT_ID');
-  const clientSecret = Deno.env.get('GHL_CLIENT_SECRET');
-  const redirectUri = Deno.env.get('GHL_REDIRECT_URI');
-  if (!clientId || !clientSecret || !redirectUri) {
-    throw new Error('GHL_OAUTH_NOT_CONFIGURED');
-  }
-  return { clientId, clientSecret, redirectUri };
+function ghlEnv(supabase: ReturnType<typeof adminClient>) {
+  return loadGhlOAuthConfig(supabase);
 }
 
 async function resolveGhlScopes(supabase: ReturnType<typeof adminClient>): Promise<string> {
-  const envScopes = normalizeScopeList(Deno.env.get('GHL_SCOPES'));
-  const { data } = await supabase
-    .from('platform_integrations')
-    .select('public_config')
-    .eq('provider', 'ghl')
-    .maybeSingle();
-
-  const publicConfig = (data?.public_config || {}) as Record<string, unknown>;
-  const dbScopes = normalizeScopeList(
-    typeof publicConfig.scopes === 'string' ? publicConfig.scopes : null,
-  );
-
-  const merged = [...new Set([...envScopes, ...dbScopes])];
-  if (!merged.length) throw new Error('GHL_OAUTH_NOT_CONFIGURED');
-  return merged.join(' ');
+  return resolveGhlOAuthScopes(supabase);
 }
 
-async function exchangeWithFallback(code: string, preferred: 'Company' | 'Location') {
-  const { clientId, clientSecret, redirectUri } = ghlEnv();
+async function exchangeWithFallback(
+  supabase: ReturnType<typeof adminClient>,
+  code: string,
+  preferred: 'Company' | 'Location',
+) {
+  const { clientId, clientSecret, redirectUri } = await ghlEnv(supabase);
   const order: Array<'Company' | 'Location'> =
     preferred === 'Company' ? ['Company', 'Location'] : ['Location', 'Company'];
 
@@ -79,8 +55,9 @@ async function ensureSupabaseUser(params: {
   suggestedRole: string;
   companyId?: string;
   locationId?: string;
+  allowlist: string[];
 }) {
-  const { supabase, email, fullName, ghlUserId, suggestedRole, companyId, locationId } = params;
+  const { supabase, email, fullName, ghlUserId, suggestedRole, companyId, locationId, allowlist } = params;
 
   const { data: byGhl } = await supabase
     .from('profiles')
@@ -120,11 +97,6 @@ async function ensureSupabaseUser(params: {
     const { data } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
     existingProfile = data;
   }
-
-  const allowlist = (Deno.env.get('GHL_SUPER_ADMIN_EMAILS') || '')
-    .split(',')
-    .map((value) => value.trim().toLowerCase())
-    .filter(Boolean);
 
   let finalRole = suggestedRole;
   if (email && allowlist.includes(email.toLowerCase())) {
@@ -179,7 +151,7 @@ Deno.serve(async (req) => {
         userId = context.user.id;
       }
 
-      const { clientId, redirectUri } = ghlEnv();
+      const { clientId, redirectUri } = await ghlEnv(supabase);
       const scopes = await resolveGhlScopes(supabase);
       const state = crypto.randomUUID();
 
@@ -219,7 +191,7 @@ Deno.serve(async (req) => {
       let tokens;
       let userType: 'Company' | 'Location';
       try {
-        ({ tokens, userType } = await exchangeWithFallback(code, preferred));
+        ({ tokens, userType } = await exchangeWithFallback(supabase, code, preferred));
       } catch (error) {
         const msg = error instanceof Error ? error.message : 'GHL_TOKEN_EXCHANGE_FAILED';
         throw new Error(msg.includes('GHL_TOKEN_') ? msg : `GHL_TOKEN_EXCHANGE_FAILED:${msg}`);
@@ -316,7 +288,8 @@ Deno.serve(async (req) => {
         [ghlUser?.firstName, ghlUser?.lastName].filter(Boolean).join(' ') ||
         'Usuario HighLevel';
 
-      const suggestedRole = resolveAppRole(email, userType);
+      const allowlist = await loadSuperAdminEmails(supabase);
+      const suggestedRole = resolveAppRoleWithAllowlist(email, userType, allowlist);
       const session = await ensureSupabaseUser({
         supabase,
         email,
@@ -325,6 +298,7 @@ Deno.serve(async (req) => {
         suggestedRole,
         companyId: tokens.companyId,
         locationId: tokens.locationId,
+        allowlist,
       });
 
       await supabase.from('audit_logs').insert({

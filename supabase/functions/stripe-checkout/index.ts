@@ -2,6 +2,7 @@ import {
   corsHeaders,
   handleError,
   json,
+  loadPlatformUrls,
   requireRole,
 } from '../_shared/core.ts';
 
@@ -302,8 +303,7 @@ Deno.serve(async (req) => {
        7. VALIDAR URL PÚBLICA
     ===================================================== */
 
-    const publicUrl =
-      Deno.env.get('PUBLIC_APP_URL');
+    const { publicAppUrl: publicUrl } = await loadPlatformUrls(supabase);
 
     if (!publicUrl) {
       await supabase
