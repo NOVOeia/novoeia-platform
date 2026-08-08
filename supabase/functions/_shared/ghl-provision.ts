@@ -1,4 +1,4 @@
-import { adminClient, ghlRequest, refreshGhlAccessToken } from './core.ts';
+import { adminClient, formatErrorMessage, ghlApiErrorMessage, ghlRequest, refreshGhlAccessToken } from './core.ts';
 
 type SupabaseAdmin = ReturnType<typeof adminClient>;
 
@@ -15,7 +15,28 @@ type AgencyConnection = {
   encrypted_access_token: string;
   encrypted_refresh_token: string | null;
   expires_at: string | null;
+  scopes?: string[] | null;
+  updated_at?: string | null;
 };
+
+const REQUIRED_LOCATION_SCOPES = ['locations.write'];
+const REQUIRED_SAAS_SCOPES = ['saas/location.write', 'saas/company.read', 'saas/company.write'];
+
+function assertAgencyScopes(connection: AgencyConnection, enableSaas: boolean) {
+  const granted = new Set((connection.scopes || []).map((scope) => scope.trim()).filter(Boolean));
+  if (!granted.size) return;
+
+  const required = [...REQUIRED_LOCATION_SCOPES];
+  if (enableSaas) required.push(...REQUIRED_SAAS_SCOPES);
+
+  const missing = required.filter((scope) => !granted.has(scope));
+  if (!missing.length) return;
+
+  throw new Error(
+    `GHL_SCOPES_MISSING: faltan ${missing.join(', ')}. Token actual: ${[...granted].join(', ')}. `
+    + 'Ve a Super Admin > Configuracion > Conectar OAuth despues de actualizar scopes en GHL Marketplace y Supabase secrets.',
+  );
+}
 
 type PartnerClientRow = {
   id: string;
@@ -40,23 +61,28 @@ async function ghlSaasRequest(path: string, token: string, init: RequestInit = {
       ...(init.headers || {}),
     },
   });
-  const payload = await response.json().catch(() => ({}));
+  const payload = await response.json().catch(() => ({})) as Record<string, unknown>;
   if (!response.ok) {
-    throw new Error(payload?.message || payload?.error || `GHL_SAAS_${response.status}`);
+    throw new Error(ghlApiErrorMessage(payload, response.status, 'GHL_SAAS'));
   }
   return payload;
 }
 
-async function loadAgencyConnection(supabase: SupabaseAdmin): Promise<AgencyConnection | null> {
+export async function loadActiveAgencyConnection(supabase: SupabaseAdmin): Promise<AgencyConnection | null> {
   const { data, error } = await supabase
     .from('ghl_connections')
-    .select('id, company_id, encrypted_access_token, encrypted_refresh_token, expires_at')
+    .select('id, company_id, encrypted_access_token, encrypted_refresh_token, expires_at, scopes, updated_at')
     .eq('connection_type', 'agency')
     .eq('status', 'active')
-    .maybeSingle();
+    .order('updated_at', { ascending: false });
 
   if (error) throw error;
-  return data as AgencyConnection | null;
+
+  const rows = (data || []) as AgencyConnection[];
+  if (!rows.length) return null;
+
+  // Prefer the connection that has company_id (required for provisioning).
+  return rows.find((row) => row.company_id) || rows[0];
 }
 
 async function resolveAgencyToken(
@@ -106,25 +132,29 @@ async function loadSaasConfig(
   if (offerId) {
     const { data: offer } = await supabase
       .from('partner_offers')
-      .select('ghl_price_id, product_id, catalog_products:product_id ( ghl_product_id, metadata )')
+      .select('ghl_price_id, product_id, catalog_products:product_id ( ghl_product_id, ghl_price_id, metadata )')
       .eq('id', offerId)
       .maybeSingle();
 
-    if (offer?.ghl_price_id) priceId = String(offer.ghl_price_id);
     const product = offer?.catalog_products as Record<string, unknown> | null;
     const metadata = (product?.metadata || {}) as Record<string, unknown>;
+
+    if (offer?.ghl_price_id) priceId = String(offer.ghl_price_id);
+    else if (product?.ghl_price_id) priceId = String(product.ghl_price_id);
+
     if (product?.ghl_product_id) saasPlanId = String(product.ghl_product_id);
     if (metadata.ghl_saas_plan_id) saasPlanId = String(metadata.ghl_saas_plan_id);
     if (metadata.ghl_saas_price_id) priceId = String(metadata.ghl_saas_price_id);
   } else if (catalogProductId) {
     const { data: product } = await supabase
       .from('catalog_products')
-      .select('ghl_product_id, metadata')
+      .select('ghl_product_id, ghl_price_id, metadata')
       .eq('id', catalogProductId)
       .maybeSingle();
 
     const metadata = (product?.metadata || {}) as Record<string, unknown>;
     if (product?.ghl_product_id) saasPlanId = String(product.ghl_product_id);
+    if (product?.ghl_price_id) priceId = String(product.ghl_price_id);
     if (metadata.ghl_saas_plan_id) saasPlanId = String(metadata.ghl_saas_plan_id);
     if (metadata.ghl_saas_price_id) priceId = String(metadata.ghl_saas_price_id);
   }
@@ -222,7 +252,7 @@ export async function provisionPartnerClientInGhl(
     };
   }
 
-  const connection = await loadAgencyConnection(supabase);
+  const connection = await loadActiveAgencyConnection(supabase);
   if (!connection) {
     await supabase
       .from('partner_clients')
@@ -238,10 +268,17 @@ export async function provisionPartnerClientInGhl(
   }
 
   const { token, companyId } = await resolveAgencyToken(supabase, connection);
-  const locationId = await createGhlLocation(token, companyId, row);
+  const shouldEnableSaas = Deno.env.get('GHL_SAAS_ENABLED') === 'true';
+  assertAgencyScopes(connection, shouldEnableSaas);
+
+  let locationId: string;
+  try {
+    locationId = await createGhlLocation(token, companyId, row);
+  } catch (error) {
+    throw new Error(`GHL_CREATE_LOCATION_FAILED: ${formatErrorMessage(error)}`);
+  }
 
   let saasEnabled = false;
-  const shouldEnableSaas = Deno.env.get('GHL_SAAS_ENABLED') === 'true';
 
   if (shouldEnableSaas) {
     const { saasPlanId, priceId } = await loadSaasConfig(
@@ -251,16 +288,20 @@ export async function provisionPartnerClientInGhl(
     );
 
     if (saasPlanId || priceId || params.stripeCustomerId) {
-      await enableGhlSaas({
-        token,
-        companyId,
-        locationId,
-        clientEmail: row.email,
-        stripeCustomerId: params.stripeCustomerId || null,
-        saasPlanId,
-        priceId,
-      });
-      saasEnabled = true;
+      try {
+        await enableGhlSaas({
+          token,
+          companyId,
+          locationId,
+          clientEmail: row.email,
+          stripeCustomerId: params.stripeCustomerId || null,
+          saasPlanId,
+          priceId,
+        });
+        saasEnabled = true;
+      } catch (error) {
+        throw new Error(`GHL_ENABLE_SAAS_FAILED: ${formatErrorMessage(error)}`);
+      }
     }
   }
 

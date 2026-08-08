@@ -39,10 +39,39 @@ export function json(data: unknown, status = 200) {
 }
 
 export function handleError(error: unknown) {
-  const message = error instanceof Error ? error.message : 'UNKNOWN_ERROR';
+  const message = formatErrorMessage(error);
   console.error('[edge-error]', message, error);
   const status = message === 'UNAUTHORIZED' ? 401 : message === 'FORBIDDEN' ? 403 : 400;
   return json({ error: message }, status);
+}
+
+export function formatErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (typeof error === 'string') return error;
+  if (error && typeof error === 'object') {
+    try {
+      return JSON.stringify(error);
+    } catch {
+      return String(error);
+    }
+  }
+  return 'UNKNOWN_ERROR';
+}
+
+export function ghlApiErrorMessage(payload: Record<string, unknown>, status: number, prefix = 'GHL'): string {
+  const message = payload?.message;
+  if (typeof message === 'string' && message.trim()) return message;
+  if (message && typeof message === 'object') {
+    return `${prefix}_${status}:${formatErrorMessage(message)}`;
+  }
+
+  const error = payload?.error;
+  if (typeof error === 'string' && error.trim()) return error;
+  if (Array.isArray(error)) return error.map((item) => formatErrorMessage(item)).join(', ');
+
+  const keys = Object.keys(payload || {});
+  if (keys.length) return `${prefix}_${status}:${formatErrorMessage(payload)}`;
+  return `${prefix}_${status}`;
 }
 
 export async function ghlRequest(path: string, token: string, init: RequestInit = {}) {
@@ -55,8 +84,8 @@ export async function ghlRequest(path: string, token: string, init: RequestInit 
       ...(init.headers || {}),
     },
   });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(payload?.message || `GHL_${response.status}`);
+  const payload = await response.json().catch(() => ({})) as Record<string, unknown>;
+  if (!response.ok) throw new Error(ghlApiErrorMessage(payload, response.status));
   return payload;
 }
 

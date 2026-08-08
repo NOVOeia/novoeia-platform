@@ -1,5 +1,5 @@
 import Stripe from 'https://esm.sh/stripe@17.7.0?target=deno';
-import { adminClient, corsHeaders, handleError, json } from '../_shared/core.ts';
+import { adminClient, corsHeaders, formatErrorMessage, handleError, json } from '../_shared/core.ts';
 import { createDeferredAddonSubscriptions } from '../_shared/deferred-addon-subscriptions.ts';
 import { provisionPartnerClientInGhl } from '../_shared/ghl-provision.ts';
 
@@ -165,7 +165,7 @@ async function fulfillCheckoutSession(
         });
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = formatErrorMessage(error);
       console.error('[ghl-provision]', message, error);
 
       await supabase

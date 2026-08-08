@@ -291,6 +291,7 @@ function AdminClients() {
   const [search, setSearch] = useState('');
   const [filters, setFilters] = useState({ partnerId: '', status: '' });
   const [formPartnerId, setFormPartnerId] = useState('');
+  const [retryingClientId, setRetryingClientId] = useState(null);
 
   const load = useCallback(async () => {
     try {
@@ -336,6 +337,42 @@ function AdminClients() {
     } finally {
       setBusy(false);
     }
+  }
+
+  async function retryGhlProvision(client) {
+    try {
+      setRetryingClientId(client.id);
+      const result = await platformApi.provisionClientInGhl(client.id, {
+        offerId: client.offer_id || null,
+      });
+
+      if (result?.skipped && result?.reason === 'already_provisioned') {
+        setNotice({ type: 'success', text: 'Este cliente ya tiene subcuenta GHL activa.' });
+      } else if (result?.skipped && result?.reason === 'agency_not_connected') {
+        setNotice({ type: 'error', text: 'Conecta la agencia GHL desde Super Admin antes de reintentar.' });
+      } else if (result?.locationId) {
+        setNotice({ type: 'success', text: `Subcuenta GHL creada: ${result.locationId}` });
+      } else {
+        setNotice({ type: 'success', text: 'Activación GHL procesada.' });
+      }
+
+      await load();
+    } catch (e) {
+      setNotice({ type: 'error', text: e.message || 'No se pudo reactivar en GHL.' });
+    } finally {
+      setRetryingClientId(null);
+    }
+  }
+
+  function canRetryGhl(client) {
+    return ['failed', 'pending_agency'].includes(client.ghl_sync_status);
+  }
+
+  function ghlSyncLabel(status) {
+    if (status === 'provisioned') return 'Activo';
+    if (status === 'failed') return 'Fallido';
+    if (status === 'pending_agency') return 'Sin agencia';
+    return 'Pendiente';
   }
 
   const formPartner = partners.find(p => p.id === formPartnerId);
@@ -417,7 +454,7 @@ function AdminClients() {
         {!loading && filtered.length === 0 && <div className="novo-empty">No hay clientes con estos filtros.</div>}
         {!loading && filtered.length > 0 && (
           <table className="novo-table">
-            <thead><tr><th>Empresa</th><th>Partner</th><th>Contacto</th><th>Ubicación</th><th>Estado</th><th>Creado</th></tr></thead>
+            <thead><tr><th>Empresa</th><th>Partner</th><th>Contacto</th><th>Ubicación</th><th>Estado</th><th>GHL</th><th>Creado</th><th></th></tr></thead>
             <tbody>
               {filtered.map(client => (
                 <tr key={client.id}>
@@ -437,7 +474,33 @@ function AdminClients() {
                   <td>{client.contact_name || '—'}<br /><small style={{ color: 'var(--novo-muted)' }}>{client.email || '—'}</small></td>
                   <td>{[client.city, client.country].filter(Boolean).join(', ') || '—'}</td>
                   <td><Badge status={client.status || 'pending'} /></td>
+                  <td>
+                    <Badge
+                      status={client.ghl_sync_status === 'provisioned' ? 'active' : client.ghl_sync_status || 'pending'}
+                      label={ghlSyncLabel(client.ghl_sync_status)}
+                    />
+                    {client.ghl_location_id && (
+                      <small style={{ display: 'block', color: 'var(--novo-muted)', marginTop: 4 }}>
+                        {client.ghl_location_id.slice(0, 12)}…
+                      </small>
+                    )}
+                  </td>
                   <td>{formatDate(client.created_at)}</td>
+                  <td>
+                    {canRetryGhl(client) && (
+                      <button
+                        type="button"
+                        className="novo-btn novo-btn-ghost"
+                        style={{ whiteSpace: 'nowrap' }}
+                        disabled={retryingClientId === client.id}
+                        onClick={() => retryGhlProvision(client)}
+                      >
+                        {retryingClientId === client.id
+                          ? <><Loader2 size={13} className="spin" /> Reintentando…</>
+                          : <><RefreshCw size={13} /> Reintentar activación GHL</>}
+                      </button>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -458,7 +521,7 @@ function AdminProducts() {
   const [editItem, setEditItem] = useState(null);
   const [notice, setNotice] = useState(null);
   const [busy, setBusy] = useState(false);
-  const [form, setForm] = useState({ name: '', description: '', wholesalePrice: '', suggestedPrice: '', interval: 'month', stripeProductId: '', stripePriceId: '', active: true });
+  const [form, setForm] = useState({ name: '', description: '', wholesalePrice: '', suggestedPrice: '', interval: 'month', stripeProductId: '', stripePriceId: '', ghlProductId: '', ghlPriceId: '', active: true });
 
   const load = useCallback(async () => {
     try { setLoading(true); const data = await platformApi.listCatalogProducts(); setProducts(data?.products || []); }
@@ -469,7 +532,7 @@ function AdminProducts() {
   useEffect(() => { load(); }, [load]);
 
   function openEdit(p) {
-    setForm({ name: p.name, description: p.description || '', wholesalePrice: p.wholesale_price, suggestedPrice: p.suggested_price || '', interval: p.interval || 'month', stripeProductId: p.stripe_product_id || '', stripePriceId: p.stripe_price_id || '', active: p.active !== false });
+    setForm({ name: p.name, description: p.description || '', wholesalePrice: p.wholesale_price, suggestedPrice: p.suggested_price || '', interval: p.interval || 'month', stripeProductId: p.stripe_product_id || '', stripePriceId: p.stripe_price_id || '', ghlProductId: p.ghl_product_id || '', ghlPriceId: p.ghl_price_id || '', active: p.active !== false });
     setEditItem(p); setShowForm(true);
   }
 
@@ -486,8 +549,8 @@ function AdminProducts() {
   return (
     <div className="novo-page">
       <div className="novo-page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <div><span className="kicker">CATÁLOGO</span><h1>Productos</h1><p>Catálogo central conectado con Stripe.</p></div>
-        <button className="novo-btn novo-btn-primary" onClick={() => { setForm({ name: '', description: '', wholesalePrice: '', suggestedPrice: '', interval: 'month', stripeProductId: '', stripePriceId: '', active: true }); setEditItem(null); setShowForm(true); }}><Plus size={15} /> Nuevo producto</button>
+        <div><span className="kicker">CATÁLOGO</span><h1>Productos</h1><p>Catálogo central conectado con Stripe y GHL SaaS.</p></div>
+        <button className="novo-btn novo-btn-primary" onClick={() => { setForm({ name: '', description: '', wholesalePrice: '', suggestedPrice: '', interval: 'month', stripeProductId: '', stripePriceId: '', ghlProductId: '', ghlPriceId: '', active: true }); setEditItem(null); setShowForm(true); }}><Plus size={15} /> Nuevo producto</button>
       </div>
       {notice && <Notice {...notice} onClose={() => setNotice(null)} />}
       {showForm && (
@@ -517,7 +580,12 @@ function AdminProducts() {
             </div>
             <NField label="Stripe Product ID" value={form.stripeProductId} onChange={v => setForm({ ...form, stripeProductId: v })} />
             <NField label="Stripe Price ID" value={form.stripePriceId} onChange={v => setForm({ ...form, stripePriceId: v })} />
+            <NField label="GHL SaaS Plan ID" value={form.ghlProductId} onChange={v => setForm({ ...form, ghlProductId: v })} placeholder="ID del plan SaaS en GoHighLevel" />
+            <NField label="GHL SaaS Price ID" value={form.ghlPriceId} onChange={v => setForm({ ...form, ghlPriceId: v })} placeholder="price_… (tarifa del plan en GHL)" />
           </div>
+          <p style={{ color: 'var(--novo-muted)', fontSize: 12, margin: '0 0 16px' }}>
+            Plan y Price ID se usan al activar la subcuenta GHL del cliente. Encuéntralos en GHL → SaaS Configurator → tu plan → opción de precio.
+          </p>
           <div style={{ display: 'flex', gap: 10 }}>
             <button className="novo-btn novo-btn-primary" onClick={save} disabled={busy}><Save size={14} /> {editItem ? 'Actualizar' : 'Crear producto'}</button>
             <button className="novo-btn novo-btn-ghost" onClick={() => setShowForm(false)}>Cancelar</button>
@@ -533,7 +601,7 @@ function AdminProducts() {
         {!loading && products.length === 0 && <div className="novo-empty" style={{ padding: '48px 24px' }}><Package size={32} style={{ opacity: .2, marginBottom: 12 }} /><p>No hay productos aún.</p></div>}
         {!loading && products.length > 0 && (
           <table className="novo-table">
-            <thead><tr><th>Producto</th><th>Intervalo</th><th>Mayorista</th><th>Sugerido</th><th>Stripe</th><th>Estado</th><th>Acciones</th></tr></thead>
+            <thead><tr><th>Producto</th><th>Intervalo</th><th>Mayorista</th><th>Sugerido</th><th>Stripe</th><th>GHL</th><th>Estado</th><th>Acciones</th></tr></thead>
             <tbody>
               {products.map(p => (
                 <tr key={p.id}>
@@ -542,6 +610,15 @@ function AdminProducts() {
                   <td><span style={{ color: 'var(--novo-success)', fontWeight: 600 }}>${p.wholesale_price}</span></td>
                   <td><span style={{ color: 'var(--novo-purple)' }}>${p.suggested_price || '—'}</span></td>
                   <td>{p.stripe_product_id ? <span style={{ color: 'var(--novo-success)', fontSize: 11 }}>✓ Vinculado</span> : <span style={{ color: 'var(--novo-muted)', fontSize: 11 }}>Sin vincular</span>}</td>
+                  <td>
+                    {p.ghl_product_id || p.ghl_price_id ? (
+                      <span style={{ color: 'var(--novo-success)', fontSize: 11 }}>
+                        {p.ghl_product_id && p.ghl_price_id ? '✓ Plan + precio' : p.ghl_product_id ? '✓ Plan' : '✓ Precio'}
+                      </span>
+                    ) : (
+                      <span style={{ color: 'var(--novo-muted)', fontSize: 11 }}>Sin vincular</span>
+                    )}
+                  </td>
                   <td><Badge status={p.active ? 'active' : 'inactive'} /></td>
                   <td><button className="novo-btn novo-btn-ghost" style={{ padding: '4px 10px', fontSize: 11 }} onClick={() => openEdit(p)}><Edit2 size={12} /> Editar</button></td>
                 </tr>
@@ -1043,9 +1120,47 @@ function AdminPayments() {
 ================================ */
 function AdminSettings() {
   const [tab, setTab] = useState('ghl');
-  const [settings, setSettings] = useState({ ghlClientId: '', ghlClientSecret: '', ghlRedirectUri: '', ghlScopes: '', stripeSecretKey: '', stripeWebhookSecret: '', supabaseServiceRoleKey: '', webhookBaseUrl: '' });
+  const defaultScopes = 'users.readonly locations.readonly locations.write companies.readonly saas/company.read saas/company.write saas/location.write';
+  const [settings, setSettings] = useState({
+    ghlClientId: '',
+    ghlClientSecret: '',
+    ghlRedirectUri: typeof window !== 'undefined' ? `${window.location.origin}/` : '',
+    ghlScopes: defaultScopes,
+    ghlCompanyId: '',
+    ghlLocationId: '',
+    ghlUserType: '',
+    ghlConnectedAt: '',
+    stripeSecretKey: '',
+    stripeWebhookSecret: '',
+    supabaseServiceRoleKey: '',
+    webhookBaseUrl: '',
+  });
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState(null);
+
+  useEffect(() => {
+    platformApi.getIntegrationSettings()
+      .then((data) => {
+        const saved = data?.settings;
+        if (!saved) return;
+        setSettings(current => ({
+          ...current,
+          ghlClientId: saved.ghlClientId || current.ghlClientId,
+          ghlRedirectUri: saved.ghlRedirectUri || current.ghlRedirectUri,
+          ghlScopes: saved.ghlScopes || current.ghlScopes,
+          ghlClientSecret: saved.ghlClientSecret || current.ghlClientSecret,
+          stripeSecretKey: saved.stripeSecretKey || current.stripeSecretKey,
+          stripeWebhookSecret: saved.stripeWebhookSecret || current.stripeWebhookSecret,
+          supabaseServiceRoleKey: saved.supabaseServiceRoleKey || current.supabaseServiceRoleKey,
+          webhookBaseUrl: saved.webhookBaseUrl || current.webhookBaseUrl,
+          ghlCompanyId: saved.ghlCompanyId || '',
+          ghlLocationId: saved.ghlLocationId || '',
+          ghlUserType: saved.ghlUserType || '',
+          ghlConnectedAt: saved.ghlConnectedAt || '',
+        }));
+      })
+      .catch(() => {});
+  }, []);
 
   async function save() {
     try { setBusy(true); await platformApi.saveIntegrationSettings(settings); setNotice({ type: 'success', text: 'Configuración guardada.' }); }
@@ -1054,8 +1169,34 @@ function AdminSettings() {
   }
 
   async function connectGhl() {
-    try { setBusy(true); const data = await platformApi.startGhlOAuth(); if (!data?.authorizationUrl) throw new Error('No se recibió URL.'); window.location.href = data.authorizationUrl; }
-    catch (e) { setNotice({ type: 'error', text: e.message }); setBusy(false); }
+    if (!settings.ghlRedirectUri?.trim()) {
+      setNotice({ type: 'error', text: 'Completa Redirect URI (ej. http://localhost:5173/).' });
+      return;
+    }
+    if (settings.ghlClientId?.includes('@')) {
+      setNotice({ type: 'error', text: 'Client ID incorrecto: debe ser el ID de la app GHL Marketplace, no un email.' });
+      return;
+    }
+    if (!settings.ghlScopes?.includes('locations.write')) {
+      setNotice({ type: 'error', text: 'Scopes debe incluir locations.write.' });
+      return;
+    }
+
+    try {
+      setBusy(true);
+      await platformApi.saveIntegrationSettings(settings);
+      const data = await platformApi.startGhlOAuth();
+      if (!data?.authorizationUrl) throw new Error('No se recibió URL.');
+      if (!String(data.requestedScopes || []).includes('locations.write')) {
+        setNotice({
+          type: 'error',
+          text: 'OAuth no incluye locations.write. Actualiza el secret GHL_SCOPES en Supabase y vuelve a conectar.',
+        });
+        setBusy(false);
+        return;
+      }
+      window.location.href = data.authorizationUrl;
+    } catch (e) { setNotice({ type: 'error', text: e.message }); setBusy(false); }
   }
 
   const tabs = [['ghl','HighLevel',PlugZap],['stripe','Stripe',CreditCard],['supabase','Supabase',ShieldCheck],['webhooks','Webhooks',Webhook],['security','Seguridad',KeyRound]];
@@ -1077,11 +1218,17 @@ function AdminSettings() {
         <div className="novo-card">
           <div className="novo-card-header"><div><div className="novo-card-title">HighLevel OAuth</div><div className="novo-card-sub">Conexión principal con GoHighLevel</div></div><button className="novo-btn novo-btn-primary" onClick={connectGhl} disabled={busy}><PlugZap size={14}/> Conectar OAuth</button></div>
           <div className="novo-grid-2">
-            <NField label="Client ID" value={settings.ghlClientId} onChange={v=>setSettings({...settings,ghlClientId:v})} />
+            <NField label="Client ID" value={settings.ghlClientId} onChange={v=>setSettings({...settings,ghlClientId:v})} placeholder="6a6b6070...-ms7m9fh5 (desde GHL Marketplace)" />
             <NField label="Client Secret" secret value={settings.ghlClientSecret} onChange={v=>setSettings({...settings,ghlClientSecret:v})} />
-            <NField label="Redirect URI" value={settings.ghlRedirectUri} onChange={v=>setSettings({...settings,ghlRedirectUri:v})} />
+            <NField label="Redirect URI" value={settings.ghlRedirectUri} onChange={v=>setSettings({...settings,ghlRedirectUri:v})} placeholder="http://localhost:5173/" />
             <NField label="Scopes" value={settings.ghlScopes} onChange={v=>setSettings({...settings,ghlScopes:v})} />
           </div>
+          <p style={{ color: 'var(--novo-muted)', fontSize: 12, margin: '0 0 16px' }}>
+            Debe incluir <code>locations.write</code>. Al conectar OAuth se combinan estos scopes con el secret <code>GHL_SCOPES</code> de Supabase.
+            {settings.ghlCompanyId && (
+              <> Agencia conectada: <code>{settings.ghlCompanyId}</code>{settings.ghlUserType ? ` (${settings.ghlUserType})` : ''}.</>
+            )}
+          </p>
         </div>
       )}
       {tab==='stripe' && (
