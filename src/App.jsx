@@ -3,8 +3,6 @@ import HomePage from './pages/HomePage.jsx';
 import ClientsPage from './pages/ClientsPage.jsx';
 import PartnersPage from './pages/PartnersPage.jsx';
 import WebsPage from './pages/WebsPage.jsx';
-import CatalogPage from './pages/CatalogPage.jsx';
-import PricingPage from './pages/PricingPage.jsx';
 import RegistrationPage from './pages/RegistrationPage.jsx';
 import LoginPage from './pages/LoginPage.jsx';
 import GhlCallbackPage from './pages/GhlCallbackPage.jsx';
@@ -199,8 +197,6 @@ export default function App() {
     if (page === 'clientes') return <ClientsPage go={go} />;
     if (page === 'partners') return <PartnersPage go={go} />;
     if (page === 'webs') return <WebsPage go={go} />;
-    if (page === 'catalogo') return <CatalogPage go={go} />;
-    if (page === 'precios') return <PricingPage go={go} />;
     if (page === 'registro-cliente') return <ClientInterestPage go={go} />;
     if (page === 'login') return <LoginPage go={go} />;
     if (page === 'checkout') {

@@ -24,7 +24,7 @@ export default function ClientInterestPage({ go }) {
         </div>
 
         <Button className="full" onClick={() => go('partners')}>Conocer partners NOVO</Button>
-        <Button className="full" variant="ghost" onClick={() => go('precios')}>Ver planes</Button>
+        <Button className="full" variant="ghost" onClick={() => go('clientes')}>Ver planes</Button>
       </div>
     </div>
   );
