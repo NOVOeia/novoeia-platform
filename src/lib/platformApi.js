@@ -280,7 +280,7 @@ function translateKnownError(rawError) {
   return raw;
 }
 
-async function parseFunctionError(error, data) {
+async function parseFunctionError(error, data, functionName = 'edge-function') {
   if (data?.error) {
     return translateKnownError(data.error);
   }
@@ -304,13 +304,13 @@ async function parseFunctionError(error, data) {
     error?.message ===
     'Edge Function returned a non-2xx status code'
   ) {
-    return 'La Edge Function falló. Revisa Supabase → Edge Functions → Logs.';
+    return `La Edge Function "${functionName}" falló. Revisa Supabase → Edge Functions → Logs.`;
   }
 
   if (
     error?.message?.includes('Failed to send a request to the Edge Function')
   ) {
-    return 'No se pudo conectar con la Edge Function. Verifica que esté desplegada en Supabase.';
+    return `No se pudo conectar con "${functionName}". Despliégala con: supabase functions deploy ${functionName}`;
   }
 
   return translateKnownError(error?.message);
@@ -323,9 +323,8 @@ async function invoke(functionName, body = {}) {
     });
 
   if (error) {
-    throw new Error(
-      await parseFunctionError(error, data),
-    );
+    const parsed = await parseFunctionError(error, data, functionName);
+    throw new Error(parsed);
   }
 
   if (data?.error) {
@@ -416,6 +415,12 @@ export const platformApi = {
     return invoke('platform-admin', {
       action: 'saveIntegrationSettings',
       payload,
+    });
+  },
+
+  getIntegrationSettings() {
+    return invoke('platform-admin', {
+      action: 'getIntegrationSettings',
     });
   },
 
@@ -511,6 +516,16 @@ export const platformApi = {
   syncGhlLocations() {
     return invoke('ghl-proxy', {
       action: 'syncLocations',
+    });
+  },
+
+  provisionClientInGhl(clientId, payload = {}) {
+    return invoke('ghl-proxy', {
+      action: 'provisionClient',
+      clientId,
+      offerId: payload.offerId || null,
+      catalogProductId: payload.catalogProductId || null,
+      stripeCustomerId: payload.stripeCustomerId || null,
     });
   },
 
@@ -673,6 +688,12 @@ export const platformApi = {
 
       stripe_price_id:
         payload.stripePriceId || null,
+
+      ghl_product_id:
+        payload.ghlProductId || null,
+
+      ghl_price_id:
+        payload.ghlPriceId || null,
 
       active:
         payload.active !== false,
@@ -921,6 +942,8 @@ export const platformApi = {
         logo_url,
         created_at,
         offer_id,
+        ghl_location_id,
+        ghl_sync_status,
         partners:partner_id ( id, name, slug )
       `)
       .order('created_at', { ascending: false });

@@ -9,15 +9,43 @@ import {
   resolveAppRole,
 } from '../_shared/core.ts';
 
+function normalizeScopeList(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+  return [...new Set(
+    raw
+      .replace(/,/g, ' ')
+      .split(/\s+/)
+      .map((scope) => scope.trim())
+      .filter(Boolean),
+  )];
+}
+
 function ghlEnv() {
   const clientId = Deno.env.get('GHL_CLIENT_ID');
   const clientSecret = Deno.env.get('GHL_CLIENT_SECRET');
   const redirectUri = Deno.env.get('GHL_REDIRECT_URI');
-  const scopes = Deno.env.get('GHL_SCOPES');
-  if (!clientId || !clientSecret || !redirectUri || !scopes) {
+  if (!clientId || !clientSecret || !redirectUri) {
     throw new Error('GHL_OAUTH_NOT_CONFIGURED');
   }
-  return { clientId, clientSecret, redirectUri, scopes };
+  return { clientId, clientSecret, redirectUri };
+}
+
+async function resolveGhlScopes(supabase: ReturnType<typeof adminClient>): Promise<string> {
+  const envScopes = normalizeScopeList(Deno.env.get('GHL_SCOPES'));
+  const { data } = await supabase
+    .from('platform_integrations')
+    .select('public_config')
+    .eq('provider', 'ghl')
+    .maybeSingle();
+
+  const publicConfig = (data?.public_config || {}) as Record<string, unknown>;
+  const dbScopes = normalizeScopeList(
+    typeof publicConfig.scopes === 'string' ? publicConfig.scopes : null,
+  );
+
+  const merged = [...new Set([...envScopes, ...dbScopes])];
+  if (!merged.length) throw new Error('GHL_OAUTH_NOT_CONFIGURED');
+  return merged.join(' ');
 }
 
 async function exchangeWithFallback(code: string, preferred: 'Company' | 'Location') {
@@ -151,7 +179,8 @@ Deno.serve(async (req) => {
         userId = context.user.id;
       }
 
-      const { clientId, redirectUri, scopes } = ghlEnv();
+      const { clientId, redirectUri } = ghlEnv();
+      const scopes = await resolveGhlScopes(supabase);
       const state = crypto.randomUUID();
 
       await supabase.from('oauth_states').delete().lt('created_at', new Date(Date.now() - 15 * 60 * 1000).toISOString());
@@ -170,7 +199,7 @@ Deno.serve(async (req) => {
       url.searchParams.set('scope', scopes);
       url.searchParams.set('state', state);
 
-      return json({ authorizationUrl: url.toString(), state, purpose });
+      return json({ authorizationUrl: url.toString(), state, purpose, requestedScopes: scopes.split(' ') });
     }
 
     if (action === 'callback') {
@@ -206,6 +235,17 @@ Deno.serve(async (req) => {
         : null;
 
       const connectionType = userType === 'Company' ? 'agency' : 'location';
+
+      if (connectionType === 'agency') {
+        await supabase
+          .from('ghl_connections')
+          .update({
+            status: 'inactive',
+            updated_at: new Date().toISOString(),
+          })
+          .eq('connection_type', 'agency');
+      }
+
       const { error: connError } = await supabase.from('ghl_connections').upsert({
         company_id: tokens.companyId || null,
         location_id: tokens.locationId || null,
@@ -219,14 +259,26 @@ Deno.serve(async (req) => {
       }, { onConflict: 'connection_type,company_id,location_id' });
       if (connError) throw new Error(`GHL_CONNECTION_SAVE:${connError.message}`);
 
+      const { data: existingIntegration } = await supabase
+        .from('platform_integrations')
+        .select('public_config, encrypted_secret')
+        .eq('provider', 'ghl')
+        .maybeSingle();
+
+      const previousPublic = (existingIntegration?.public_config || {}) as Record<string, unknown>;
+      const publicConfig = {
+        ...previousPublic,
+        companyId: tokens.companyId || null,
+        locationId: tokens.locationId || null,
+        userType,
+        connectedAt: new Date().toISOString(),
+      };
+
       const { error: integrationError } = await supabase.from('platform_integrations').upsert({
         provider: 'ghl',
         status: 'connected',
-        public_config: {
-          companyId: tokens.companyId || null,
-          locationId: tokens.locationId || null,
-          userType,
-        },
+        public_config: publicConfig,
+        encrypted_secret: existingIntegration?.encrypted_secret || null,
         updated_at: new Date().toISOString(),
       }, { onConflict: 'provider' });
       if (integrationError) throw new Error(`INTEGRATION_SAVE:${integrationError.message}`);

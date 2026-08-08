@@ -53,6 +53,45 @@ Deno.serve(async (req) => {
       return json({ connected: Boolean(data), integration: data });
     }
 
+    if (action === 'getIntegrationSettings') {
+      const { data, error } = await supabase
+        .from('platform_integrations')
+        .select('provider, public_config, encrypted_secret')
+        .in('provider', ['ghl', 'stripe', 'supabase', 'webhooks']);
+      if (error) throw error;
+
+      const byProvider = Object.fromEntries((data || []).map((row) => [row.provider, row]));
+      const ghlPublic = (byProvider.ghl?.public_config || {}) as Record<string, string>;
+      const ghlSecret = byProvider.ghl?.encrypted_secret
+        ? JSON.parse(byProvider.ghl.encrypted_secret as string)
+        : {};
+      const stripePublic = (byProvider.stripe?.public_config || {}) as Record<string, string>;
+      const stripeSecret = byProvider.stripe?.encrypted_secret
+        ? JSON.parse(byProvider.stripe.encrypted_secret as string)
+        : {};
+      const supabaseSecret = byProvider.supabase?.encrypted_secret
+        ? JSON.parse(byProvider.supabase.encrypted_secret as string)
+        : {};
+      const webhooksPublic = (byProvider.webhooks?.public_config || {}) as Record<string, string>;
+
+      return json({
+        settings: {
+          ghlClientId: ghlPublic.clientId || '',
+          ghlRedirectUri: ghlPublic.redirectUri || '',
+          ghlScopes: ghlPublic.scopes || '',
+          ghlCompanyId: ghlPublic.companyId || '',
+          ghlLocationId: ghlPublic.locationId || '',
+          ghlUserType: ghlPublic.userType || '',
+          ghlConnectedAt: ghlPublic.connectedAt || '',
+          ghlClientSecret: ghlSecret.clientSecret || '',
+          stripeSecretKey: stripeSecret.secretKey || '',
+          stripeWebhookSecret: stripeSecret.webhookSecret || '',
+          supabaseServiceRoleKey: supabaseSecret.serviceRoleKey || '',
+          webhookBaseUrl: webhooksPublic.baseUrl || '',
+        },
+      });
+    }
+
     throw new Error('UNKNOWN_ACTION');
   } catch (error) {
     return handleError(error);
