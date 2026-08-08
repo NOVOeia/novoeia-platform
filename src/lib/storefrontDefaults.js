@@ -78,6 +78,8 @@ export const DEFAULT_FUNNEL_SETTINGS = {
   },
 };
 
+export const MAX_PARTNER_ADDITIONAL_SERVICES = 4;
+
 export const DEFAULT_CHECKOUT = {
   title: 'Activa tu servicio',
   subtitle: 'Revisa los detalles de tu compra y completa el pago.',

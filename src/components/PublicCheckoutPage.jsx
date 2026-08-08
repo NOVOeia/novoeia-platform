@@ -139,11 +139,16 @@ export default function PublicCheckoutPage({
   );
 
   const checkoutTotals = calculateCheckoutDueToday(product, selectedActiveServices);
-  const { dueToday, subscriptionRecurringTotal, oneTimeTotal } = checkoutTotals;
+  const {
+    dueToday,
+    subscriptionRecurringTotal,
+    oneTimeTotal,
+    hasDeferredMonthlyAddons,
+  } = checkoutTotals;
   const recurringAddonsTotal = selectedActiveServices
     .filter(service => {
       const line = buildCheckoutServiceLineItem(service, product.interval);
-      return !line.bundled && line.billingType !== 'one_time';
+      return line.billingType === 'month' || line.billingType === 'year';
     })
     .reduce((sum, service) => sum + Number(service.price || 0), 0);
 
@@ -318,7 +323,7 @@ export default function PublicCheckoutPage({
                         </small>
                         {intervalMismatch && (
                           <small className="checkout-service-note">
-                            Con plan {product.interval === 'year' ? 'anual' : 'mensual'}, se cobra {lineItem.summaryLabel} en este pago.
+                            El primer mes se incluye en el pago de hoy. Después se renovará {service.billingType === 'month' ? 'mensualmente' : 'anualmente'} en una suscripción aparte.
                           </small>
                         )}
                       </span>
@@ -437,10 +442,20 @@ export default function PublicCheckoutPage({
                 <span>Total de hoy</span>
 
                 <small>
-                  {recurringAddonsTotal > 0
-                    ? `Incluye suscripción (${formatMoney(subscriptionRecurringTotal, product.currency)}${subscriptionIntervalSuffix(product.interval)})`
-                    : `La suscripción se renovará ${intervalLabel(product.interval)}.`}
-                  {oneTimeTotal > 0 && recurringAddonsTotal > 0 && (
+                  {hasDeferredMonthlyAddons ? (
+                    <>
+                      Plan {intervalLabel(product.interval)} + servicios mensuales.
+                      {' '}
+                      El plan se renueva {intervalLabel(product.interval)}.
+                      {' '}
+                      Los servicios mensuales se renuevan cada mes (desde el 2.° mes).
+                    </>
+                  ) : recurringAddonsTotal > 0 ? (
+                    `Incluye suscripción (${formatMoney(subscriptionRecurringTotal, product.currency)}${subscriptionIntervalSuffix(product.interval)})`
+                  ) : (
+                    `La suscripción se renovará ${intervalLabel(product.interval)}.`
+                  )}
+                  {oneTimeTotal > 0 && (
                     <> + {formatMoney(oneTimeTotal, product.currency)} en cargos únicos.</>
                   )}
                 </small>

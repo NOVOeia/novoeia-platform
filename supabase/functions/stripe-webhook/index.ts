@@ -1,5 +1,6 @@
 import Stripe from 'https://esm.sh/stripe@17.7.0?target=deno';
 import { adminClient, corsHeaders, handleError, json } from '../_shared/core.ts';
+import { createDeferredAddonSubscriptions } from '../_shared/deferred-addon-subscriptions.ts';
 
 function stripeClient() {
   const secret = Deno.env.get('STRIPE_SECRET_KEY');
@@ -16,6 +17,7 @@ function webhookSecret() {
 async function fulfillCheckoutSession(
   supabase: ReturnType<typeof adminClient>,
   session: Stripe.Checkout.Session,
+  stripe: Stripe,
 ) {
   const metadata = session.metadata || {};
   let salesLinkId = metadata.sales_link_id || null;
@@ -53,6 +55,12 @@ async function fulfillCheckoutSession(
       .eq('id', clientId);
   }
 
+  const deferredAddonSubscriptions = await createDeferredAddonSubscriptions(
+    stripe,
+    supabase,
+    session,
+  );
+
   if (salesLinkId) {
     const { data: salesLink } = await supabase
       .from('sales_links')
@@ -70,11 +78,24 @@ async function fulfillCheckoutSession(
           ...(salesLink?.metadata || {}),
           stripe_customer_id: session.customer || null,
           stripe_subscription_id: subscriptionId,
+          deferred_addon_subscriptions: deferredAddonSubscriptions,
           payment_status: session.payment_status || null,
           paid_at: new Date().toISOString(),
         },
       })
       .eq('id', salesLinkId);
+  } else if (deferredAddonSubscriptions.length > 0 && clientId) {
+    await supabase.from('audit_logs').insert({
+      actor_user_id: null,
+      action: 'stripe.deferred_addon_subscriptions_created',
+      entity_type: 'partner_client',
+      entity_id: clientId,
+      metadata: {
+        sessionId: session.id,
+        partnerId,
+        deferredAddonSubscriptions,
+      },
+    });
   }
 
   if (partnerId && session.id) {
@@ -108,6 +129,7 @@ async function fulfillCheckoutSession(
       clientId,
       offerId,
       subscriptionId,
+      deferredAddonSubscriptions,
       paymentStatus: session.payment_status,
     },
   });
@@ -117,6 +139,7 @@ async function fulfillCheckoutSession(
     clientId,
     partnerId,
     subscriptionId,
+    deferredAddonSubscriptions,
   };
 }
 
@@ -159,7 +182,7 @@ Deno.serve(async (req) => {
     if (event.type === 'checkout.session.completed') {
       const session = event.data.object as Stripe.Checkout.Session;
       if (session.mode === 'subscription' && session.payment_status === 'paid') {
-        result = { ...result, ...(await fulfillCheckoutSession(supabase, session)) };
+        result = { ...result, ...(await fulfillCheckoutSession(supabase, session, stripe)) };
       } else {
         result.skipped = 'not_paid_yet';
       }
@@ -181,7 +204,7 @@ Deno.serve(async (req) => {
       const subscription = event.data.object as Stripe.Subscription;
       const metadata = subscription.metadata || {};
 
-      if (metadata.client_id) {
+      if (metadata.type !== 'partner_additional_service_subscription' && metadata.client_id) {
         await supabase
           .from('partner_clients')
           .update({ status: 'cancelled' })

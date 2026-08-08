@@ -1,7 +1,9 @@
 type ServiceInput = {
+  id?: unknown;
   title?: unknown;
   price?: unknown;
   billingType?: unknown;
+  stripe_price_id?: unknown;
 };
 
 export type CheckoutLineItem = {
@@ -10,6 +12,7 @@ export type CheckoutLineItem = {
   currency: string;
   billingType: 'one_time' | 'month' | 'year';
   bundledAsOneTime?: boolean;
+  stripePriceId?: string;
 };
 
 function normalizeProductInterval(interval: unknown): 'month' | 'year' {
@@ -45,12 +48,13 @@ export function buildAdditionalLineItems(
           unitAmountCents,
           currency,
           billingType: billingType === 'one_time' ? 'one_time' as const : serviceCycle,
+          stripePriceId: String(service.stripe_price_id || '') || undefined,
         };
       }
 
       if (serviceCycle === 'month' && productCycle === 'year') {
         return {
-          name: `${title} (1er mes)`,
+          name: `${title} (1er mes incluido)`,
           unitAmountCents,
           currency,
           billingType: 'one_time' as const,
@@ -77,6 +81,22 @@ export function buildAdditionalLineItems(
       };
     })
     .filter((item): item is CheckoutLineItem => Boolean(item));
+}
+
+export function getDeferredAddonServiceIds(
+  productInterval: unknown,
+  services: ServiceInput[],
+): string[] {
+  const productCycle = normalizeProductInterval(productInterval);
+
+  return services
+    .filter((service) => {
+      const billingType = String(service.billingType || 'one_time');
+      const serviceCycle = serviceBillingInterval(billingType);
+      return serviceCycle !== 'one_time' && serviceCycle !== productCycle;
+    })
+    .map((service) => String(service.id || ''))
+    .filter(Boolean);
 }
 
 export function calculateDueTodayTotal(

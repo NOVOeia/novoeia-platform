@@ -35,9 +35,9 @@ export function buildCheckoutServiceLineItem(service, productInterval) {
     return {
       name: title,
       dueToday: price,
-      billingType: 'one_time',
+      billingType: 'month',
       bundled: true,
-      summaryLabel: 'pago único (1er mes)',
+      summaryLabel: 'Suscripción mensual · 1er mes incluido hoy',
     };
   }
 
@@ -46,9 +46,9 @@ export function buildCheckoutServiceLineItem(service, productInterval) {
     return {
       name: title,
       dueToday: monthlyPortion,
-      billingType: 'one_time',
+      billingType: 'year',
       bundled: true,
-      summaryLabel: 'pago único (1er mes)',
+      summaryLabel: 'Suscripción anual · 1er mes incluido hoy',
     };
   }
 
@@ -67,18 +67,29 @@ export function calculateCheckoutDueToday(product, services = []) {
     (sum, service) => sum + buildCheckoutServiceLineItem(service, product?.interval).dueToday,
     0,
   );
-  const recurringAddonTotal = services
-    .filter(service => !buildCheckoutServiceLineItem(service, product?.interval).bundled
-      && serviceBillingInterval(service.billingType) !== 'one_time')
+  const recurringAddonTotal = services.reduce((sum, service) => {
+    const line = buildCheckoutServiceLineItem(service, product?.interval);
+    if (line.billingType === 'month' || line.billingType === 'year') {
+      return sum + Number(service.price || 0);
+    }
+    return sum;
+  }, 0);
+
+  const oneTimeTotal = services
+    .filter(service => serviceBillingInterval(service.billingType) === 'one_time')
     .reduce((sum, service) => sum + Number(service.price || 0), 0);
+
+  const deferredMonthlyAddons = services.filter(service => {
+    const line = buildCheckoutServiceLineItem(service, product?.interval);
+    return line.bundled && line.billingType === 'month';
+  });
 
   return {
     dueToday: productPrice + addonTotal,
     subscriptionRecurringTotal: productPrice + recurringAddonTotal,
-    oneTimeTotal: services
-      .filter(service => buildCheckoutServiceLineItem(service, product?.interval).billingType === 'one_time'
-        || buildCheckoutServiceLineItem(service, product?.interval).bundled)
-      .reduce((sum, service) => sum + buildCheckoutServiceLineItem(service, product?.interval).dueToday, 0),
+    oneTimeTotal,
+    deferredMonthlyAddons,
+    hasDeferredMonthlyAddons: deferredMonthlyAddons.length > 0,
   };
 }
 

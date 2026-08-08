@@ -1,4 +1,15 @@
-import { corsHeaders, handleError, json, requireRole } from '../_shared/core.ts';
+import { corsHeaders, handleError, json, requireRole, adminClient } from '../_shared/core.ts';
+import { syncAdditionalServicesToStripe } from '../_shared/additional-services-stripe.ts';
+import { createDeferredAddonSubscriptions } from '../_shared/deferred-addon-subscriptions.ts';
+import Stripe from 'https://esm.sh/stripe@17.7.0?target=deno';
+
+const MAX_PARTNER_ADDITIONAL_SERVICES = 4;
+
+function assertAdditionalServicesLimit(services: unknown[]) {
+  if (services.length > MAX_PARTNER_ADDITIONAL_SERVICES) {
+    throw new Error(`ADDITIONAL_SERVICES_LIMIT_${MAX_PARTNER_ADDITIONAL_SERVICES}`);
+  }
+}
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
@@ -178,6 +189,18 @@ Deno.serve(async (req) => {
 
     if (action === 'saveAdditionalServices') {
       const services = Array.isArray(payload.additionalServices) ? payload.additionalServices : [];
+      assertAdditionalServicesLimit(services);
+
+      let syncedServices: Array<Record<string, unknown>>;
+      try {
+        syncedServices = await syncAdditionalServicesToStripe(
+          services as Array<Record<string, unknown>>,
+          String(partnerId),
+        );
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'UNKNOWN_ERROR';
+        throw new Error(`ADDITIONAL_SERVICE_STRIPE:${message}`);
+      }
 
       const { data: partner, error: readError } = await supabase
         .from('partners')
@@ -188,7 +211,7 @@ Deno.serve(async (req) => {
 
       const branding = {
         ...(partner.branding || {}),
-        additionalServices: services,
+        additionalServices: syncedServices,
       };
 
       const { data, error } = await supabase
@@ -201,7 +224,50 @@ Deno.serve(async (req) => {
         .select('id, name, slug, status, branding, social_settings')
         .single();
       if (error) throw error;
+
+      await supabase.from('audit_logs').insert({
+        actor_user_id: profile.id,
+        action: 'partner.additional_services_saved',
+        entity_type: 'partner',
+        entity_id: partnerId,
+        metadata: {
+          partnerId,
+          serviceCount: syncedServices.length,
+          stripeLinkedCount: syncedServices.filter(
+            (service) => Boolean(service.stripe_price_id),
+          ).length,
+        },
+      });
+
       return json({ partner: data });
+    }
+
+    if (action === 'repairDeferredAddonSubscriptions') {
+      const sessionId = String(payload.checkoutSessionId || '').trim();
+      if (!sessionId) throw new Error('CHECKOUT_SESSION_ID_REQUIRED');
+
+      const stripeSecret = Deno.env.get('STRIPE_SECRET_KEY');
+      if (!stripeSecret) throw new Error('STRIPE_NOT_CONFIGURED');
+
+      const stripe = new Stripe(stripeSecret, { apiVersion: '2023-10-16' });
+      const session = await stripe.checkout.sessions.retrieve(sessionId);
+
+      if (session.payment_status !== 'paid') {
+        throw new Error('CHECKOUT_NOT_PAID');
+      }
+
+      const sessionPartnerId = String(session.metadata?.partner_id || '');
+      if (profile.role !== 'super_admin' && sessionPartnerId !== String(partnerId)) {
+        throw new Error('FORBIDDEN');
+      }
+
+      const subscriptions = await createDeferredAddonSubscriptions(
+        stripe,
+        adminClient(),
+        session,
+      );
+
+      return json({ subscriptions });
     }
 
     if (action === 'saveBranding') {
@@ -220,6 +286,9 @@ Deno.serve(async (req) => {
       const additionalServices = Array.isArray(payload.additionalServices)
         ? payload.additionalServices
         : (Array.isArray(existingBranding.additionalServices) ? existingBranding.additionalServices : []);
+      if (payload.additionalServices !== undefined) {
+        assertAdditionalServicesLimit(additionalServices);
+      }
       const productOverrides = payload.productOverrides !== undefined
         ? payload.productOverrides
         : (existingBranding.productOverrides || {});

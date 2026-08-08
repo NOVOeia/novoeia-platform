@@ -154,6 +154,15 @@ const ERROR_HINTS = {
   PRICE_BELOW_WHOLESALE:
     'El precio de venta no puede ser menor al costo mayorista.',
 
+  ADDITIONAL_SERVICES_LIMIT_4:
+    'Solo puedes tener hasta 4 servicios adicionales.',
+
+  CHECKOUT_SESSION_ID_REQUIRED:
+    'Indica el ID de la sesión de checkout de Stripe (cs_...).',
+
+  CHECKOUT_NOT_PAID:
+    'La sesión de checkout aún no está pagada.',
+
   INVALID_CHECKOUT_PAYLOAD:
     'Selecciona producto, cliente y define un precio de venta válido.',
 
@@ -247,6 +256,7 @@ function translateKnownError(rawError) {
   const prefixedErrors = [
     ['STRIPE_CHECKOUT:', 'Stripe: '],
     ['STRIPE_PAYMENT_LINK:', 'Stripe: '],
+    ['ADDITIONAL_SERVICE_STRIPE:', 'No se pudo sincronizar el servicio con Stripe: '],
     ['OFFER_SAVE:', 'No se pudo guardar la oferta: '],
     ['OFFER_UPDATE:', 'No se pudo actualizar la oferta: '],
     ['SALES_LINK_CREATE:', 'No se pudo registrar el link de venta: '],
