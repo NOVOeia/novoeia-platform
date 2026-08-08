@@ -9,7 +9,6 @@ import {
   STEP_NAV,
 } from './partnerRegistrationConfig.js';
 import { PartnerPrivacyModal, PartnerTermsModal } from './PartnerRegistrationLegalModals.jsx';
-import '../../styles/partner-registration.css';
 
 function Required() {
   return <span className="required">*</span>;
@@ -24,15 +23,6 @@ export default function PartnerRegistrationForm({ go }) {
   const [termsOpen, setTermsOpen] = useState(false);
   const [privacyOpen, setPrivacyOpen] = useState(false);
   const formRef = useRef(null);
-
-  useEffect(() => {
-    document.documentElement.classList.add('partner-registration-active');
-    document.body.classList.add('partner-registration-active');
-    return () => {
-      document.documentElement.classList.remove('partner-registration-active');
-      document.body.classList.remove('partner-registration-active');
-    };
-  }, []);
 
   useEffect(() => {
     document.body.classList.toggle('pr-partner-reg-modal-open', termsOpen || privacyOpen);

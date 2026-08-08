@@ -7,8 +7,11 @@ body.partner-registration-active {
 }
 
 body.partner-registration-active .public-header,
+body.partner-registration-active .app .public-header,
 body.partner-registration-active footer {
   display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
 }
 
 body.partner-registration-active .app {
@@ -42,8 +45,10 @@ body.partner-registration-active .app {
   --radius-sm: 13px;
 
   isolation: isolate;
-  position: relative;
-  z-index: 1;
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  overflow-y: auto;
   scroll-behavior: smooth;
   min-height: 100vh;
   font-family:

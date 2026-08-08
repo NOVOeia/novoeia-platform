@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import HomePage from './pages/HomePage.jsx';
 import ClientsPage from './pages/ClientsPage.jsx';
 import PartnersPage from './pages/PartnersPage.jsx';
@@ -185,6 +185,12 @@ export default function App() {
     setPage('ghl-callback');
   }, [oauth]);
 
+  useLayoutEffect(() => {
+    const active = page === 'registro-partner';
+    document.documentElement.classList.toggle('partner-registration-active', active);
+    document.body.classList.toggle('partner-registration-active', active);
+  }, [page]);
+
   const content = useMemo(() => {
     if (oauth || page === 'ghl-callback') {
       return <GhlCallbackPage go={go} code={oauth?.code} state={oauth?.state} />;
@@ -196,7 +202,6 @@ export default function App() {
     if (page === 'catalogo') return <CatalogPage go={go} />;
     if (page === 'precios') return <PricingPage go={go} />;
     if (page === 'registro-cliente') return <ClientInterestPage go={go} />;
-    if (page === 'registro-partner') return <RegistrationPage go={go} />;
     if (page === 'login') return <LoginPage go={go} />;
     if (page === 'checkout') {
       return (
@@ -224,6 +229,10 @@ export default function App() {
     if (page === 'client-dashboard') return <AppShell role="client" section={section} go={go} />;
     return <HomePage go={go} />;
   }, [page, section, landingSlug, checkoutProductId, oauth]);
+
+  if (page === 'registro-partner') {
+    return <RegistrationPage go={go} />;
+  }
 
   return <div className="app">{content}</div>;
 }
