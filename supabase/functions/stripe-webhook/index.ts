@@ -1,6 +1,7 @@
 import Stripe from 'https://esm.sh/stripe@17.7.0?target=deno';
 import { adminClient, corsHeaders, handleError, json } from '../_shared/core.ts';
 import { createDeferredAddonSubscriptions } from '../_shared/deferred-addon-subscriptions.ts';
+import { provisionPartnerClientInGhl } from '../_shared/ghl-provision.ts';
 
 function stripeClient() {
   const secret = Deno.env.get('STRIPE_SECRET_KEY');
@@ -134,12 +135,68 @@ async function fulfillCheckoutSession(
     },
   });
 
+  let ghlProvision: Record<string, unknown> | null = null;
+
+  if (clientId) {
+    try {
+      const result = await provisionPartnerClientInGhl(supabase, {
+        clientId,
+        offerId,
+        catalogProductId: metadata.catalog_product_id || null,
+        stripeCustomerId: typeof session.customer === 'string'
+          ? session.customer
+          : session.customer?.id || null,
+      });
+
+      ghlProvision = result as Record<string, unknown>;
+
+      if (!result.skipped) {
+        await supabase.from('audit_logs').insert({
+          actor_user_id: null,
+          action: 'ghl.client_provisioned',
+          entity_type: 'partner_client',
+          entity_id: clientId,
+          metadata: {
+            sessionId: session.id,
+            partnerId,
+            locationId: result.locationId,
+            saasEnabled: result.saasEnabled,
+          },
+        });
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error('[ghl-provision]', message, error);
+
+      await supabase
+        .from('partner_clients')
+        .update({ ghl_sync_status: 'failed' })
+        .eq('id', clientId);
+
+      await supabase.from('audit_logs').insert({
+        actor_user_id: null,
+        action: 'ghl.provision_failed',
+        entity_type: 'partner_client',
+        entity_id: clientId,
+        metadata: {
+          sessionId: session.id,
+          partnerId,
+          offerId,
+          error: message,
+        },
+      });
+
+      ghlProvision = { failed: true, error: message };
+    }
+  }
+
   return {
     salesLinkId,
     clientId,
     partnerId,
     subscriptionId,
     deferredAddonSubscriptions,
+    ghlProvision,
   };
 }
 

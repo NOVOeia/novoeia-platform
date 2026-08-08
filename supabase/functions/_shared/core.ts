@@ -104,6 +104,35 @@ export async function exchangeGhlCode(params: {
   return payload as GhlTokenResponse;
 }
 
+export async function refreshGhlAccessToken(refreshToken: string): Promise<GhlTokenResponse> {
+  const clientId = Deno.env.get('GHL_CLIENT_ID');
+  const clientSecret = Deno.env.get('GHL_CLIENT_SECRET');
+  if (!clientId || !clientSecret) throw new Error('GHL_OAUTH_NOT_CONFIGURED');
+
+  const response = await fetch('https://services.leadconnectorhq.com/oauth/token', {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/x-www-form-urlencoded',
+      Version: '2021-07-28',
+    },
+    body: new URLSearchParams({
+      client_id: clientId,
+      client_secret: clientSecret,
+      grant_type: 'refresh_token',
+      refresh_token: refreshToken,
+    }),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const detail = payload?.message || payload?.error_description
+      || (Array.isArray(payload?.error) ? payload.error.join(', ') : payload?.error)
+      || JSON.stringify(payload);
+    throw new Error(`GHL_REFRESH_${response.status}:${detail}`);
+  }
+  return payload as GhlTokenResponse;
+}
+
 export async function fetchGhlUser(userId: string, token: string) {
   try {
     return await ghlRequest(`/users/${encodeURIComponent(userId)}`, token);

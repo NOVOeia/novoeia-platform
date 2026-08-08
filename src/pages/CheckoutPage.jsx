@@ -15,7 +15,7 @@ export default function CheckoutPage({ go, status = 'success', sessionId = null 
             <CheckCircle2 size={48} color="#4ade80" style={{ margin: '12px auto' }} />
             <h2>Pago recibido</h2>
             <p className="auth-intro">
-              Tu suscripción NOVO quedó registrada. El partner y el equipo NOVO procesarán la activación.
+              Tu suscripción NOVO quedó registrada. Estamos activando tu cuenta en GoHighLevel; recibirás acceso en breve.
             </p>
             {sessionId && (
               <p className="auth-intro" style={{ fontSize: 12, opacity: 0.75 }}>
