@@ -1,6 +1,6 @@
 import { adminClient, corsHeaders, handleError, json } from '../_shared/core.ts';
 import { createStripeCheckoutSession } from '../_shared/stripe.ts';
-import { buildAdditionalLineItems } from '../_shared/checkout-line-items.ts';
+import { buildAdditionalLineItems, getDeferredAddonServiceIds } from '../_shared/checkout-line-items.ts';
 
 const DEFAULT_BRAND = {
   businessName: '',
@@ -576,6 +576,7 @@ Deno.serve(async (req) => {
         selectedServices,
         String(checkout.product.currency || 'USD'),
       );
+      const deferredAddonServiceIds = getDeferredAddonServiceIds(product.interval, selectedServices);
 
       const { data: existingClient } = await supabase
         .from('partner_clients')
@@ -635,6 +636,8 @@ Deno.serve(async (req) => {
         source: salesLink ? 'partner_sales_link_checkout' : 'public_storefront_checkout',
         storefront_slug: slug,
         selected_services: JSON.stringify(selectedServiceIds),
+        deferred_addon_service_ids: JSON.stringify(deferredAddonServiceIds),
+        product_interval: interval,
         wholesale_cents: String(Math.round(wholesalePrice * 100)),
         commission_cents: String(Math.max(commissionCents, 0)),
         retail_cents: String(Math.round(retailPrice * 100)),

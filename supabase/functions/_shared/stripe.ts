@@ -14,6 +14,8 @@ type CheckoutSessionParams = {
     unitAmountCents: number;
     currency: string;
     billingType?: 'one_time' | 'month' | 'year';
+    stripePriceId?: string;
+    bundledAsOneTime?: boolean;
   }>;
   /** @deprecated use additionalLineItems */
   oneTimeLineItems?: Array<{
@@ -27,6 +29,65 @@ function stripeSecretKey() {
   const secret = Deno.env.get('STRIPE_SECRET_KEY');
   if (!secret) throw new Error('STRIPE_NOT_CONFIGURED');
   return secret;
+}
+
+async function stripeRequest(path: string, method: string, body?: URLSearchParams) {
+  const response = await fetch(`https://api.stripe.com/v1${path}`, {
+    method,
+    headers: {
+      Authorization: `Bearer ${stripeSecretKey()}`,
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body,
+  });
+
+  const payload = await response.json();
+  if (!response.ok) {
+    const message = payload?.error?.message || `STRIPE_${response.status}`;
+    throw new Error(`STRIPE_${message}`);
+  }
+
+  return payload;
+}
+
+export async function createStripeProduct(params: {
+  name: string;
+  description?: string;
+  metadata?: Record<string, string>;
+}) {
+  const body = new URLSearchParams();
+  body.set('name', params.name);
+  if (params.description) body.set('description', params.description);
+  for (const [key, value] of Object.entries(params.metadata || {})) {
+    body.set(`metadata[${key}]`, value);
+  }
+  return stripeRequest('/products', 'POST', body) as Promise<{ id: string }>;
+}
+
+export async function updateStripeProduct(
+  productId: string,
+  params: { name?: string; description?: string },
+) {
+  const body = new URLSearchParams();
+  if (params.name) body.set('name', params.name);
+  if (params.description !== undefined) body.set('description', params.description);
+  return stripeRequest(`/products/${productId}`, 'POST', body) as Promise<{ id: string }>;
+}
+
+export async function createStripePrice(params: {
+  productId: string;
+  unitAmountCents: number;
+  currency: string;
+  billingType?: 'one_time' | 'month' | 'year';
+}) {
+  const body = new URLSearchParams();
+  body.set('product', params.productId);
+  body.set('unit_amount', String(params.unitAmountCents));
+  body.set('currency', params.currency.toLowerCase());
+  if (params.billingType && params.billingType !== 'one_time') {
+    body.set('recurring[interval]', params.billingType);
+  }
+  return stripeRequest('/prices', 'POST', body) as Promise<{ id: string }>;
 }
 
 export async function createStripeCheckoutSession(params: CheckoutSessionParams) {
@@ -66,6 +127,12 @@ export async function createStripeCheckoutSession(params: CheckoutSessionParams)
     const lineIndex = index + 1;
     const billingType = item.billingType || 'one_time';
     body.set(`line_items[${lineIndex}][quantity]`, '1');
+
+    if (item.stripePriceId && !item.bundledAsOneTime) {
+      body.set(`line_items[${lineIndex}][price]`, item.stripePriceId);
+      return;
+    }
+
     body.set(`line_items[${lineIndex}][price_data][currency]`, item.currency.toLowerCase());
     body.set(`line_items[${lineIndex}][price_data][product_data][name]`, item.name);
     body.set(`line_items[${lineIndex}][price_data][unit_amount]`, String(item.unitAmountCents));

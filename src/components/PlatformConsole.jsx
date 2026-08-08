@@ -11,6 +11,7 @@ import {
 import { platformApi } from '../lib/platformApi.js';
 import { calculateCheckoutDueToday } from '../lib/checkoutLineItems.js';
 import { notifyPartnerCatalogUpdated, subscribePartnerCatalogUpdated } from '../lib/partnerCatalogEvents.js';
+import { MAX_PARTNER_ADDITIONAL_SERVICES } from '../lib/storefrontDefaults.js';
 import { supabase } from '../lib/supabase.js';
 import {
   AdminResources,
@@ -1566,6 +1567,13 @@ function PartnerProductServices({ onNavigate }) {
   }
 
   function addAdditionalService() {
+    if (additionalServices.length >= MAX_PARTNER_ADDITIONAL_SERVICES) {
+      setNotice({
+        type: 'error',
+        text: `Solo puedes tener hasta ${MAX_PARTNER_ADDITIONAL_SERVICES} servicios adicionales.`,
+      });
+      return;
+    }
     setAdditionalServices(current => [
       ...current,
       {
@@ -1591,6 +1599,26 @@ function PartnerProductServices({ onNavigate }) {
   }
 
   async function saveAdditionalServices() {
+    if (additionalServices.length > MAX_PARTNER_ADDITIONAL_SERVICES) {
+      setNotice({
+        type: 'error',
+        text: `Solo puedes guardar hasta ${MAX_PARTNER_ADDITIONAL_SERVICES} servicios adicionales.`,
+      });
+      return;
+    }
+
+    const incompleteActive = additionalServices.filter(service =>
+      service.active !== false
+      && (!String(service.title || '').trim() || !Number(service.price) || Number(service.price) <= 0),
+    );
+    if (incompleteActive.length > 0) {
+      setNotice({
+        type: 'error',
+        text: 'Los servicios activos deben tener nombre y precio mayor a 0 para guardarse en Stripe.',
+      });
+      return;
+    }
+
     try {
       setBusy(true);
       await platformApi.savePartnerAdditionalServices(additionalServices);
@@ -1742,7 +1770,7 @@ function PartnerProductServices({ onNavigate }) {
         <div className="novo-card-header">
           <div>
             <div className="novo-card-title">Servicios adicionales</div>
-            <div className="novo-card-sub">Upsells opcionales que el cliente puede agregar durante el pago en tu checkout.</div>
+            <div className="novo-card-sub">Upsells opcionales en el checkout. Máximo {MAX_PARTNER_ADDITIONAL_SERVICES} servicios ({additionalServices.length}/{MAX_PARTNER_ADDITIONAL_SERVICES}). Al guardar, cada servicio con nombre y precio se crea en Stripe.</div>
           </div>
         </div>
 
@@ -1758,7 +1786,12 @@ function PartnerProductServices({ onNavigate }) {
               style={{ marginBottom: 12, padding: 16, background: 'var(--novo-card-hover)' }}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-                <strong>Servicio {index + 1}</strong>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <strong>Servicio {index + 1}</strong>
+                  {service.stripe_price_id && (
+                    <span style={{ fontSize: 11, color: 'var(--novo-success)' }}>✓ Stripe</span>
+                  )}
+                </div>
                 <button
                   type="button"
                   className="novo-btn novo-btn-ghost"
@@ -1813,7 +1846,13 @@ function PartnerProductServices({ onNavigate }) {
         )}
 
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 8 }}>
-          <button type="button" className="novo-btn novo-btn-ghost" onClick={addAdditionalService}>
+          <button
+            type="button"
+            className="novo-btn novo-btn-ghost"
+            onClick={addAdditionalService}
+            disabled={additionalServices.length >= MAX_PARTNER_ADDITIONAL_SERVICES}
+            title={additionalServices.length >= MAX_PARTNER_ADDITIONAL_SERVICES ? `Máximo ${MAX_PARTNER_ADDITIONAL_SERVICES} servicios` : undefined}
+          >
             <Plus size={14} /> Agregar servicio adicional
           </button>
           <button type="button" className="novo-btn novo-btn-primary" onClick={saveAdditionalServices} disabled={busy}>
