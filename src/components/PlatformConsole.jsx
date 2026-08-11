@@ -20,9 +20,15 @@ import { notifyPartnerCatalogUpdated, subscribePartnerCatalogUpdated } from '../
 import { MAX_PARTNER_ADDITIONAL_SERVICES } from '../lib/storefrontDefaults.js';
 import { supabase } from '../lib/supabase.js';
 import PartnerBrandConsole from './PartnerBrandConsole.jsx';
+import PartnerPaymentsModule from './PartnerPaymentsModule.jsx';
 import AdminPartnerCreateForm from './partner-registration/AdminPartnerCreateForm.jsx';
 import AdminEmailTemplates from './AdminEmailTemplates.jsx';
 import PartnerRegistrationEmbed from './PartnerRegistrationEmbed.jsx';
+import {
+  countryLabel,
+  paymentRouteFromSelection,
+  statusLabel as paymentStatusLabel,
+} from '../lib/partnerPaymentConfig.js';
 
 /* ================================
    SUPER ADMIN ROUTER
@@ -36,6 +42,7 @@ export function SuperAdminConsole({ section, go }) {
   if (section === 'links') return <AdminSalesLinks />;
   if (section === 'subscriptions') return <AdminSubscriptions />;
   if (section === 'payments') return <AdminPayments />;
+  if (section === 'support') return <AdminSupport />;
   if (section === 'email-templates') return <AdminEmailTemplates />;
   if (section === 'audit') return <AdminAuditLogs />;
   if (section === 'settings') return <AdminSettings />;
@@ -271,9 +278,37 @@ function AdminPartners({ go }) {
     finally { setBusy(false); }
   }
 
+  async function changePartnerStatus(partner, status) {
+    if (!partner?.id || partner.status === status) return;
+    try {
+      setBusy(true);
+      await platformApi.updatePartner({ id: partner.id, status });
+      setNotice({
+        type: 'success',
+        text: status === 'active'
+          ? `${partner.name} activado.`
+          : status === 'inactive'
+            ? `${partner.name} desactivado.`
+            : `${partner.name} marcado como pendiente.`,
+      });
+      if (selected?.id === partner.id) {
+        setSelected({ ...partner, status });
+        setForm((current) => ({ ...current, status }));
+      }
+      await load();
+    } catch (e) {
+      setNotice({ type: 'error', text: e.message });
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function openEdit(p) {
     setForm({ name: p.name, slug: p.slug, plan_name: p.plan_name || 'partner', status: p.status || 'pending' });
     setSelected(p); setEditMode(true); setShowForm(true);
+    window.requestAnimationFrame(() => {
+      document.querySelector('.novo-page-header')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
   }
 
   const filtered = partners.filter(p => p.name?.toLowerCase().includes(search.toLowerCase()) || p.slug?.toLowerCase().includes(search.toLowerCase()));
@@ -351,7 +386,27 @@ function AdminPartners({ go }) {
                     <td><strong style={{ color: 'var(--novo-text)' }}>{p.name}</strong><br /><small style={{ color: 'var(--novo-muted)', fontSize: 11 }}>/{p.slug}</small></td>
                     <td>{p.plan_name || 'Partner'}</td>
                     <td style={{ fontSize: 12, color: 'var(--novo-muted)' }}>{p.ghl_location_id || 'Sin asignar'}</td>
-                    <td><Badge status={p.status || 'pending'} /></td>
+                    <td>
+                      <select
+                        value={p.status || 'pending'}
+                        disabled={busy}
+                        onChange={(e) => changePartnerStatus(p, e.target.value)}
+                        style={{
+                          minWidth: 120,
+                          padding: '6px 8px',
+                          borderRadius: 8,
+                          border: '1px solid rgba(148,163,184,.35)',
+                          background: 'var(--novo-surface, #fff)',
+                          color: 'var(--novo-text)',
+                          fontSize: 12,
+                        }}
+                        aria-label={`Estado de ${p.name}`}
+                      >
+                        <option value="pending">Pendiente</option>
+                        <option value="active">Activo</option>
+                        <option value="inactive">Inactivo</option>
+                      </select>
+                    </td>
                     <td style={{ fontSize: 12, color: 'var(--novo-muted)' }}>{new Date(p.created_at).toLocaleDateString()}</td>
                     <td>
                       <div style={{ display: 'flex', gap: 6 }}>
@@ -1424,26 +1479,187 @@ function AdminSubscriptions() {
 /* ================================
    ADMIN PAGOS
 ================================ */
+function paymentRouteLabel(route) {
+  const map = {
+    AIRWALLEX_ACCOUNT: 'Airwallex',
+    WISE_ACCOUNT: 'Wise (cuenta)',
+    WISE_BANK: 'Wise → banco',
+    USA_BANK: 'Cuenta bancaria USA',
+  };
+  return map[route] || route || 'Sin definir';
+}
+
+function DetailRow({ label, value }) {
+  if (!value && value !== 0) return null;
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '8px 0', borderBottom: '1px solid var(--novo-border)' }}>
+      <span style={{ color: 'var(--novo-muted)', fontSize: 13 }}>{label}</span>
+      <strong style={{ color: 'var(--novo-text)', fontSize: 13, textAlign: 'right' }}>{value}</strong>
+    </div>
+  );
+}
+
+function CommissionPayoutModal({ data, onClose }) {
+  const commission = data?.commission;
+  const profile = data?.profile;
+  const legal = profile?.legal_profile || {};
+  const backup = profile?.backup_bank || {};
+  const usBank = profile?.us_bank || {};
+  const provider = profile?.provider_details || {};
+  const wizard = profile?.wizard_state || {};
+  const client = commission?.partner_clients;
+
+  return (
+    <div
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 80,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 20,
+        background: 'rgba(15, 23, 42, 0.45)',
+      }}
+    >
+      <div
+        className="novo-card"
+        style={{
+          width: 'min(640px, 100%)',
+          maxHeight: '85vh',
+          overflow: 'auto',
+          margin: 0,
+          boxShadow: '0 24px 70px rgba(15,23,42,.28)',
+        }}
+      >
+        <div className="novo-card-header">
+          <div>
+            <div className="novo-card-title">Datos para liquidar comisión</div>
+            <div className="novo-card-sub">
+              {commission?.partners?.name || 'Partner'} · {data?.serviceName || 'Servicio'}
+            </div>
+          </div>
+          <button type="button" className="novo-btn novo-btn-ghost" style={{ padding: '4px 8px' }} onClick={onClose}>
+            <X size={14} />
+          </button>
+        </div>
+
+        <div style={{ display: 'grid', gap: 14 }}>
+          <div style={{ padding: 12, borderRadius: 12, background: 'rgba(124,58,237,.06)', border: '1px solid rgba(124,58,237,.15)' }}>
+            <DetailRow label="Servicio" value={data?.serviceName} />
+            <DetailRow label="Cliente" value={client?.company_name || client?.name || '—'} />
+            <DetailRow label="Comisión" value={money(commission?.commission_amount, commission?.currency)} />
+            <DetailRow label="Bruto / Mayorista" value={`${money(commission?.gross_amount, commission?.currency)} / ${money(commission?.wholesale_amount, commission?.currency)}`} />
+            <DetailRow label="Estado comisión" value={commission?.status || '—'} />
+          </div>
+
+          {!profile ? (
+            <div className="novo-empty" style={{ padding: 24 }}>
+              Este partner aún no tiene una cuenta de pagos registrada.
+            </div>
+          ) : (
+            <>
+              <div>
+                <div style={{ fontWeight: 700, marginBottom: 6, color: 'var(--novo-text)' }}>Titular</div>
+                <DetailRow label="Nombre" value={[legal.firstName, legal.lastName].filter(Boolean).join(' ') || '—'} />
+                <DetailRow label="Email" value={legal.email} />
+                <DetailRow label="Teléfono" value={legal.phone} />
+                <DetailRow label="País" value={countryLabel(legal.country)} />
+                <DetailRow label="Tipo" value={legal.partnerType === 'company' ? 'Empresa' : legal.partnerType === 'individual' ? 'Persona natural' : legal.partnerType} />
+                <DetailRow label="Empresa legal" value={legal.companyLegalName} />
+              </div>
+
+              <div>
+                <div style={{ fontWeight: 700, marginBottom: 6, color: 'var(--novo-text)' }}>Método oficial</div>
+                <DetailRow label="Ruta" value={paymentRouteLabel(profile.payment_route)} />
+                <DetailRow label="Estado perfil" value={paymentStatusLabel(profile.status)} />
+                <DetailRow label="Proveedor" value={wizard.selectedProvider || '—'} />
+                {profile.payment_route === 'AIRWALLEX_ACCOUNT' && (
+                  <>
+                    <DetailRow label="Email Airwallex" value={provider.airwallexEmail} />
+                    <DetailRow label="Account ID" value={provider.airwallexAccountId} />
+                  </>
+                )}
+                {(profile.payment_route === 'WISE_ACCOUNT' || profile.payment_route === 'WISE_BANK') && (
+                  <>
+                    <DetailRow label="Email Wise" value={provider.wiseEmail} />
+                    <DetailRow label="Wisetag" value={provider.wiseTag} />
+                    <DetailRow label="Teléfono Wise" value={provider.wisePhone} />
+                  </>
+                )}
+              </div>
+
+              {(profile.payment_route === 'USA_BANK' || profile.has_us_bank) && (
+                <div>
+                  <div style={{ fontWeight: 700, marginBottom: 6, color: 'var(--novo-text)' }}>Cuenta bancaria USA</div>
+                  <DetailRow label="Banco" value={usBank.usBankName} />
+                  <DetailRow label="Titular" value={usBank.usBankHolder} />
+                  <DetailRow label="Routing / ABA" value={usBank.usBankRouting} />
+                  <DetailRow label="Cuenta" value={usBank.usBankAccount} />
+                  <DetailRow label="Tipo" value={usBank.usBankType} />
+                  <DetailRow label="Zelle" value={usBank.usBankZelle} />
+                </div>
+              )}
+
+              <div>
+                <div style={{ fontWeight: 700, marginBottom: 6, color: 'var(--novo-text)' }}>Banco de respaldo</div>
+                <DetailRow label="País" value={countryLabel(backup.bankCountry)} />
+                <DetailRow label="Banco" value={backup.bankName} />
+                <DetailRow label="Titular" value={backup.bankHolder} />
+                <DetailRow label="Tipo" value={backup.bankType} />
+                <DetailRow label="Cuenta / IBAN" value={backup.bankAccount || backup.mainBankIban} />
+                <DetailRow label="SWIFT" value={backup.bankSwift} />
+                <DetailRow label="Routing" value={backup.mainBankRouting} />
+                <DetailRow label="Método local" value={backup.localPaymentId} />
+              </div>
+            </>
+          )}
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <button type="button" className="novo-btn novo-btn-primary" onClick={onClose}>Cerrar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ================================
+   ADMIN PAGOS BODY
+================================ */
 function AdminPayments() {
+  const [tab, setTab] = useState('commissions');
   const [commissions, setCommissions] = useState([]);
   const [partners, setPartners] = useState([]);
+  const [paymentProfiles, setPaymentProfiles] = useState([]);
+  const [payoutProfilesByPartner, setPayoutProfilesByPartner] = useState({});
   const [loading, setLoading] = useState(true);
+  const [profilesLoading, setProfilesLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState(null);
   const [filters, setFilters] = useState({ partnerId: '', status: 'pending' });
+  const [profileFilters, setProfileFilters] = useState({ status: 'pending_review', partnerId: '' });
+  const [reviewNotes, setReviewNotes] = useState({});
+  const [expandedProfileId, setExpandedProfileId] = useState(null);
+  const [payoutModal, setPayoutModal] = useState(null);
 
   const loadCommissions = useCallback(async () => {
     try {
       setLoading(true);
-      const [commData, partnersData] = await Promise.all([
+      const [commData, partnersData, payoutProfilesData] = await Promise.all([
         platformApi.listCommissions({
           partnerId: filters.partnerId || null,
           status: filters.status || null,
         }),
         platformApi.listPartners(),
+        platformApi.listPaymentProfiles({}).catch(() => ({ profiles: [] })),
       ]);
       setCommissions(commData?.commissions || []);
       setPartners(partnersData?.partners || []);
+      setPayoutProfilesByPartner(Object.fromEntries(
+        (payoutProfilesData?.profiles || []).map((profile) => [profile.partner_id, profile]),
+      ));
     } catch (e) {
       setNotice({ type: 'error', text: e.message });
     } finally {
@@ -1451,7 +1667,23 @@ function AdminPayments() {
     }
   }, [filters.partnerId, filters.status]);
 
+  const loadPaymentProfiles = useCallback(async () => {
+    try {
+      setProfilesLoading(true);
+      const data = await platformApi.listPaymentProfiles({
+        status: profileFilters.status || null,
+        partnerId: profileFilters.partnerId || null,
+      });
+      setPaymentProfiles(data?.profiles || []);
+    } catch (e) {
+      setNotice({ type: 'error', text: e.message });
+    } finally {
+      setProfilesLoading(false);
+    }
+  }, [profileFilters.status, profileFilters.partnerId]);
+
   useEffect(() => { loadCommissions(); }, [loadCommissions]);
+  useEffect(() => { loadPaymentProfiles(); }, [loadPaymentProfiles]);
 
   async function markPaid(commission) {
     try {
@@ -1466,97 +1698,314 @@ function AdminPayments() {
     }
   }
 
+  async function reviewProfile(profile, decision) {
+    try {
+      setBusy(true);
+      await platformApi.reviewPaymentProfile({
+        profileId: profile.id,
+        decision,
+        notes: reviewNotes[profile.id] || null,
+      });
+      setNotice({
+        type: 'success',
+        text: decision === 'approved'
+          ? 'Cuenta de pagos aprobada.'
+          : decision === 'rejected'
+            ? 'Cuenta de pagos rechazada.'
+            : 'Se solicitaron cambios al Partner.',
+      });
+      await loadPaymentProfiles();
+    } catch (e) {
+      setNotice({ type: 'error', text: e.message });
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const pendingTotal = commissions
     .filter(row => row.status === 'pending')
     .reduce((sum, row) => sum + Number(row.commission_amount || 0), 0);
 
+  const pendingProfiles = paymentProfiles.filter(row => row.status === 'pending_review').length;
+
   return (
     <div className="novo-page">
-      <div className="novo-page-header"><span className="kicker">FINANZAS</span><h1>Pagos y comisiones</h1><p>Gestión de comisiones de partners. Las claves Stripe están en Configuración.</p></div>
+      <div className="novo-page-header"><span className="kicker">FINANZAS</span><h1>Pagos y comisiones</h1><p>Gestión de comisiones y activación de cuentas de pago de partners.</p></div>
       {notice && <Notice {...notice} onClose={() => setNotice(null)} />}
 
-      <div className="novo-stats" style={{ gridTemplateColumns: 'repeat(3,1fr)' }}>
-        <div className="novo-stat">
-          <div className="novo-stat-icon orange"><DollarSign size={17} /></div>
-          <span className="novo-stat-label">Comisiones pendientes</span>
-          <span className="novo-stat-value">{loading ? '…' : money(pendingTotal)}</span>
-          <span className="novo-stat-sub">{commissions.filter(row => row.status === 'pending').length} por pagar</span>
-        </div>
-        <div className="novo-stat">
-          <div className="novo-stat-icon green"><CheckCircle2 size={17} /></div>
-          <span className="novo-stat-label">Comisiones pagadas</span>
-          <span className="novo-stat-value">{loading ? '…' : commissions.filter(row => row.status === 'paid').length}</span>
-          <span className="novo-stat-sub">Marcadas manualmente</span>
-        </div>
-        <div className="novo-stat">
-          <div className="novo-stat-icon blue"><Activity size={17} /></div>
-          <span className="novo-stat-label">Total en vista</span>
-          <span className="novo-stat-value">{loading ? '…' : commissions.length}</span>
-          <span className="novo-stat-sub">Según filtros activos</span>
-        </div>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+        <button
+          className={`novo-btn ${tab === 'commissions' ? 'novo-btn-primary' : 'novo-btn-ghost'}`}
+          onClick={() => setTab('commissions')}
+        >
+          Comisiones
+        </button>
+        <button
+          className={`novo-btn ${tab === 'accounts' ? 'novo-btn-primary' : 'novo-btn-ghost'}`}
+          onClick={() => setTab('accounts')}
+        >
+          Cuentas de pago {pendingProfiles > 0 ? `(${pendingProfiles})` : ''}
+        </button>
       </div>
 
-      <div className="novo-card" style={{ marginTop: 16, marginBottom: 16 }}>
-        <div className="novo-card-header">
-          <div><div className="novo-card-title">Comisiones de partners</div><div className="novo-card-sub">Generadas automáticamente al confirmar el pago en Stripe</div></div>
-          <button className="novo-btn novo-btn-ghost" onClick={loadCommissions} disabled={loading}><RefreshCw size={13} /></button>
-        </div>
-        <div className="novo-grid-2" style={{ marginBottom: 16 }}>
-          <SelectField label="Partner" value={filters.partnerId} onChange={value => setFilters(current => ({ ...current, partnerId: value }))}>
-            <option value="">Todos</option>
-            {partners.map(partner => <option key={partner.id} value={partner.id}>{partner.name}</option>)}
-          </SelectField>
-          <SelectField label="Estado" value={filters.status} onChange={value => setFilters(current => ({ ...current, status: value }))}>
-            <option value="">Todos</option>
-            <option value="pending">Pendiente</option>
-            <option value="paid">Pagada</option>
-            <option value="cancelled">Cancelada</option>
-          </SelectField>
-        </div>
-        {loading && <div className="novo-empty">Cargando…</div>}
-        {!loading && commissions.length === 0 && <div className="novo-empty">No hay comisiones con estos filtros.</div>}
-        {!loading && commissions.length > 0 && (
-          <table className="novo-table">
-            <thead>
-              <tr>
-                <th>Partner</th>
-                <th>Cliente</th>
-                <th>Bruto</th>
-                <th>Mayorista</th>
-                <th>Comisión</th>
-                <th>Estado</th>
-                <th>Fecha</th>
-                <th>Acción</th>
-              </tr>
-            </thead>
-            <tbody>
-              {commissions.map(row => {
-                const client = row.partner_clients;
-                return (
-                  <tr key={row.id}>
-                    <td><strong style={{ color: 'var(--novo-text)' }}>{row.partners?.name || '—'}</strong></td>
-                    <td>{client?.company_name || client?.name || '—'}<br /><small style={{ color: 'var(--novo-muted)' }}>{client?.email || '—'}</small></td>
-                    <td>{money(row.gross_amount, row.currency)}</td>
-                    <td>{money(row.wholesale_amount, row.currency)}</td>
-                    <td><span style={{ color: 'var(--novo-purple)', fontWeight: 600 }}>{money(row.commission_amount, row.currency)}</span></td>
-                    <td><Badge status={row.status} /></td>
-                    <td>{formatDate(row.created_at)}</td>
-                    <td>
-                      {row.status === 'pending' ? (
-                        <button className="novo-btn novo-btn-primary" style={{ padding: '4px 10px', fontSize: 11 }} onClick={() => markPaid(row)} disabled={busy}>
-                          <CheckCircle2 size={12} /> Marcar pagada
-                        </button>
-                      ) : row.paid_at ? (
-                        <small style={{ color: 'var(--novo-muted)' }}>{formatDate(row.paid_at)}</small>
-                      ) : '—'}
-                    </td>
+      {tab === 'commissions' && (
+        <>
+          <div className="novo-stats" style={{ gridTemplateColumns: 'repeat(3,1fr)' }}>
+            <div className="novo-stat">
+              <div className="novo-stat-icon orange"><DollarSign size={17} /></div>
+              <span className="novo-stat-label">Comisiones pendientes</span>
+              <span className="novo-stat-value">{loading ? '…' : money(pendingTotal)}</span>
+              <span className="novo-stat-sub">{commissions.filter(row => row.status === 'pending').length} por pagar</span>
+            </div>
+            <div className="novo-stat">
+              <div className="novo-stat-icon green"><CheckCircle2 size={17} /></div>
+              <span className="novo-stat-label">Comisiones pagadas</span>
+              <span className="novo-stat-value">{loading ? '…' : commissions.filter(row => row.status === 'paid').length}</span>
+              <span className="novo-stat-sub">Marcadas manualmente</span>
+            </div>
+            <div className="novo-stat">
+              <div className="novo-stat-icon blue"><Activity size={17} /></div>
+              <span className="novo-stat-label">Total en vista</span>
+              <span className="novo-stat-value">{loading ? '…' : commissions.length}</span>
+              <span className="novo-stat-sub">Según filtros activos</span>
+            </div>
+          </div>
+
+          <div className="novo-card" style={{ marginTop: 16, marginBottom: 16 }}>
+            <div className="novo-card-header">
+              <div><div className="novo-card-title">Comisiones de partners</div><div className="novo-card-sub">Generadas automáticamente al confirmar el pago en Stripe</div></div>
+              <button className="novo-btn novo-btn-ghost" onClick={loadCommissions} disabled={loading}><RefreshCw size={13} /></button>
+            </div>
+            <div className="novo-grid-2" style={{ marginBottom: 16 }}>
+              <SelectField label="Partner" value={filters.partnerId} onChange={value => setFilters(current => ({ ...current, partnerId: value }))}>
+                <option value="">Todos</option>
+                {partners.map(partner => <option key={partner.id} value={partner.id}>{partner.name}</option>)}
+              </SelectField>
+              <SelectField label="Estado" value={filters.status} onChange={value => setFilters(current => ({ ...current, status: value }))}>
+                <option value="">Todos</option>
+                <option value="pending">Pendiente</option>
+                <option value="paid">Pagada</option>
+                <option value="cancelled">Cancelada</option>
+              </SelectField>
+            </div>
+            {loading && <div className="novo-empty">Cargando…</div>}
+            {!loading && commissions.length === 0 && <div className="novo-empty">No hay comisiones con estos filtros.</div>}
+            {!loading && commissions.length > 0 && (
+              <table className="novo-table">
+                <thead>
+                  <tr>
+                    <th>Partner</th>
+                    <th>Cliente</th>
+                    <th>Servicio</th>
+                    <th>Bruto</th>
+                    <th>Mayorista</th>
+                    <th>Comisión</th>
+                    <th>Estado</th>
+                    <th>Fecha</th>
+                    <th>Acción</th>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
-      </div>
+                </thead>
+                <tbody>
+                  {commissions.map(row => {
+                    const client = row.partner_clients;
+                    const serviceName = row.sales_links?.product_name
+                      || row.sales_links?.metadata?.product_name
+                      || '—';
+                    return (
+                      <tr key={row.id}>
+                        <td><strong style={{ color: 'var(--novo-text)' }}>{row.partners?.name || '—'}</strong></td>
+                        <td>{client?.company_name || client?.name || '—'}<br /><small style={{ color: 'var(--novo-muted)' }}>{client?.email || '—'}</small></td>
+                        <td>
+                          {serviceName !== '—' ? (
+                            <button
+                              type="button"
+                              onClick={() => setPayoutModal({
+                                commission: row,
+                                serviceName,
+                                profile: payoutProfilesByPartner[row.partner_id] || null,
+                              })}
+                              style={{
+                                background: 'none',
+                                border: 'none',
+                                padding: 0,
+                                color: 'var(--novo-purple)',
+                                fontWeight: 600,
+                                cursor: 'pointer',
+                                textAlign: 'left',
+                                textDecoration: 'underline',
+                              }}
+                              title="Ver datos bancarios del partner"
+                            >
+                              {serviceName}
+                            </button>
+                          ) : (
+                            <span style={{ color: 'var(--novo-muted)' }}>—</span>
+                          )}
+                        </td>
+                        <td>{money(row.gross_amount, row.currency)}</td>
+                        <td>{money(row.wholesale_amount, row.currency)}</td>
+                        <td><span style={{ color: 'var(--novo-purple)', fontWeight: 600 }}>{money(row.commission_amount, row.currency)}</span></td>
+                        <td><Badge status={row.status} /></td>
+                        <td>{formatDate(row.created_at)}</td>
+                        <td>
+                          {row.status === 'pending' ? (
+                            <button className="novo-btn novo-btn-primary" style={{ padding: '4px 10px', fontSize: 11 }} onClick={() => markPaid(row)} disabled={busy}>
+                              <CheckCircle2 size={12} /> Marcar pagada
+                            </button>
+                          ) : row.paid_at ? (
+                            <small style={{ color: 'var(--novo-muted)' }}>{formatDate(row.paid_at)}</small>
+                          ) : '—'}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+
+          {payoutModal && (
+            <CommissionPayoutModal
+              data={payoutModal}
+              onClose={() => setPayoutModal(null)}
+            />
+          )}
+        </>
+      )}
+
+      {tab === 'accounts' && (
+        <div className="novo-card">
+          <div className="novo-card-header">
+            <div>
+              <div className="novo-card-title">Cuentas de pago de partners</div>
+              <div className="novo-card-sub">Revisión de perfiles enviados desde el módulo Pagos del Partner</div>
+            </div>
+            <button className="novo-btn novo-btn-ghost" onClick={loadPaymentProfiles} disabled={profilesLoading}><RefreshCw size={13} /></button>
+          </div>
+          <div className="novo-grid-2" style={{ marginBottom: 16 }}>
+            <SelectField label="Partner" value={profileFilters.partnerId} onChange={value => setProfileFilters(current => ({ ...current, partnerId: value }))}>
+              <option value="">Todos</option>
+              {partners.map(partner => <option key={partner.id} value={partner.id}>{partner.name}</option>)}
+            </SelectField>
+            <SelectField label="Estado" value={profileFilters.status} onChange={value => setProfileFilters(current => ({ ...current, status: value }))}>
+              <option value="">Todos</option>
+              <option value="pending_review">En revisión</option>
+              <option value="approved">Aprobada</option>
+              <option value="rejected">Rechazada</option>
+              <option value="needs_changes">Requiere cambios</option>
+              <option value="draft">Borrador</option>
+            </SelectField>
+          </div>
+
+          {profilesLoading && <div className="novo-empty">Cargando…</div>}
+          {!profilesLoading && paymentProfiles.length === 0 && <div className="novo-empty">No hay cuentas de pago con estos filtros.</div>}
+          {!profilesLoading && paymentProfiles.length > 0 && (
+            <table className="novo-table">
+              <thead>
+                <tr>
+                  <th>Partner</th>
+                  <th>Titular</th>
+                  <th>Ruta</th>
+                  <th>Estado</th>
+                  <th>Enviado</th>
+                  <th>Acción</th>
+                </tr>
+              </thead>
+              <tbody>
+                {paymentProfiles.map((row) => {
+                  const legal = row.legal_profile || {};
+                  const wizard = row.wizard_state || {};
+                  const expanded = expandedProfileId === row.id;
+                  return (
+                    <Fragment key={row.id}>
+                      <tr>
+                        <td>
+                          <strong style={{ color: 'var(--novo-text)' }}>{row.partners?.name || '—'}</strong>
+                          <br /><small style={{ color: 'var(--novo-muted)' }}>{row.partners?.slug || row.partner_id}</small>
+                        </td>
+                        <td>
+                          {[legal.firstName, legal.lastName].filter(Boolean).join(' ') || '—'}
+                          <br /><small style={{ color: 'var(--novo-muted)' }}>{legal.email || '—'}</small>
+                        </td>
+                        <td>
+                          {row.payment_route
+                            || paymentRouteFromSelection(wizard.selectedProvider, wizard.selectedWiseDestination)
+                            || '—'}
+                        </td>
+                        <td><Badge status={row.status} /> <small style={{ color: 'var(--novo-muted)' }}>{paymentStatusLabel(row.status)}</small></td>
+                        <td>{row.submitted_at ? formatDate(row.submitted_at) : '—'}</td>
+                        <td>
+                          <button
+                            className="novo-btn novo-btn-ghost"
+                            style={{ padding: '4px 10px', fontSize: 11 }}
+                            onClick={() => setExpandedProfileId(expanded ? null : row.id)}
+                          >
+                            {expanded ? 'Ocultar' : 'Revisar'}
+                          </button>
+                        </td>
+                      </tr>
+                      {expanded && (
+                        <tr>
+                          <td colSpan={6}>
+                            <div style={{ display: 'grid', gap: 10, padding: '8px 0' }}>
+                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                                <div>
+                                  <strong>Perfil</strong>
+                                  <div style={{ color: 'var(--novo-muted)', fontSize: 13, marginTop: 6 }}>
+                                    País: {countryLabel(legal.country)} · Tipo: {legal.partnerType || '—'}
+                                    <br />Tel: {legal.phone || '—'}
+                                    {legal.companyLegalName ? <><br />Empresa: {legal.companyLegalName}</> : null}
+                                  </div>
+                                </div>
+                                <div>
+                                  <strong>Banco respaldo</strong>
+                                  <div style={{ color: 'var(--novo-muted)', fontSize: 13, marginTop: 6 }}>
+                                    {(row.backup_bank?.bankName) || '—'} · {(row.backup_bank?.bankHolder) || '—'}
+                                    <br />{countryLabel(row.backup_bank?.bankCountry)} · cuenta {(row.backup_bank?.bankAccount) || '—'}
+                                    <br />USA bank: {row.has_us_bank ? 'Sí' : 'No'}
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="novo-field">
+                                <label>Notas de revisión</label>
+                                <textarea
+                                  rows={2}
+                                  value={reviewNotes[row.id] || ''}
+                                  onChange={(e) => setReviewNotes((current) => ({ ...current, [row.id]: e.target.value }))}
+                                  placeholder="Opcional para el Partner"
+                                  disabled={busy || row.status === 'approved'}
+                                />
+                              </div>
+                              {row.status === 'pending_review' && (
+                                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                                  <button className="novo-btn novo-btn-primary" disabled={busy} onClick={() => reviewProfile(row, 'approved')}>
+                                    <Check size={13} /> Aprobar
+                                  </button>
+                                  <button className="novo-btn novo-btn-ghost" disabled={busy} onClick={() => reviewProfile(row, 'needs_changes')}>
+                                    Pedir cambios
+                                  </button>
+                                  <button className="novo-btn novo-btn-ghost" disabled={busy} onClick={() => reviewProfile(row, 'rejected')}>
+                                    <XCircle size={13} /> Rechazar
+                                  </button>
+                                </div>
+                              )}
+                              {row.review_notes && (
+                                <div style={{ color: 'var(--novo-muted)', fontSize: 13 }}>
+                                  Última nota: {row.review_notes}
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
 
       <div className="novo-card" style={{ marginTop: 16, border: '1px dashed rgba(124,58,237,.25)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -1568,6 +2017,279 @@ function AdminPayments() {
             </p>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/* ================================
+   ADMIN SOPORTE
+================================ */
+function AdminSupport() {
+  const [tickets, setTickets] = useState([]);
+  const [partners, setPartners] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState(null);
+  const [filters, setFilters] = useState({ status: 'open', partnerId: '', priority: '' });
+  const [selectedId, setSelectedId] = useState(null);
+  const [detail, setDetail] = useState(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [reply, setReply] = useState('');
+  const [replyStatus, setReplyStatus] = useState('waiting_partner');
+
+  const load = useCallback(async () => {
+    try {
+      setLoading(true);
+      const [ticketsData, partnersData] = await Promise.all([
+        platformApi.listAdminSupportTickets({
+          status: filters.status || null,
+          partnerId: filters.partnerId || null,
+          priority: filters.priority || null,
+        }),
+        platformApi.listPartners().catch(() => ({ partners: [] })),
+      ]);
+      setTickets(ticketsData?.tickets || []);
+      setPartners(partnersData?.partners || []);
+    } catch (e) {
+      setNotice({ type: 'error', text: e.message });
+    } finally {
+      setLoading(false);
+    }
+  }, [filters.status, filters.partnerId, filters.priority]);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function openTicket(ticketId) {
+    try {
+      setSelectedId(ticketId);
+      setDetailLoading(true);
+      const data = await platformApi.getAdminSupportTicket(ticketId);
+      setDetail(data);
+      setReply('');
+      setReplyStatus('waiting_partner');
+    } catch (e) {
+      setNotice({ type: 'error', text: e.message });
+    } finally {
+      setDetailLoading(false);
+    }
+  }
+
+  async function sendReply() {
+    if (!selectedId || !reply.trim()) return;
+    try {
+      setBusy(true);
+      await platformApi.replyAdminSupportTicket({
+        ticketId: selectedId,
+        message: reply.trim(),
+        status: replyStatus,
+      });
+      setNotice({ type: 'success', text: 'Respuesta enviada al partner.' });
+      setReply('');
+      await openTicket(selectedId);
+      await load();
+    } catch (e) {
+      setNotice({ type: 'error', text: e.message });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function changeStatus(status) {
+    if (!selectedId) return;
+    try {
+      setBusy(true);
+      await platformApi.updateSupportTicketStatus({ ticketId: selectedId, status });
+      setNotice({ type: 'success', text: `Ticket marcado como ${SUPPORT_STATUS_LABELS[status] || status}.` });
+      await openTicket(selectedId);
+      await load();
+    } catch (e) {
+      setNotice({ type: 'error', text: e.message });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const ticket = detail?.ticket;
+  const messages = detail?.messages || [];
+  const openCount = tickets.filter((row) => ['open', 'in_progress', 'waiting_partner'].includes(row.status)).length;
+
+  return (
+    <div className="novo-page">
+      <div className="novo-page-header">
+        <span className="kicker">ATENCIÓN</span>
+        <h1>Soporte a partners</h1>
+        <p>Revisa, responde y gestiona los tickets abiertos por partners.</p>
+      </div>
+      {notice && <Notice {...notice} onClose={() => setNotice(null)} />}
+
+      <div className="novo-stats" style={{ gridTemplateColumns: 'repeat(3,1fr)', marginBottom: 16 }}>
+        <div className="novo-stat">
+          <div className="novo-stat-icon orange"><LifeBuoy size={17} /></div>
+          <span className="novo-stat-label">En vista</span>
+          <span className="novo-stat-value">{loading ? '…' : tickets.length}</span>
+          <span className="novo-stat-sub">Según filtros</span>
+        </div>
+        <div className="novo-stat">
+          <div className="novo-stat-icon purple"><Activity size={17} /></div>
+          <span className="novo-stat-label">Activos en vista</span>
+          <span className="novo-stat-value">{loading ? '…' : openCount}</span>
+          <span className="novo-stat-sub">Abiertos / en progreso / esperando</span>
+        </div>
+        <div className="novo-stat">
+          <div className="novo-stat-icon green"><CheckCircle2 size={17} /></div>
+          <span className="novo-stat-label">Selección</span>
+          <span className="novo-stat-value">{ticket ? (SUPPORT_STATUS_LABELS[ticket.status] || '—') : '—'}</span>
+          <span className="novo-stat-sub">{ticket?.partners?.name || 'Sin ticket abierto'}</span>
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: selectedId ? '1.15fr 1fr' : '1fr', gap: 16 }}>
+        <div className="novo-card">
+          <div className="novo-card-header">
+            <div>
+              <div className="novo-card-title">Tickets ({tickets.length})</div>
+              <div className="novo-card-sub">Cola de soporte de partners</div>
+            </div>
+            <button className="novo-btn novo-btn-ghost" onClick={load} disabled={loading}><RefreshCw size={13} /></button>
+          </div>
+          <div className="novo-grid-2" style={{ marginBottom: 14, gridTemplateColumns: 'repeat(3,1fr)' }}>
+            <SelectField label="Estado" value={filters.status} onChange={value => setFilters(current => ({ ...current, status: value }))}>
+              <option value="">Todos</option>
+              <option value="open">Abierto</option>
+              <option value="in_progress">En progreso</option>
+              <option value="waiting_partner">Esperando partner</option>
+              <option value="resolved">Resuelto</option>
+              <option value="closed">Cerrado</option>
+            </SelectField>
+            <SelectField label="Partner" value={filters.partnerId} onChange={value => setFilters(current => ({ ...current, partnerId: value }))}>
+              <option value="">Todos</option>
+              {partners.map(partner => <option key={partner.id} value={partner.id}>{partner.name}</option>)}
+            </SelectField>
+            <SelectField label="Prioridad" value={filters.priority} onChange={value => setFilters(current => ({ ...current, priority: value }))}>
+              <option value="">Todas</option>
+              <option value="high">Alta</option>
+              <option value="medium">Media</option>
+              <option value="low">Baja</option>
+            </SelectField>
+          </div>
+
+          {loading && <div className="novo-empty">Cargando…</div>}
+          {!loading && tickets.length === 0 && <div className="novo-empty">No hay tickets con estos filtros.</div>}
+          {!loading && tickets.length > 0 && (
+            <table className="novo-table">
+              <thead>
+                <tr>
+                  <th>Partner</th>
+                  <th>Asunto</th>
+                  <th>Prioridad</th>
+                  <th>Estado</th>
+                  <th>Actualizado</th>
+                </tr>
+              </thead>
+              <tbody>
+                {tickets.map((row) => (
+                  <tr
+                    key={row.id}
+                    onClick={() => openTicket(row.id)}
+                    style={{ cursor: 'pointer', background: selectedId === row.id ? 'rgba(124,58,237,.06)' : undefined }}
+                  >
+                    <td><strong style={{ color: 'var(--novo-text)' }}>{row.partners?.name || '—'}</strong></td>
+                    <td>{row.subject}</td>
+                    <td>
+                      <Badge
+                        status={row.priority === 'high' ? 'inactive' : row.priority === 'medium' ? 'pending' : 'active'}
+                        label={SUPPORT_PRIORITY_LABELS[row.priority] || row.priority}
+                      />
+                    </td>
+                    <td><Badge status={supportStatusBadge(row.status)} label={SUPPORT_STATUS_LABELS[row.status] || row.status} /></td>
+                    <td style={{ fontSize: 12, color: 'var(--novo-muted)' }}>{formatDate(row.last_message_at || row.updated_at)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        {selectedId && (
+          <div className="novo-card">
+            <div className="novo-card-header">
+              <div>
+                <div className="novo-card-title">{ticket?.subject || 'Ticket'}</div>
+                <div className="novo-card-sub">
+                  {ticket?.partners?.name || 'Partner'} · {ticket ? (SUPPORT_STATUS_LABELS[ticket.status] || ticket.status) : '…'}
+                </div>
+              </div>
+              <button className="novo-btn novo-btn-ghost" style={{ padding: '4px 8px' }} onClick={() => { setSelectedId(null); setDetail(null); }}>
+                <X size={14} />
+              </button>
+            </div>
+
+            {detailLoading && <div className="novo-empty">Cargando conversación…</div>}
+            {!detailLoading && ticket && (
+              <>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+                  <button className="novo-btn novo-btn-ghost" style={{ fontSize: 11 }} disabled={busy} onClick={() => changeStatus('in_progress')}>En progreso</button>
+                  <button className="novo-btn novo-btn-ghost" style={{ fontSize: 11 }} disabled={busy} onClick={() => changeStatus('waiting_partner')}>Esperar partner</button>
+                  <button className="novo-btn novo-btn-ghost" style={{ fontSize: 11 }} disabled={busy} onClick={() => changeStatus('resolved')}>Resuelto</button>
+                  <button className="novo-btn novo-btn-ghost" style={{ fontSize: 11 }} disabled={busy} onClick={() => changeStatus('closed')}>Cerrar</button>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 360, overflowY: 'auto', marginBottom: 14 }}>
+                  {messages.map((msg) => (
+                    <div
+                      key={msg.id}
+                      style={{
+                        alignSelf: msg.author_role === 'super_admin' ? 'flex-end' : 'flex-start',
+                        maxWidth: '88%',
+                        padding: '10px 12px',
+                        borderRadius: 12,
+                        background: msg.author_role === 'super_admin' ? 'rgba(124,58,237,.12)' : 'rgba(148,163,184,.12)',
+                        border: '1px solid var(--novo-border)',
+                      }}
+                    >
+                      <div style={{ fontSize: 11, color: 'var(--novo-muted)', marginBottom: 4 }}>
+                        {msg.author_role === 'super_admin' ? 'Soporte NOVO' : 'Partner'} · {formatDate(msg.created_at)}
+                      </div>
+                      <div style={{ color: 'var(--novo-text)', whiteSpace: 'pre-wrap', fontSize: 13 }}>{msg.body}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {ticket.status !== 'closed' ? (
+                  <>
+                    <div className="novo-grid-2" style={{ marginBottom: 10 }}>
+                      <div className="novo-field">
+                        <label>Estado al responder</label>
+                        <select value={replyStatus} onChange={e => setReplyStatus(e.target.value)}>
+                          <option value="waiting_partner">Esperando partner</option>
+                          <option value="in_progress">En progreso</option>
+                          <option value="resolved">Resuelto</option>
+                          <option value="closed">Cerrado</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div className="novo-field" style={{ marginBottom: 10 }}>
+                      <label>Respuesta</label>
+                      <textarea
+                        rows={4}
+                        value={reply}
+                        onChange={e => setReply(e.target.value)}
+                        placeholder="Escribe la respuesta para el partner…"
+                        style={{ background: 'var(--novo-card-hover)', border: '1px solid var(--novo-border)', borderRadius: 8, padding: '9px 12px', color: 'var(--novo-text)', fontSize: 13, outline: 'none', width: '100%', resize: 'vertical' }}
+                      />
+                    </div>
+                    <button className="novo-btn novo-btn-primary" onClick={sendReply} disabled={busy || !reply.trim()}>
+                      {busy ? <Loader2 size={14} style={{ animation: 'novoSpin .8s linear infinite' }} /> : <Save size={14} />} Enviar respuesta
+                    </button>
+                  </>
+                ) : (
+                  <div className="novo-empty">Ticket cerrado.</div>
+                )}
+              </>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -2188,6 +2910,11 @@ function AdminSettings() {
               {settings.emailProvider === 'ses' && (
                 <NField label="Región SES" value={settings.emailSesRegion} onChange={v => setSettings({ ...settings, emailSesRegion: v })} placeholder="us-east-1" />
               )}
+              {settings.emailSmtpPort === '465' && settings.emailSmtpEncryption !== 'ssl' && (
+                <div style={{ gridColumn: '1 / -1', fontSize: 12, color: 'var(--novo-danger)' }}>
+                  Puerto 465 requiere cifrado SSL. Con STARTTLS el correo suele no enviarse.
+                </div>
+              )}
             </div>
           )}
 
@@ -2385,6 +3112,7 @@ export function PartnerConsole({ section, onNavigate, linkProductPreset, onClear
     );
   }
   if (section === 'commissions') return <PartnerCommissions />;
+  if (section === 'payments') return <PartnerPaymentsModule />;
   if (section === 'partner-center' || section === 'partner-registration') return <PartnerRegistrationEmbed />;
   if (section === 'brand')     return null;
   if (section === 'support')   return <PartnerSupport />;
@@ -3592,25 +4320,118 @@ function PartnerCommissions() {
 /* ================================
    PARTNER SOPORTE
 ================================ */
+const SUPPORT_STATUS_LABELS = {
+  open: 'Abierto',
+  in_progress: 'En progreso',
+  waiting_partner: 'Esperando partner',
+  resolved: 'Resuelto',
+  closed: 'Cerrado',
+};
+
+const SUPPORT_PRIORITY_LABELS = {
+  low: 'Baja',
+  medium: 'Media',
+  high: 'Alta',
+};
+
+function supportStatusBadge(status) {
+  if (status === 'resolved' || status === 'closed') return 'active';
+  if (status === 'in_progress' || status === 'waiting_partner') return 'pending';
+  return 'pending';
+}
+
 function PartnerSupport() {
   const [tickets, setTickets] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
   const [showForm, setShowForm] = useState(false);
+  const [selectedId, setSelectedId] = useState(null);
+  const [detail, setDetail] = useState(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [reply, setReply] = useState('');
   const [form, setForm] = useState({ subject: '', message: '', priority: 'medium' });
+  const [statusFilter, setStatusFilter] = useState('');
   const [notice, setNotice] = useState(null);
 
-  function submitTicket() {
-    if (!form.subject || !form.message) { setNotice({ type: 'error', text: 'Completa el asunto y el mensaje.' }); return; }
-    setTickets(t => [{ id: Date.now(), ...form, status: 'open', created_at: new Date().toISOString() }, ...t]);
-    setNotice({ type: 'success', text: 'Ticket enviado. Te responderemos pronto.' });
-    setShowForm(false);
-    setForm({ subject: '', message: '', priority: 'medium' });
+  const load = useCallback(async () => {
+    try {
+      setLoading(true);
+      const data = await platformApi.listSupportTickets({ status: statusFilter || null });
+      setTickets(data?.tickets || []);
+    } catch (e) {
+      setNotice({ type: 'error', text: e.message });
+    } finally {
+      setLoading(false);
+    }
+  }, [statusFilter]);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function openTicket(ticketId) {
+    try {
+      setSelectedId(ticketId);
+      setDetailLoading(true);
+      const data = await platformApi.getSupportTicket(ticketId);
+      setDetail(data);
+      setReply('');
+    } catch (e) {
+      setNotice({ type: 'error', text: e.message });
+    } finally {
+      setDetailLoading(false);
+    }
   }
+
+  async function submitTicket() {
+    if (!form.subject.trim() || !form.message.trim()) {
+      setNotice({ type: 'error', text: 'Completa el asunto y el mensaje.' });
+      return;
+    }
+    try {
+      setBusy(true);
+      const data = await platformApi.createSupportTicket(form);
+      setNotice({ type: 'success', text: 'Ticket enviado. El equipo NOVO te responderá pronto.' });
+      setShowForm(false);
+      setForm({ subject: '', message: '', priority: 'medium' });
+      await load();
+      if (data?.ticket?.id) await openTicket(data.ticket.id);
+    } catch (e) {
+      setNotice({ type: 'error', text: e.message });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function sendReply() {
+    if (!selectedId || !reply.trim()) return;
+    try {
+      setBusy(true);
+      await platformApi.replySupportTicket({ ticketId: selectedId, message: reply.trim() });
+      setNotice({ type: 'success', text: 'Respuesta enviada.' });
+      setReply('');
+      await openTicket(selectedId);
+      await load();
+    } catch (e) {
+      setNotice({ type: 'error', text: e.message });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const ticket = detail?.ticket;
+  const messages = detail?.messages || [];
+  const canReply = ticket && ticket.status !== 'closed';
 
   return (
     <div className="novo-page">
       <div className="novo-page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <div><span className="kicker">SOPORTE</span><h1>Centro de ayuda</h1><p>Soporte directo para partners del ecosistema NOVO.</p></div>
-        <button className="novo-btn novo-btn-primary" onClick={() => setShowForm(!showForm)}><Plus size={15} /> Nuevo ticket</button>
+        <div>
+          <span className="kicker">SOPORTE</span>
+          <h1>Centro de ayuda</h1>
+          <p>Crea tickets y conversa con el equipo de NOVO.</p>
+        </div>
+        <button className="novo-btn novo-btn-primary" onClick={() => setShowForm(!showForm)}>
+          <Plus size={15} /> Nuevo ticket
+        </button>
       </div>
 
       {notice && <Notice {...notice} onClose={() => setNotice(null)} />}
@@ -3634,38 +4455,133 @@ function PartnerSupport() {
           </div>
           <div className="novo-field" style={{ marginBottom: 14 }}>
             <label>Mensaje *</label>
-            <textarea rows={4} value={form.message} onChange={e => setForm({ ...form, message: e.target.value })}
-              style={{ background: 'var(--novo-card-hover)', border: '1px solid var(--novo-border)', borderRadius: 8, padding: '9px 12px', color: 'var(--novo-text)', fontSize: 13, outline: 'none', width: '100%', resize: 'vertical' }} />
+            <textarea
+              rows={4}
+              value={form.message}
+              onChange={e => setForm({ ...form, message: e.target.value })}
+              style={{ background: 'var(--novo-card-hover)', border: '1px solid var(--novo-border)', borderRadius: 8, padding: '9px 12px', color: 'var(--novo-text)', fontSize: 13, outline: 'none', width: '100%', resize: 'vertical' }}
+            />
           </div>
           <div style={{ display: 'flex', gap: 10 }}>
-            <button className="novo-btn novo-btn-primary" onClick={submitTicket}><Save size={14} /> Enviar ticket</button>
+            <button className="novo-btn novo-btn-primary" onClick={submitTicket} disabled={busy}>
+              {busy ? <Loader2 size={14} style={{ animation: 'novoSpin .8s linear infinite' }} /> : <Save size={14} />} Enviar ticket
+            </button>
             <button className="novo-btn novo-btn-ghost" onClick={() => setShowForm(false)}>Cancelar</button>
           </div>
         </div>
       )}
 
-      <div className="novo-card">
-        <div className="novo-card-header"><div className="novo-card-title">Mis tickets ({tickets.length})</div></div>
-        {tickets.length === 0 ? (
-          <div className="novo-empty" style={{ padding: '48px 24px' }}>
-            <LifeBuoy size={36} style={{ opacity: .2, marginBottom: 14 }} />
-            <p style={{ fontWeight: 600, color: 'var(--novo-text)', marginBottom: 6 }}>No tienes tickets abiertos</p>
-            <p style={{ fontSize: 13 }}>Para soporte directo: <strong style={{ color: 'var(--novo-purple)' }}>clients@novoeia.com</strong></p>
+      <div style={{ display: 'grid', gridTemplateColumns: selectedId ? '1.1fr 1fr' : '1fr', gap: 16 }}>
+        <div className="novo-card">
+          <div className="novo-card-header">
+            <div className="novo-card-title">Mis tickets ({tickets.length})</div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={{ fontSize: 12, padding: '6px 8px', borderRadius: 8 }}>
+                <option value="">Todos</option>
+                <option value="open">Abierto</option>
+                <option value="in_progress">En progreso</option>
+                <option value="waiting_partner">Esperando partner</option>
+                <option value="resolved">Resuelto</option>
+                <option value="closed">Cerrado</option>
+              </select>
+              <button className="novo-btn novo-btn-ghost" onClick={load} disabled={loading}><RefreshCw size={13} /></button>
+            </div>
           </div>
-        ) : (
-          <table className="novo-table">
-            <thead><tr><th>Asunto</th><th>Prioridad</th><th>Estado</th><th>Fecha</th></tr></thead>
-            <tbody>
-              {tickets.map(t => (
-                <tr key={t.id}>
-                  <td><strong style={{ color: 'var(--novo-text)' }}>{t.subject}</strong><br /><small style={{ color: 'var(--novo-muted)', fontSize: 11 }}>{t.message.slice(0, 60)}…</small></td>
-                  <td><Badge status={t.priority === 'high' ? 'inactive' : t.priority === 'medium' ? 'pending' : 'active'} label={t.priority === 'high' ? 'Alta' : t.priority === 'medium' ? 'Media' : 'Baja'} /></td>
-                  <td><Badge status="pending" label="Abierto" /></td>
-                  <td style={{ fontSize: 12, color: 'var(--novo-muted)' }}>{new Date(t.created_at).toLocaleDateString()}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          {loading && <div className="novo-empty">Cargando…</div>}
+          {!loading && tickets.length === 0 && (
+            <div className="novo-empty" style={{ padding: '48px 24px' }}>
+              <LifeBuoy size={36} style={{ opacity: .2, marginBottom: 14 }} />
+              <p style={{ fontWeight: 600, color: 'var(--novo-text)', marginBottom: 6 }}>No tienes tickets</p>
+              <p style={{ fontSize: 13 }}>Crea uno para recibir ayuda del equipo NOVO.</p>
+            </div>
+          )}
+          {!loading && tickets.length > 0 && (
+            <table className="novo-table">
+              <thead><tr><th>Asunto</th><th>Prioridad</th><th>Estado</th><th>Actualizado</th></tr></thead>
+              <tbody>
+                {tickets.map(t => (
+                  <tr
+                    key={t.id}
+                    onClick={() => openTicket(t.id)}
+                    style={{ cursor: 'pointer', background: selectedId === t.id ? 'rgba(124,58,237,.06)' : undefined }}
+                  >
+                    <td><strong style={{ color: 'var(--novo-text)' }}>{t.subject}</strong></td>
+                    <td>
+                      <Badge
+                        status={t.priority === 'high' ? 'inactive' : t.priority === 'medium' ? 'pending' : 'active'}
+                        label={SUPPORT_PRIORITY_LABELS[t.priority] || t.priority}
+                      />
+                    </td>
+                    <td><Badge status={supportStatusBadge(t.status)} label={SUPPORT_STATUS_LABELS[t.status] || t.status} /></td>
+                    <td style={{ fontSize: 12, color: 'var(--novo-muted)' }}>{formatDate(t.last_message_at || t.updated_at)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        {selectedId && (
+          <div className="novo-card">
+            <div className="novo-card-header">
+              <div>
+                <div className="novo-card-title">{ticket?.subject || 'Ticket'}</div>
+                <div className="novo-card-sub">
+                  {ticket ? `${SUPPORT_STATUS_LABELS[ticket.status] || ticket.status} · ${SUPPORT_PRIORITY_LABELS[ticket.priority] || ticket.priority}` : 'Cargando…'}
+                </div>
+              </div>
+              <button className="novo-btn novo-btn-ghost" style={{ padding: '4px 8px' }} onClick={() => { setSelectedId(null); setDetail(null); }}>
+                <X size={14} />
+              </button>
+            </div>
+
+            {detailLoading && <div className="novo-empty">Cargando conversación…</div>}
+            {!detailLoading && (
+              <>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 420, overflowY: 'auto', marginBottom: 14 }}>
+                  {messages.map((msg) => (
+                    <div
+                      key={msg.id}
+                      style={{
+                        alignSelf: msg.author_role === 'partner' ? 'flex-end' : 'flex-start',
+                        maxWidth: '88%',
+                        padding: '10px 12px',
+                        borderRadius: 12,
+                        background: msg.author_role === 'partner' ? 'rgba(124,58,237,.12)' : 'rgba(148,163,184,.12)',
+                        border: '1px solid var(--novo-border)',
+                      }}
+                    >
+                      <div style={{ fontSize: 11, color: 'var(--novo-muted)', marginBottom: 4 }}>
+                        {msg.author_role === 'partner' ? 'Tú' : 'Soporte NOVO'} · {formatDate(msg.created_at)}
+                      </div>
+                      <div style={{ color: 'var(--novo-text)', whiteSpace: 'pre-wrap', fontSize: 13 }}>{msg.body}</div>
+                    </div>
+                  ))}
+                  {messages.length === 0 && <div className="novo-empty">Sin mensajes.</div>}
+                </div>
+
+                {canReply ? (
+                  <>
+                    <div className="novo-field" style={{ marginBottom: 10 }}>
+                      <label>Responder</label>
+                      <textarea
+                        rows={3}
+                        value={reply}
+                        onChange={e => setReply(e.target.value)}
+                        placeholder="Escribe tu respuesta…"
+                        style={{ background: 'var(--novo-card-hover)', border: '1px solid var(--novo-border)', borderRadius: 8, padding: '9px 12px', color: 'var(--novo-text)', fontSize: 13, outline: 'none', width: '100%', resize: 'vertical' }}
+                      />
+                    </div>
+                    <button className="novo-btn novo-btn-primary" onClick={sendReply} disabled={busy || !reply.trim()}>
+                      {busy ? <Loader2 size={14} style={{ animation: 'novoSpin .8s linear infinite' }} /> : <Save size={14} />} Enviar respuesta
+                    </button>
+                  </>
+                ) : (
+                  <div className="novo-empty">Este ticket está cerrado.</div>
+                )}
+              </>
+            )}
+          </div>
         )}
       </div>
     </div>
@@ -3885,18 +4801,36 @@ function Badge({ status, label }) {
     active: 'active',
     paid: 'active',
     completed: 'active',
+    approved: 'active',
     inactive: 'inactive',
     disabled: 'inactive',
     expired: 'inactive',
     archived: 'inactive',
     failed: 'inactive',
+    rejected: 'inactive',
+    cancelled: 'inactive',
     pending: 'pending',
+    pending_review: 'pending',
+    needs_changes: 'pending',
     draft: 'pending',
     open: 'pending',
   }[normalized] || 'pending';
   const defaultLabel = {
-    active: 'Activo', inactive: 'Inactivo', disabled: 'Desactivado', expired: 'Expirado', archived: 'Archivado',
-    pending: 'Pendiente', draft: 'Borrador', paid: 'Pagado', failed: 'Fallido', open: 'Abierto',
+    active: 'Activo',
+    inactive: 'Inactivo',
+    disabled: 'Desactivado',
+    expired: 'Expirado',
+    archived: 'Archivado',
+    pending: 'Pendiente',
+    pending_review: 'En revisión',
+    needs_changes: 'Requiere cambios',
+    approved: 'Aprobada',
+    rejected: 'Rechazada',
+    draft: 'Borrador',
+    paid: 'Pagado',
+    failed: 'Fallido',
+    open: 'Abierto',
+    cancelled: 'Cancelada',
   }[normalized] || normalized;
   return <span className={`novo-badge ${cls}`}>{label || defaultLabel}</span>;
 }

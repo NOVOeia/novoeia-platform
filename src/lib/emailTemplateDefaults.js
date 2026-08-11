@@ -142,13 +142,79 @@ export function mergeEmailTemplates(stored = {}) {
       enabled: override.enabled !== undefined ? override.enabled : defaults.enabled,
     };
   }
+
+  for (const [id, value] of Object.entries(stored || {})) {
+    if (merged[id]) continue;
+    if (!value || typeof value !== 'object') continue;
+    const isCustom = value.custom === true || String(id).startsWith('custom_');
+    if (!isCustom) continue;
+    merged[id] = {
+      subject: String(value.subject || ''),
+      html: String(value.html || ''),
+      enabled: value.enabled !== false,
+      custom: true,
+      name: String(value.name || id),
+      description: String(value.description || 'Plantilla personalizada'),
+      trigger: String(value.trigger || 'manual'),
+      variables: Array.isArray(value.variables) ? value.variables.map(String) : ['fullName', 'email', 'appName'],
+    };
+  }
+
   return merged;
 }
 
 export function listEmailTemplatesForAdmin(stored = {}) {
   const merged = mergeEmailTemplates(stored);
-  return EMAIL_TEMPLATE_CATALOG.map(meta => ({
+  const system = EMAIL_TEMPLATE_CATALOG.map(meta => ({
     ...meta,
     ...merged[meta.id],
+    custom: false,
   }));
+
+  const custom = Object.entries(merged)
+    .filter(([id]) => !EMAIL_TEMPLATE_CATALOG.some(item => item.id === id))
+    .map(([id, value]) => ({
+      id,
+      name: value.name || id,
+      description: value.description || 'Plantilla personalizada',
+      trigger: value.trigger || 'manual',
+      variables: value.variables || ['fullName', 'email', 'appName'],
+      subject: value.subject,
+      html: value.html,
+      enabled: value.enabled,
+      custom: true,
+    }))
+    .sort((a, b) => String(a.name).localeCompare(String(b.name), 'es'));
+
+  return [...system, ...custom];
 }
+
+export function slugifyTemplateId(name = '') {
+  const base = String(name)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 40);
+  return `custom_${base || 'plantilla'}_${Date.now().toString(36)}`;
+}
+
+export const CUSTOM_TEMPLATE_VARIABLE_OPTIONS = [
+  'fullName',
+  'email',
+  'companyName',
+  'clientName',
+  'clientEmail',
+  'productName',
+  'amount',
+  'currency',
+  'commission',
+  'partnerName',
+  'loginUrl',
+  'dashboardUrl',
+  'resetUrl',
+  'expiresIn',
+  'supportEmail',
+  'appName',
+];

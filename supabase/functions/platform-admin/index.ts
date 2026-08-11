@@ -3,7 +3,8 @@ import { createPartnerAccount } from '../_shared/partner-account.ts';
 import { isEmailConfigReady, loadEmailConfig, sendPlatformEmail } from '../_shared/email.ts';
 import {
   EMAIL_TEMPLATE_CATALOG,
-  loadEmailTemplates,
+  loadStoredEmailTemplateConfig,
+  listEmailTemplatesForAdmin,
   sendTemplatedEmail,
   trySendTemplatedEmail,
 } from '../_shared/email-templates.ts';
@@ -208,9 +209,42 @@ Deno.serve(async (req) => {
     }
 
     if (action === 'updatePartner') {
-      const { id, ...changes } = payload;
-      const { data, error } = await supabase.from('partners').update({ ...changes, updated_at: new Date().toISOString() }).eq('id', id).select().single();
+      const id = payload.id as string | undefined;
+      if (!id) throw new Error('MISSING_REQUIRED_FIELDS');
+
+      const patch: Record<string, unknown> = {
+        updated_at: new Date().toISOString(),
+      };
+      if (payload.name != null) patch.name = String(payload.name).trim();
+      if (payload.slug != null) patch.slug = String(payload.slug).trim().toLowerCase();
+      if (payload.plan_name != null) patch.plan_name = payload.plan_name;
+      if (payload.status != null) {
+        const status = String(payload.status);
+        if (!['pending', 'active', 'inactive'].includes(status)) {
+          throw new Error('INVALID_PARTNER_STATUS');
+        }
+        patch.status = status;
+      }
+      if (payload.ghl_location_id !== undefined) {
+        patch.ghl_location_id = payload.ghl_location_id || null;
+      }
+
+      const { data, error } = await supabase
+        .from('partners')
+        .update(patch)
+        .eq('id', id)
+        .select()
+        .single();
       if (error) throw error;
+
+      await supabase.from('audit_logs').insert({
+        actor_user_id: user.id,
+        action: 'partner.updated',
+        entity_type: 'partner',
+        entity_id: id,
+        metadata: { patch },
+      });
+
       return json({ partner: data });
     }
 
@@ -310,34 +344,59 @@ Deno.serve(async (req) => {
     }
 
     if (action === 'getEmailTemplates') {
-      const templates = await loadEmailTemplates(supabase);
+      const stored = await loadStoredEmailTemplateConfig(supabase);
       return json({
-        templates: EMAIL_TEMPLATE_CATALOG.map(meta => ({
-          ...meta,
-          ...templates[meta.id],
-        })),
+        templates: listEmailTemplatesForAdmin(stored as Record<string, Partial<{
+          subject: string;
+          html: string;
+          enabled: boolean;
+          custom?: boolean;
+          name?: string;
+          description?: string;
+          trigger?: string;
+          variables?: string[];
+        }>>),
       });
     }
 
     if (action === 'saveEmailTemplates') {
       const incoming = (payload.templates || {}) as Record<string, unknown>;
-      const { data: existing } = await supabase
-        .from('platform_integrations')
-        .select('public_config')
-        .eq('provider', 'email_templates')
-        .maybeSingle();
-
-      const currentTemplates = ((existing?.public_config || {}) as { templates?: Record<string, unknown> }).templates || {};
-      const mergedTemplates = { ...currentTemplates };
+      const currentTemplates = await loadStoredEmailTemplateConfig(supabase) as Record<string, Record<string, unknown>>;
+      const mergedTemplates: Record<string, Record<string, unknown>> = { ...currentTemplates };
+      const systemIds = new Set(EMAIL_TEMPLATE_CATALOG.map((item) => item.id));
 
       for (const [id, value] of Object.entries(incoming)) {
         const tpl = value as Record<string, unknown>;
+        const existing = (currentTemplates[id] || {}) as Record<string, unknown>;
+        const isCustom = tpl.custom === true || existing.custom === true || String(id).startsWith('custom_') || !systemIds.has(id as typeof EMAIL_TEMPLATE_CATALOG[number]['id']);
+
         mergedTemplates[id] = {
-          ...(currentTemplates[id] as Record<string, unknown> || {}),
+          ...existing,
           ...(tpl.subject !== undefined ? { subject: String(tpl.subject) } : {}),
           ...(tpl.html !== undefined ? { html: String(tpl.html) } : {}),
           ...(tpl.enabled !== undefined ? { enabled: tpl.enabled === true } : {}),
         };
+
+        if (isCustom) {
+          mergedTemplates[id].custom = true;
+          if (tpl.name !== undefined) mergedTemplates[id].name = String(tpl.name).trim() || id;
+          if (tpl.description !== undefined) mergedTemplates[id].description = String(tpl.description);
+          if (tpl.trigger !== undefined) mergedTemplates[id].trigger = String(tpl.trigger || 'manual');
+          if (tpl.variables !== undefined) {
+            mergedTemplates[id].variables = Array.isArray(tpl.variables)
+              ? tpl.variables.map(String)
+              : (existing.variables || ['fullName', 'email', 'appName']);
+          }
+          if (!mergedTemplates[id].name) mergedTemplates[id].name = existing.name || id;
+        }
+      }
+
+      if (Array.isArray(payload.deleteIds)) {
+        for (const rawId of payload.deleteIds) {
+          const id = String(rawId || '');
+          if (!id || systemIds.has(id as typeof EMAIL_TEMPLATE_CATALOG[number]['id'])) continue;
+          delete mergedTemplates[id];
+        }
       }
 
       await supabase.from('platform_integrations').upsert({
@@ -355,7 +414,19 @@ Deno.serve(async (req) => {
         entity_type: 'platform',
       });
 
-      return json({ ok: true });
+      return json({
+        ok: true,
+        templates: listEmailTemplatesForAdmin(mergedTemplates as Record<string, Partial<{
+          subject: string;
+          html: string;
+          enabled: boolean;
+          custom?: boolean;
+          name?: string;
+          description?: string;
+          trigger?: string;
+          variables?: string[];
+        }>>),
+      });
     }
 
     if (action === 'sendTemplateTestEmail') {
@@ -379,7 +450,29 @@ Deno.serve(async (req) => {
         expiresIn: '60 minutos',
       };
 
-      await sendTemplatedEmail(supabase, templateId, { to, variables: sampleVariables });
+      const result = await sendTemplatedEmail(supabase, templateId, {
+        to,
+        variables: sampleVariables,
+        force: true,
+      });
+      if (result?.skipped) {
+        const reasonMap: Record<string, string> = {
+          email_not_configured: 'EMAIL_NOT_CONFIGURED',
+          template_disabled: 'TEMPLATE_DISABLED',
+          template_not_found: 'TEMPLATE_NOT_FOUND',
+          missing_recipient: 'TEST_EMAIL_REQUIRED',
+        };
+        throw new Error(reasonMap[String(result.reason)] || String(result.reason || 'EMAIL_SEND_SKIPPED'));
+      }
+
+      await supabase.from('audit_logs').insert({
+        actor_user_id: user.id,
+        action: 'email.template_test_sent',
+        entity_type: 'email_template',
+        entity_id: templateId,
+        metadata: { to, templateId },
+      });
+
       return json({ ok: true, to, templateId });
     }
 
@@ -444,6 +537,219 @@ Deno.serve(async (req) => {
       });
 
       return json({ partner, decision });
+    }
+
+    if (action === 'listPaymentProfiles') {
+      let query = supabase
+        .from('partner_payment_profiles')
+        .select(`
+          *,
+          partners:partner_id ( id, name, slug, status )
+        `)
+        .order('updated_at', { ascending: false });
+
+      if (payload.status) {
+        query = query.eq('status', payload.status);
+      }
+      if (payload.partnerId) {
+        query = query.eq('partner_id', payload.partnerId);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      return json({ profiles: data || [] });
+    }
+
+    if (action === 'reviewPaymentProfile') {
+      const profileId = payload.profileId as string | undefined;
+      const decision = payload.decision as string | undefined;
+      const allowed = ['approved', 'rejected', 'needs_changes'];
+      if (!profileId || !allowed.includes(decision || '')) {
+        throw new Error('INVALID_PAYMENT_PROFILE_REVIEW');
+      }
+
+      const { data: profile, error } = await supabase
+        .from('partner_payment_profiles')
+        .update({
+          status: decision,
+          review_notes: payload.notes ? String(payload.notes) : null,
+          reviewed_at: new Date().toISOString(),
+          reviewed_by: user.id,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', profileId)
+        .select(`
+          *,
+          partners:partner_id ( id, name, slug )
+        `)
+        .single();
+      if (error) throw error;
+
+      await supabase.from('audit_logs').insert({
+        actor_user_id: user.id,
+        action: `partner.payment_profile_${decision}`,
+        entity_type: 'partner_payment_profile',
+        entity_id: profileId,
+        metadata: {
+          partnerId: profile.partner_id,
+          notes: payload.notes || null,
+        },
+      });
+
+      return json({ profile, decision });
+    }
+
+    if (action === 'listSupportTickets') {
+      let query = supabase
+        .from('support_tickets')
+        .select(`
+          id, partner_id, subject, priority, status, last_message_at, last_message_by,
+          created_at, updated_at, resolved_at, closed_at, created_by,
+          partners:partner_id ( id, name, slug )
+        `)
+        .order('last_message_at', { ascending: false });
+      if (payload.status) query = query.eq('status', payload.status);
+      if (payload.partnerId) query = query.eq('partner_id', payload.partnerId);
+      if (payload.priority) query = query.eq('priority', payload.priority);
+      const { data, error } = await query;
+      if (error) throw error;
+      return json({ tickets: data || [] });
+    }
+
+    if (action === 'getSupportTicket') {
+      const ticketId = String(payload.ticketId || '').trim();
+      if (!ticketId) throw new Error('SUPPORT_TICKET_REQUIRED');
+
+      const { data: ticket, error: ticketError } = await supabase
+        .from('support_tickets')
+        .select(`
+          *,
+          partners:partner_id ( id, name, slug )
+        `)
+        .eq('id', ticketId)
+        .single();
+      if (ticketError) throw ticketError;
+
+      const { data: messages, error: messagesError } = await supabase
+        .from('support_ticket_messages')
+        .select('id, ticket_id, author_user_id, author_role, body, created_at')
+        .eq('ticket_id', ticketId)
+        .order('created_at', { ascending: true });
+      if (messagesError) throw messagesError;
+
+      return json({ ticket, messages: messages || [] });
+    }
+
+    if (action === 'replySupportTicket') {
+      const ticketId = String(payload.ticketId || '').trim();
+      const body = String(payload.message || payload.body || '').trim();
+      if (!ticketId || !body) throw new Error('SUPPORT_TICKET_FIELDS_REQUIRED');
+
+      const { data: ticket, error: ticketError } = await supabase
+        .from('support_tickets')
+        .select('*')
+        .eq('id', ticketId)
+        .single();
+      if (ticketError) throw ticketError;
+      if (ticket.status === 'closed') throw new Error('SUPPORT_TICKET_CLOSED');
+
+      const now = new Date().toISOString();
+      const { data: message, error: messageError } = await supabase
+        .from('support_ticket_messages')
+        .insert({
+          ticket_id: ticketId,
+          author_user_id: user.id,
+          author_role: 'super_admin',
+          body,
+          created_at: now,
+        })
+        .select('*')
+        .single();
+      if (messageError) throw messageError;
+
+      const requestedStatus = payload.status ? String(payload.status) : 'waiting_partner';
+      const allowed = ['open', 'in_progress', 'waiting_partner', 'resolved', 'closed'];
+      const nextStatus = allowed.includes(requestedStatus) ? requestedStatus : 'waiting_partner';
+
+      const { data: updated, error: updateError } = await supabase
+        .from('support_tickets')
+        .update({
+          status: nextStatus,
+          last_message_at: now,
+          last_message_by: 'super_admin',
+          updated_at: now,
+          resolved_at: nextStatus === 'resolved' ? now : null,
+          closed_at: nextStatus === 'closed' ? now : null,
+        })
+        .eq('id', ticketId)
+        .select(`
+          *,
+          partners:partner_id ( id, name, slug )
+        `)
+        .single();
+      if (updateError) throw updateError;
+
+      await supabase.from('platform_notifications').insert({
+        partner_id: ticket.partner_id,
+        recipient_role: 'partner',
+        type: 'support_ticket_reply',
+        title: 'Respuesta de soporte NOVO',
+        body: ticket.subject,
+        metadata: { ticketId, status: nextStatus },
+      });
+
+      await supabase.from('audit_logs').insert({
+        actor_user_id: user.id,
+        action: 'support.ticket_replied',
+        entity_type: 'support_ticket',
+        entity_id: ticketId,
+        metadata: { status: nextStatus },
+      });
+
+      return json({ ticket: updated, message });
+    }
+
+    if (action === 'updateSupportTicketStatus') {
+      const ticketId = String(payload.ticketId || '').trim();
+      const status = String(payload.status || '').trim();
+      const allowed = ['open', 'in_progress', 'waiting_partner', 'resolved', 'closed'];
+      if (!ticketId || !allowed.includes(status)) throw new Error('INVALID_SUPPORT_TICKET_STATUS');
+
+      const now = new Date().toISOString();
+      const { data: ticket, error } = await supabase
+        .from('support_tickets')
+        .update({
+          status,
+          updated_at: now,
+          resolved_at: status === 'resolved' ? now : null,
+          closed_at: status === 'closed' ? now : null,
+        })
+        .eq('id', ticketId)
+        .select(`
+          *,
+          partners:partner_id ( id, name, slug )
+        `)
+        .single();
+      if (error) throw error;
+
+      await supabase.from('platform_notifications').insert({
+        partner_id: ticket.partner_id,
+        recipient_role: 'partner',
+        type: 'support_ticket_status',
+        title: 'Actualización de tu ticket',
+        body: `${ticket.subject} → ${status}`,
+        metadata: { ticketId, status },
+      });
+
+      await supabase.from('audit_logs').insert({
+        actor_user_id: user.id,
+        action: 'support.ticket_status_updated',
+        entity_type: 'support_ticket',
+        entity_id: ticketId,
+        metadata: { status },
+      });
+
+      return json({ ticket });
     }
 
     throw new Error('UNKNOWN_ACTION');

@@ -22,6 +22,40 @@ type AgencyConnection = {
 const REQUIRED_LOCATION_SCOPES = ['locations.write'];
 const REQUIRED_SAAS_SCOPES = ['saas/location.write', 'saas/company.read', 'saas/company.write'];
 
+const COUNTRY_NAME_TO_ISO: Record<string, string> = {
+  'estados unidos': 'US',
+  colombia: 'CO',
+  mexico: 'MX',
+  'méxico': 'MX',
+  espana: 'ES',
+  'españa': 'ES',
+  argentina: 'AR',
+  chile: 'CL',
+  peru: 'PE',
+  'perú': 'PE',
+  ecuador: 'EC',
+  'republica dominicana': 'DO',
+  'república dominicana': 'DO',
+  panama: 'PA',
+  'panamá': 'PA',
+  'costa rica': 'CR',
+  'puerto rico': 'PR',
+};
+
+function stripDiacritics(value: string) {
+  return value.normalize('NFD').replace(/\p{M}/gu, '');
+}
+
+/** GHL locations API expects ISO 3166-1 alpha-2 (e.g. CO), not full country names. */
+export function normalizeGhlCountry(country: string | null | undefined): string | undefined {
+  const trimmed = String(country || '').trim();
+  if (!trimmed || /^otro$/i.test(trimmed)) return undefined;
+  if (/^[A-Z]{2}$/i.test(trimmed)) return trimmed.toUpperCase();
+
+  const normalized = stripDiacritics(trimmed).toLowerCase();
+  return COUNTRY_NAME_TO_ISO[normalized] || COUNTRY_NAME_TO_ISO[trimmed.toLowerCase()];
+}
+
 function assertAgencyScopes(connection: AgencyConnection, enableSaas: boolean) {
   const granted = new Set((connection.scopes || []).map((scope) => scope.trim()).filter(Boolean));
   if (!granted.size) return;
@@ -179,7 +213,8 @@ async function createGhlLocation(
   if (client.email) body.email = client.email;
   if (client.phone) body.phone = client.phone;
   if (client.city) body.city = client.city;
-  if (client.country) body.country = client.country;
+  const country = normalizeGhlCountry(client.country);
+  if (country) body.country = country;
 
   const payload = await ghlRequest('/locations/', token, {
     method: 'POST',

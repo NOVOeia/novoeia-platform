@@ -1,5 +1,5 @@
 import { CheckCircle2, XCircle } from 'lucide-react';
-import { Button, Logo } from '../components/ui.jsx';
+import { Button } from '../components/ui.jsx';
 import '../styles/site-wow.css';
 
 export default function CheckoutPage({ go, status = 'success', sessionId = null }) {
@@ -9,13 +9,12 @@ export default function CheckoutPage({ go, status = 'success', sessionId = null 
     <div className="wow-auth-page">
       <div className="wow-auth-grid" />
       <div className="auth-card card wow-auth-card wow-login-card" style={{ textAlign: 'center' }}>
-        <Logo />
         {isSuccess ? (
           <>
             <CheckCircle2 size={48} color="#4ade80" style={{ margin: '12px auto' }} />
             <h2>Pago recibido</h2>
             <p className="auth-intro">
-              Tu suscripción NOVO quedó registrada. Estamos activando tu cuenta en GoHighLevel; recibirás acceso en breve.
+              Tu pago quedó registrado. Estamos activando tu servicio; recibirás acceso en breve.
             </p>
             {sessionId && (
               <p className="auth-intro" style={{ fontSize: 12, opacity: 0.75 }}>

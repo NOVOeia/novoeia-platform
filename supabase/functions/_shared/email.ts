@@ -187,9 +187,18 @@ async function writeSmtp(conn: Deno.Conn | Deno.TlsConn, command: string) {
   await conn.write(new TextEncoder().encode(`${command}\r\n`));
 }
 
+function resolveSmtpEncryption(config: EmailConfig): EmailConfig['smtpEncryption'] {
+  const port = config.smtpPort || 587;
+  // Puerto 465 exige TLS implícito; STARTTLS ahí suele fallar en silencio o colgar.
+  if (port === 465 && config.smtpEncryption !== 'none') return 'ssl';
+  if (port === 587 && config.smtpEncryption === 'ssl') return 'starttls';
+  return config.smtpEncryption || 'starttls';
+}
+
 async function sendViaSmtp(config: EmailConfig, params: { to: string; subject: string; html: string; text?: string }) {
   const port = config.smtpPort || 587;
-  let conn: Deno.Conn | Deno.TlsConn = config.smtpEncryption === 'ssl'
+  const encryption = resolveSmtpEncryption(config);
+  let conn: Deno.Conn | Deno.TlsConn = encryption === 'ssl'
     ? await Deno.connectTls({ hostname: config.smtpHost, port })
     : await Deno.connect({ hostname: config.smtpHost, port });
 
@@ -198,7 +207,7 @@ async function sendViaSmtp(config: EmailConfig, params: { to: string; subject: s
     await writeSmtp(conn, `EHLO novo-platform`);
     const ehlo = await readSmtpResponse(conn);
 
-    if (config.smtpEncryption === 'starttls' && ehlo.toUpperCase().includes('STARTTLS')) {
+    if (encryption === 'starttls' && ehlo.toUpperCase().includes('STARTTLS')) {
       await writeSmtp(conn, 'STARTTLS');
       await readSmtpResponse(conn);
       conn = await Deno.startTls(conn as Deno.Conn, { hostname: config.smtpHost });

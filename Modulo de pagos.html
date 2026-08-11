@@ -1,0 +1,8099 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Activación de Pagos | NOVO Partners</title>
+
+<style>
+
+/* ============================================================
+   NOVO PARTNERS
+   ACTIVACIÓN DE CUENTA DE PAGOS
+   LIGHT UI
+   ============================================================ */
+
+:root{
+
+  --ink:#15213d;
+
+  /*
+    Más oscuros que la versión anterior
+    para mejorar considerablemente legibilidad.
+  */
+  --muted:#53627d;
+  --muted-2:#65738e;
+
+  --white:#ffffff;
+
+  --surface:rgba(255,255,255,.82);
+  --surface-solid:#ffffff;
+
+  --line:#dbe6f6;
+  --line-soft:#edf2f9;
+
+  --blue:#258dff;
+  --cyan:#25d8ff;
+  --purple:#7e4dff;
+  --pink:#d84cff;
+
+  --green:#21c894;
+  --green-dark:#149f75;
+  --green-soft:#edfff8;
+
+  --yellow:#ffbe3f;
+  --yellow-soft:#fff9e9;
+
+  --red:#ff6a82;
+  --red-soft:#fff1f4;
+
+  --gray-disabled:#f3f6fa;
+  --gray-disabled-border:#e5eaf2;
+
+  /*
+    También oscurecido para que una opción
+    deshabilitada siga siendo legible.
+  */
+  --gray-disabled-text:#8d98ab;
+
+  --shadow:
+    0 24px 70px rgba(52,78,140,.15);
+
+  --shadow-card:
+    0 10px 26px rgba(60,83,140,.07);
+
+  --radius-xl:28px;
+  --radius-lg:22px;
+  --radius-md:16px;
+  --radius-sm:11px;
+}
+
+
+/* ============================================================
+   RESET
+   ============================================================ */
+
+*{
+  box-sizing:border-box;
+}
+
+html{
+  scroll-behavior:smooth;
+}
+
+body{
+
+  margin:0;
+  min-height:100vh;
+
+  font-family:
+    Inter,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+
+  color:var(--ink);
+
+  background:
+
+    radial-gradient(
+      circle at 10% 5%,
+      rgba(37,216,255,.32),
+      transparent 25%
+    ),
+
+    radial-gradient(
+      circle at 92% 10%,
+      rgba(216,76,255,.19),
+      transparent 24%
+    ),
+
+    radial-gradient(
+      circle at 50% 100%,
+      rgba(126,77,255,.16),
+      transparent 32%
+    ),
+
+    linear-gradient(
+      135deg,
+      #f6fbff 0%,
+      #f7f3ff 45%,
+      #effbff 100%
+    );
+}
+
+
+body::before,
+body::after{
+
+  content:"";
+
+  position:fixed;
+
+  width:320px;
+  height:320px;
+
+  border-radius:50%;
+
+  filter:blur(55px);
+
+  opacity:.38;
+
+  z-index:-1;
+
+  pointer-events:none;
+}
+
+
+body::before{
+
+  background:#59e6ff;
+
+  left:-80px;
+  top:170px;
+}
+
+
+body::after{
+
+  background:#b46cff;
+
+  right:-90px;
+  bottom:70px;
+}
+
+
+button,
+input,
+select{
+
+  font:inherit;
+}
+
+
+button{
+
+  cursor:pointer;
+}
+
+
+a{
+
+  color:inherit;
+  text-decoration:none;
+}
+
+
+/* ============================================================
+   MAIN SHELL
+   ============================================================ */
+
+.wrap{
+
+  max-width:1450px;
+
+  margin:auto;
+
+  padding:26px;
+}
+
+
+.module{
+
+  min-height:820px;
+
+  overflow:hidden;
+
+  border-radius:30px;
+
+  border:
+    1px solid rgba(255,255,255,.92);
+
+  background:
+    var(--surface);
+
+  backdrop-filter:
+    blur(22px);
+
+  box-shadow:
+    var(--shadow);
+}
+
+
+/* ============================================================
+   HEADER
+   ============================================================ */
+
+.header{
+
+  padding:
+    20px 24px 0;
+
+  background:
+
+    linear-gradient(
+      120deg,
+      rgba(255,255,255,.97),
+      rgba(244,249,255,.97) 55%,
+      rgba(250,244,255,.97)
+    );
+
+  border-bottom:
+    1px solid var(--line);
+}
+
+
+.header-row{
+
+  display:flex;
+
+  align-items:center;
+
+  justify-content:
+    space-between;
+
+  gap:24px;
+}
+
+
+.brand{
+
+  display:flex;
+
+  align-items:center;
+
+  gap:14px;
+}
+
+
+.brand-logo{
+
+  width:72px;
+  height:58px;
+
+  object-fit:contain;
+}
+
+
+/*
+  IMPORTANTE:
+  Sustituir esta ruta por el logo oficial de NOVO Partners
+  dentro del proyecto real.
+*/
+
+.brand-copy h1{
+
+  margin:0;
+
+  font-size:24px;
+
+  letter-spacing:-.04em;
+}
+
+
+.brand-copy h1 span{
+
+  background:
+
+    linear-gradient(
+      90deg,
+      var(--blue),
+      var(--purple),
+      var(--pink)
+    );
+
+  -webkit-background-clip:text;
+
+  background-clip:text;
+
+  color:transparent;
+}
+
+
+.brand-copy p{
+
+  margin:
+    5px 0 0;
+
+  color:var(--muted);
+
+  font-size:11px;
+
+  font-weight:500;
+}
+
+
+/* ============================================================
+   PROGRESS
+   ============================================================ */
+
+.header-status{
+
+  min-width:245px;
+
+  padding:
+    12px 14px;
+
+  border-radius:16px;
+
+  background:
+
+    linear-gradient(
+      135deg,
+      #eef9ff,
+      #f4efff
+    );
+
+  border:
+    1px solid #dbe7ff;
+}
+
+
+.status-top{
+
+  display:flex;
+
+  justify-content:
+    space-between;
+
+  gap:15px;
+
+  color:#596984;
+
+  font-size:10px;
+}
+
+
+.status-top strong{
+
+  color:var(--purple);
+}
+
+
+.progress-track{
+
+  height:8px;
+
+  margin-top:8px;
+
+  overflow:hidden;
+
+  border-radius:999px;
+
+  background:#e9eef8;
+}
+
+
+.progress-bar{
+
+  width:25%;
+  height:100%;
+
+  border-radius:inherit;
+
+  background:
+
+    linear-gradient(
+      90deg,
+      var(--cyan),
+      var(--blue),
+      var(--purple),
+      var(--pink)
+    );
+
+  transition:
+    .35s ease;
+}
+
+
+/* ============================================================
+   STEP TABS
+   ============================================================ */
+
+.steps{
+
+  display:grid;
+
+  grid-template-columns:
+    repeat(4,1fr);
+
+  gap:10px;
+
+  margin-top:18px;
+
+  padding-bottom:15px;
+}
+
+
+.step-tab{
+
+  position:relative;
+
+  padding:
+    11px 12px;
+
+  border:
+    1px solid #e2e8f5;
+
+  border-radius:15px;
+
+  background:#fff;
+
+  color:#5e6e89;
+
+  text-align:left;
+
+  transition:
+    .2s ease;
+}
+
+
+.step-tab:hover{
+
+  transform:
+    translateY(-2px);
+
+  box-shadow:
+    0 10px 22px rgba(59,90,160,.1);
+}
+
+
+.step-tab.active{
+
+  color:#fff;
+
+  border-color:
+    transparent;
+
+  background:
+
+    linear-gradient(
+      135deg,
+      var(--blue),
+      var(--purple)
+    );
+
+  box-shadow:
+
+    0 12px 28px
+    rgba(80,76,220,.22);
+}
+
+
+.step-tab.done::after{
+
+  content:"✓";
+
+  position:absolute;
+
+  right:9px;
+  top:9px;
+
+  width:18px;
+  height:18px;
+
+  display:grid;
+
+  place-items:center;
+
+  border-radius:50%;
+
+  background:
+    var(--green);
+
+  color:#fff;
+
+  font-size:10px;
+
+  font-weight:900;
+}
+
+
+.step-number{
+
+  width:24px;
+  height:24px;
+
+  display:grid;
+
+  place-items:center;
+
+  margin-bottom:5px;
+
+  border-radius:8px;
+
+  background:#eef5ff;
+
+  color:var(--blue);
+
+  font-size:10px;
+
+  font-weight:900;
+}
+
+
+.step-tab.active
+.step-number{
+
+  color:#fff;
+
+  background:
+    rgba(255,255,255,.2);
+}
+
+
+.step-tab strong{
+
+  display:block;
+
+  font-size:11px;
+}
+
+
+.step-tab small{
+
+  display:block;
+
+  margin-top:3px;
+
+  font-size:9px;
+
+  opacity:.9;
+}
+
+
+/* ============================================================
+   CONTENT
+   ============================================================ */
+
+.content{
+
+  padding:26px;
+}
+
+
+.panel{
+
+  display:none;
+
+  animation:
+    fade .25s ease;
+}
+
+
+.panel.active{
+
+  display:block;
+}
+
+
+@keyframes fade{
+
+  from{
+
+    opacity:0;
+
+    transform:
+      translateY(5px);
+  }
+
+  to{
+
+    opacity:1;
+
+    transform:none;
+  }
+}
+
+
+/* ============================================================
+   HERO
+   ============================================================ */
+
+.hero{
+
+  position:relative;
+
+  overflow:hidden;
+
+  margin-bottom:18px;
+
+  padding:
+    22px 24px;
+
+  border-radius:24px;
+
+  color:#fff;
+
+  box-shadow:
+
+    0 18px 40px
+    rgba(57,77,160,.14);
+}
+
+
+.hero::after{
+
+  content:"";
+
+  position:absolute;
+
+  width:230px;
+  height:230px;
+
+  right:-70px;
+  top:-100px;
+
+  border-radius:50%;
+
+  background:
+
+    radial-gradient(
+      circle,
+      rgba(255,255,255,.28),
+      transparent 65%
+    );
+}
+
+
+.hero-1{
+
+  background:
+
+    linear-gradient(
+      120deg,
+      #187eff,
+      #7056ff 55%,
+      #be4cff
+    );
+}
+
+
+.hero-2{
+
+  background:
+
+    linear-gradient(
+      120deg,
+      #10b9d4,
+      #1b8fff 48%,
+      #7654ff
+    );
+}
+
+
+.hero-3{
+
+  background:
+
+    linear-gradient(
+      120deg,
+      #6248ff,
+      #9b43ff 55%,
+      #e14ec8
+    );
+}
+
+
+.hero-4{
+
+  background:
+
+    linear-gradient(
+      120deg,
+      #0bbf9a,
+      #188fff 55%,
+      #6e55ff
+    );
+}
+
+
+.kicker{
+
+  position:relative;
+
+  z-index:1;
+
+  font-size:10px;
+
+  text-transform:
+    uppercase;
+
+  letter-spacing:.14em;
+
+  font-weight:900;
+
+  opacity:.88;
+}
+
+
+.hero h2{
+
+  position:relative;
+
+  z-index:1;
+
+  margin:
+    6px 0;
+
+  font-size:29px;
+
+  letter-spacing:-.04em;
+}
+
+
+.hero p{
+
+  position:relative;
+
+  z-index:1;
+
+  max-width:850px;
+
+  margin:0;
+
+  font-size:12px;
+
+  line-height:1.65;
+
+  opacity:.95;
+}
+
+
+/* ============================================================
+   CARDS
+   ============================================================ */
+
+.card{
+
+  padding:19px;
+
+  border:
+    1px solid #e2e9f5;
+
+  border-radius:20px;
+
+  background:#fff;
+
+  box-shadow:
+    var(--shadow-card);
+}
+
+
+.card + .card{
+
+  margin-top:15px;
+}
+
+
+.card-title{
+
+  margin:
+    0 0 5px;
+
+  font-size:16px;
+}
+
+
+.card-desc{
+
+  margin:
+    0 0 18px;
+
+  color:var(--muted);
+
+  font-size:11px;
+
+  font-weight:500;
+
+  line-height:1.55;
+}
+
+
+/* ============================================================
+   FORM
+   ============================================================ */
+
+.form-grid{
+
+  display:grid;
+
+  grid-template-columns:
+    repeat(2,1fr);
+
+  gap:13px;
+}
+
+
+.field.full{
+
+  grid-column:
+    1/-1;
+}
+
+
+.field label{
+
+  display:block;
+
+  margin-bottom:6px;
+
+  color:#566681;
+
+  font-size:9px;
+
+  font-weight:900;
+
+  text-transform:
+    uppercase;
+
+  letter-spacing:.04em;
+}
+
+
+.field input,
+.field select{
+
+  width:100%;
+  height:44px;
+
+  padding:
+    0 12px;
+
+  border:
+    1px solid #dce5f2;
+
+  border-radius:11px;
+
+  background:#f9fbff;
+
+  color:var(--ink);
+
+  outline:none;
+
+  transition:.18s;
+}
+
+
+.field input::placeholder{
+
+  color:#8b98ac;
+}
+
+
+.field input:focus,
+.field select:focus{
+
+  border-color:#7e77ff;
+
+  background:#fff;
+
+  box-shadow:
+
+    0 0 0 3px
+    rgba(126,77,255,.08);
+}
+
+
+.field-help{
+
+  display:block;
+
+  margin-top:6px;
+
+  color:var(--muted);
+
+  font-size:9px;
+
+  font-weight:500;
+
+  line-height:1.45;
+}
+
+
+/* ============================================================
+   CHECK CARDS
+   ============================================================ */
+
+.check-card{
+
+  display:flex;
+
+  align-items:flex-start;
+
+  gap:12px;
+
+  margin-top:16px;
+
+  padding:
+    14px 15px;
+
+  border:
+    1px solid #dce6f5;
+
+  border-radius:15px;
+
+  background:
+
+    linear-gradient(
+      135deg,
+      #f7fbff,
+      #faf7ff
+    );
+}
+
+
+.check-card input{
+
+  width:18px;
+  height:18px;
+
+  margin-top:2px;
+
+  accent-color:
+    var(--purple);
+}
+
+
+.check-card strong{
+
+  display:block;
+
+  color:var(--ink);
+
+  font-size:11px;
+}
+
+
+.check-card span{
+
+  display:block;
+
+  margin-top:3px;
+
+  color:var(--muted);
+
+  font-size:9.5px;
+
+  font-weight:500;
+
+  line-height:1.45;
+}
+
+
+/* ============================================================
+   INFORMATION
+   ============================================================ */
+
+.info{
+
+  margin-top:15px;
+
+  padding:
+    13px 14px;
+
+  border:
+    1px solid #dbe7fa;
+
+  border-radius:14px;
+
+  background:
+
+    linear-gradient(
+      90deg,
+      #eef8ff,
+      #f7f2ff
+    );
+
+  color:#465773;
+
+  font-size:10px;
+
+  font-weight:500;
+
+  line-height:1.55;
+}
+
+
+.info strong{
+
+  color:var(--purple);
+}
+
+
+/* ============================================================
+   LOCAL METHOD
+   ============================================================ */
+
+.local-method{
+
+  margin-top:16px;
+
+  padding:16px;
+
+  border:
+    1px solid #dfe9f7;
+
+  border-radius:17px;
+
+  background:
+
+    linear-gradient(
+      135deg,
+      #f3fbff,
+      #f8f5ff
+    );
+}
+
+
+.local-method-head{
+
+  display:flex;
+
+  align-items:center;
+
+  gap:10px;
+
+  margin-bottom:12px;
+}
+
+
+.local-icon{
+
+  width:38px;
+  height:38px;
+
+  display:grid;
+
+  place-items:center;
+
+  border-radius:12px;
+
+  background:
+
+    linear-gradient(
+      135deg,
+      #e8f8ff,
+      #f1eaff
+    );
+
+  color:var(--purple);
+
+  font-weight:900;
+}
+
+
+.local-method h4{
+
+  margin:0;
+
+  color:var(--ink);
+
+  font-size:12px;
+}
+
+
+.local-method p{
+
+  margin:
+    3px 0 0;
+
+  color:var(--muted);
+
+  font-size:9px;
+
+  font-weight:500;
+}
+
+
+/* ============================================================
+   LOCATION BANNER
+   ============================================================ */
+
+.location-banner{
+
+  margin-bottom:15px;
+
+  padding:
+    14px 16px;
+
+  border:
+    1px solid #dbe6fb;
+
+  border-radius:16px;
+
+  background:
+
+    linear-gradient(
+      135deg,
+      #f2faff,
+      #f8f3ff
+    );
+}
+
+
+.location-banner strong{
+
+  display:block;
+
+  color:var(--ink);
+
+  font-size:12px;
+}
+
+
+.location-banner span{
+
+  display:block;
+
+  margin-top:3px;
+
+  color:var(--muted);
+
+  font-size:9.5px;
+
+  font-weight:500;
+
+  line-height:1.5;
+}
+
+
+/* ============================================================
+   PROVIDERS
+   ============================================================ */
+
+.provider-grid{
+
+  display:grid;
+
+  grid-template-columns:
+    repeat(3,1fr);
+
+  gap:14px;
+}
+
+
+.provider{
+
+  position:relative;
+
+  min-height:385px;
+
+  display:flex;
+
+  flex-direction:column;
+
+  padding:17px;
+
+  border:
+    1px solid #e2e9f5;
+
+  border-radius:20px;
+
+  background:#fff;
+
+  box-shadow:
+
+    0 10px 24px
+    rgba(60,83,140,.06);
+
+  transition:
+    .2s ease;
+}
+
+
+.provider.available:hover{
+
+  transform:
+    translateY(-3px);
+
+  box-shadow:
+
+    0 16px 34px
+    rgba(60,83,140,.11);
+}
+
+
+/*
+  RECOMMENDED
+*/
+
+.provider.recommended{
+
+  border:
+    2px solid #67d6b3;
+
+  background:
+
+    linear-gradient(
+      145deg,
+      #ffffff 0%,
+      #f0fff9 100%
+    );
+
+  box-shadow:
+
+    0 16px 36px
+    rgba(33,200,148,.15);
+}
+
+
+/*
+  SELECTED
+*/
+
+.provider.selected{
+
+  border:
+    2px solid var(--purple);
+
+  box-shadow:
+
+    0 16px 35px
+    rgba(126,77,255,.16);
+}
+
+
+/*
+  SELECTED + RECOMMENDED
+*/
+
+.provider.selected.recommended{
+
+  border:
+    2px solid var(--green);
+
+  box-shadow:
+
+    0 16px 38px
+    rgba(33,200,148,.2);
+}
+
+
+/*
+  DISABLED
+*/
+
+.provider.disabled{
+
+  border-color:
+    var(--gray-disabled-border);
+
+  background:
+    var(--gray-disabled);
+
+  box-shadow:none;
+
+  opacity:.72;
+}
+
+
+.provider.disabled *{
+
+  color:
+    var(--gray-disabled-text) !important;
+}
+
+
+.provider-top{
+
+  display:flex;
+
+  justify-content:
+    space-between;
+
+  align-items:flex-start;
+
+  gap:10px;
+}
+
+
+.provider-logo{
+
+  min-width:76px;
+
+  height:52px;
+
+  display:grid;
+
+  place-items:center;
+
+  padding:
+    0 13px;
+
+  border:
+    1px solid #e8edf5;
+
+  border-radius:13px;
+
+  background:#f8fbff;
+
+  color:var(--purple);
+
+  font-size:14px;
+
+  font-weight:900;
+}
+
+
+.provider-radio{
+
+  width:20px;
+  height:20px;
+
+  flex:
+    0 0 20px;
+
+  display:grid;
+
+  place-items:center;
+
+  border:
+    2px solid #ced7e6;
+
+  border-radius:50%;
+}
+
+
+.provider.selected
+.provider-radio{
+
+  border-color:
+    var(--purple);
+}
+
+
+.provider.selected
+.provider-radio::after{
+
+  content:"";
+
+  width:10px;
+  height:10px;
+
+  border-radius:50%;
+
+  background:
+
+    linear-gradient(
+      135deg,
+      var(--blue),
+      var(--purple)
+    );
+}
+
+
+.provider.selected.recommended
+.provider-radio{
+
+  border-color:
+    var(--green);
+}
+
+
+.provider.selected.recommended
+.provider-radio::after{
+
+  background:
+    var(--green);
+}
+
+
+.provider h3{
+
+  margin:
+    14px 0 5px;
+
+  color:var(--ink);
+
+  font-size:16px;
+}
+
+
+.provider-copy{
+
+  min-height:63px;
+
+  color:var(--muted);
+
+  font-size:10px;
+
+  font-weight:500;
+
+  line-height:1.55;
+}
+
+
+.badge{
+
+  width:max-content;
+
+  margin-top:8px;
+
+  padding:
+    6px 8px;
+
+  border-radius:999px;
+
+  font-size:8px;
+
+  font-weight:900;
+
+  text-transform:
+    uppercase;
+}
+
+
+.badge.recommended-badge{
+
+  color:
+    var(--green-dark);
+
+  background:#e9fff6;
+
+  border:
+    1px solid #bdebdc;
+}
+
+
+.badge.available-badge{
+
+  color:#435f9e;
+
+  background:#eef4ff;
+
+  border:
+    1px solid #d8e4ff;
+}
+
+
+.badge.disabled-badge{
+
+  color:#778399;
+
+  background:#e9edf3;
+
+  border:
+    1px solid #dce2eb;
+}
+
+
+.provider-list{
+
+  display:grid;
+
+  gap:7px;
+
+  margin:
+    13px 0;
+
+  color:#465772;
+
+  font-size:9.5px;
+
+  font-weight:500;
+}
+
+
+.provider-point{
+
+  display:flex;
+
+  gap:7px;
+
+  line-height:1.4;
+}
+
+
+.provider-point::before{
+
+  content:"✓";
+
+  color:
+    var(--green);
+
+  font-weight:900;
+}
+
+
+.provider.disabled
+.provider-point::before{
+
+  content:"—";
+}
+
+
+.provider-actions{
+
+  display:grid;
+
+  gap:7px;
+
+  margin-top:auto;
+}
+
+
+.more-btn{
+
+  width:100%;
+
+  padding:6px;
+
+  border:0;
+
+  background:
+    transparent;
+
+  color:var(--purple);
+
+  font-size:9px;
+
+  font-weight:900;
+}
+
+
+.choose-btn{
+
+  width:100%;
+  height:40px;
+
+  border:0;
+
+  border-radius:11px;
+
+  color:#fff;
+
+  background:
+
+    linear-gradient(
+      135deg,
+      var(--blue),
+      var(--purple)
+    );
+
+  font-size:9px;
+
+  font-weight:900;
+}
+
+
+.provider.recommended
+.choose-btn{
+
+  background:
+
+    linear-gradient(
+      135deg,
+      #16b786,
+      #28d2a1
+    );
+}
+
+
+.provider.disabled
+.choose-btn{
+
+  background:#d7dde6;
+
+  cursor:not-allowed;
+}
+
+
+/* ============================================================
+   ACTIVATION
+   ============================================================ */
+
+.method-activation{
+
+  display:none;
+
+  margin-top:18px;
+
+  overflow:hidden;
+
+  border:
+    1px solid #dedff8;
+
+  border-radius:22px;
+
+  background:
+
+    linear-gradient(
+      145deg,
+      #ffffff,
+      #f6f8ff
+    );
+
+  box-shadow:
+
+    0 14px 32px
+    rgba(68,77,160,.09);
+}
+
+
+.method-activation.visible{
+
+  display:block;
+}
+
+
+.activation-head{
+
+  padding:
+    18px 20px;
+
+  color:#fff;
+
+  background:
+
+    linear-gradient(
+      120deg,
+      #258dff,
+      #7e4dff,
+      #d84cff
+    );
+}
+
+
+.activation-head small{
+
+  display:block;
+
+  font-size:9px;
+
+  text-transform:
+    uppercase;
+
+  letter-spacing:.12em;
+
+  font-weight:900;
+
+  opacity:.85;
+}
+
+
+.activation-head h3{
+
+  margin:
+    5px 0;
+
+  font-size:19px;
+}
+
+
+.activation-head p{
+
+  max-width:760px;
+
+  margin:0;
+
+  font-size:10px;
+
+  font-weight:500;
+
+  line-height:1.5;
+
+  opacity:.95;
+}
+
+
+.activation-body{
+
+  padding:19px;
+}
+
+
+/* ============================================================
+   ACCOUNT CHOICE
+   ============================================================ */
+
+.account-choice{
+
+  display:grid;
+
+  grid-template-columns:
+    repeat(2,1fr);
+
+  gap:10px;
+
+  margin-bottom:16px;
+}
+
+
+.account-choice button{
+
+  padding:13px;
+
+  border:
+    1px solid #dce5f2;
+
+  border-radius:13px;
+
+  background:#fff;
+
+  color:#42536f;
+
+  text-align:left;
+}
+
+
+.account-choice button:hover{
+
+  border-color:#b7c5dc;
+}
+
+
+.account-choice button.active{
+
+  border-color:#8b7aff;
+
+  background:
+
+    linear-gradient(
+      135deg,
+      #f1f8ff,
+      #f7f1ff
+    );
+
+  box-shadow:
+
+    0 0 0 3px
+    rgba(126,77,255,.06);
+}
+
+
+.account-choice button strong{
+
+  display:block;
+
+  color:var(--ink);
+
+  font-size:10px;
+}
+
+
+.account-choice button span{
+
+  display:block;
+
+  margin-top:3px;
+
+  color:var(--muted);
+
+  font-size:9px;
+
+  font-weight:500;
+
+  line-height:1.4;
+}
+
+
+/* ============================================================
+   EXTERNAL CTA
+   ============================================================ */
+
+.external-cta{
+
+  display:flex;
+
+  align-items:center;
+
+  justify-content:
+    space-between;
+
+  gap:15px;
+
+  margin-bottom:15px;
+
+  padding:14px;
+
+  border:
+    1px solid #dce7fa;
+
+  border-radius:15px;
+
+  background:
+
+    linear-gradient(
+      135deg,
+      #eefaff,
+      #f6f0ff
+    );
+}
+
+
+.external-cta strong{
+
+  display:block;
+
+  color:var(--ink);
+
+  font-size:11px;
+}
+
+
+.external-cta span{
+
+  display:block;
+
+  margin-top:3px;
+
+  color:var(--muted);
+
+  font-size:9px;
+
+  font-weight:500;
+
+  line-height:1.45;
+}
+
+
+.external-button{
+
+  flex:
+    0 0 auto;
+
+  padding:
+    10px 13px;
+
+  border:0;
+
+  border-radius:11px;
+
+  color:#fff;
+
+  background:
+
+    linear-gradient(
+      135deg,
+      var(--blue),
+      var(--purple)
+    );
+
+  font-size:9px;
+
+  font-weight:900;
+}
+
+
+/* ============================================================
+   CONFIRMATION
+   ============================================================ */
+
+.confirm-box{
+
+  margin-top:15px;
+
+  padding:14px;
+
+  border:
+    1px solid #bfe9dd;
+
+  border-radius:15px;
+
+  background:
+
+    linear-gradient(
+      135deg,
+      #f1fff9,
+      #f5fffc
+    );
+}
+
+
+.confirm-box label{
+
+  display:flex;
+
+  align-items:flex-start;
+
+  gap:10px;
+
+  color:#365e52;
+
+  font-size:10px;
+
+  font-weight:500;
+
+  line-height:1.45;
+}
+
+
+.confirm-box input{
+
+  width:17px;
+  height:17px;
+
+  margin-top:1px;
+
+  accent-color:
+    var(--green);
+}
+
+
+/* ============================================================
+   BUTTONS
+   ============================================================ */
+
+.actions{
+
+  display:flex;
+
+  align-items:center;
+
+  justify-content:
+    space-between;
+
+  gap:10px;
+
+  margin-top:20px;
+}
+
+
+.btn{
+
+  min-height:42px;
+
+  padding:
+    0 15px;
+
+  border:0;
+
+  border-radius:11px;
+
+  font-size:9px;
+
+  font-weight:900;
+}
+
+
+.btn-primary{
+
+  color:#fff;
+
+  background:
+
+    linear-gradient(
+      135deg,
+      var(--blue),
+      var(--purple)
+    );
+
+  box-shadow:
+
+    0 9px 22px
+    rgba(95,76,220,.18);
+}
+
+
+.btn-secondary{
+
+  color:#4b5d79;
+
+  background:#fff;
+
+  border:
+    1px solid #dce5f2;
+}
+
+
+/* ============================================================
+   REVIEW
+   ============================================================ */
+
+.review-grid{
+
+  display:grid;
+
+  grid-template-columns:
+    repeat(2,1fr);
+
+  gap:13px;
+}
+
+
+.review-card{
+
+  padding:16px;
+
+  border:
+    1px solid #e1e8f5;
+
+  border-radius:18px;
+
+  background:#fff;
+
+  box-shadow:
+
+    0 10px 24px
+    rgba(60,83,140,.05);
+}
+
+
+.review-card h3{
+
+  margin:
+    0 0 11px;
+
+  color:var(--ink);
+
+  font-size:12px;
+}
+
+
+.review-row{
+
+  display:flex;
+
+  justify-content:
+    space-between;
+
+  gap:20px;
+
+  padding:
+    7px 0;
+
+  border-bottom:
+    1px solid #f0f3f8;
+
+  color:var(--muted);
+
+  font-size:9.5px;
+
+  font-weight:500;
+}
+
+
+.review-row:last-child{
+
+  border-bottom:0;
+}
+
+
+.review-row strong{
+
+  color:var(--ink);
+
+  text-align:right;
+}
+
+
+.payment-route{
+
+  margin-top:15px;
+
+  padding:18px;
+
+  border:
+    1px solid #bfe9dd;
+
+  border-radius:19px;
+
+  background:
+
+    linear-gradient(
+      135deg,
+      #edfff8,
+      #eef9ff
+    );
+}
+
+
+.payment-route small{
+
+  display:block;
+
+  color:#52796e;
+
+  font-size:9px;
+
+  font-weight:700;
+}
+
+
+.payment-route strong{
+
+  display:block;
+
+  margin-top:4px;
+
+  color:#13a878;
+
+  font-size:20px;
+}
+
+
+/* ============================================================
+   MODAL
+   ============================================================ */
+
+.modal-backdrop{
+
+  position:fixed;
+
+  inset:0;
+
+  z-index:100;
+
+  display:none;
+
+  align-items:center;
+
+  justify-content:center;
+
+  padding:20px;
+
+  background:
+    rgba(23,33,61,.34);
+
+  backdrop-filter:
+    blur(8px);
+}
+
+
+.modal-backdrop.visible{
+
+  display:flex;
+}
+
+
+.modal{
+
+  width:
+    min(650px,100%);
+
+  max-height:88vh;
+
+  overflow:auto;
+
+  padding:22px;
+
+  border:
+    1px solid rgba(255,255,255,.95);
+
+  border-radius:24px;
+
+  background:
+
+    linear-gradient(
+      145deg,
+      #ffffff,
+      #f8fbff
+    );
+
+  box-shadow:
+
+    0 30px 90px
+    rgba(44,56,110,.25);
+}
+
+
+.modal-header{
+
+  display:flex;
+
+  align-items:flex-start;
+
+  justify-content:
+    space-between;
+
+  gap:15px;
+}
+
+
+.modal-kicker{
+
+  color:var(--purple);
+
+  text-transform:
+    uppercase;
+
+  letter-spacing:.12em;
+
+  font-size:9px;
+
+  font-weight:900;
+}
+
+
+.modal h2{
+
+  margin:
+    4px 0 0;
+
+  color:var(--ink);
+
+  font-size:22px;
+
+  letter-spacing:-.03em;
+}
+
+
+.modal-close{
+
+  width:36px;
+  height:36px;
+
+  border:
+    1px solid #dde5f2;
+
+  border-radius:50%;
+
+  background:#fff;
+
+  color:#51637f;
+
+  font-size:17px;
+}
+
+
+.modal-content{
+
+  margin-top:17px;
+
+  color:#435571;
+
+  font-size:10.5px;
+
+  font-weight:500;
+
+  line-height:1.65;
+}
+
+
+.modal-section{
+
+  margin-top:14px;
+
+  padding:
+    13px 14px;
+
+  border:
+    1px solid #e0e7f4;
+
+  border-radius:14px;
+
+  background:#fff;
+}
+
+
+.modal-section strong{
+
+  display:block;
+
+  margin-bottom:4px;
+
+  color:var(--ink);
+}
+
+
+.cost-note{
+
+  border-color:#ffe0b7;
+
+  background:
+
+    linear-gradient(
+      135deg,
+      #fff9e9,
+      #fff5ef
+    );
+}
+
+
+/* ============================================================
+   TOAST
+   ============================================================ */
+
+.toast{
+
+  position:fixed;
+
+  z-index:999;
+
+  right:24px;
+  bottom:24px;
+
+  padding:
+    12px 16px;
+
+  border-radius:12px;
+
+  background:#15213d;
+
+  color:#fff;
+
+  font-size:9.5px;
+
+  font-weight:800;
+
+  box-shadow:
+
+    0 18px 40px
+    rgba(25,36,70,.2);
+
+  opacity:0;
+
+  transform:
+    translateY(20px);
+
+  pointer-events:none;
+
+  transition:.2s;
+}
+
+
+.toast.visible{
+
+  opacity:1;
+
+  transform:none;
+}
+
+
+/* ============================================================
+   RESPONSIVE
+   ============================================================ */
+
+@media(max-width:950px){
+
+  .provider-grid{
+
+    grid-template-columns:1fr;
+  }
+
+
+  .review-grid{
+
+    grid-template-columns:1fr;
+  }
+}
+
+
+@media(max-width:760px){
+
+  .wrap{
+
+    padding:0;
+  }
+
+
+  .module{
+
+    min-height:100vh;
+
+    border-radius:0;
+  }
+
+
+  .header-row{
+
+    align-items:flex-start;
+  }
+
+
+  .header-status{
+
+    display:none;
+  }
+
+
+  .steps{
+
+    grid-template-columns:
+      repeat(2,1fr);
+  }
+
+
+  .content{
+
+    padding:16px;
+  }
+
+
+  .form-grid{
+
+    grid-template-columns:1fr;
+  }
+
+
+  .field.full{
+
+    grid-column:auto;
+  }
+
+
+  .hero h2{
+
+    font-size:23px;
+  }
+
+
+  .account-choice{
+
+    grid-template-columns:1fr;
+  }
+
+
+  .external-cta{
+
+    align-items:flex-start;
+
+    flex-direction:column;
+  }
+
+
+  .actions{
+
+    flex-direction:
+      column-reverse;
+  }
+
+
+  .actions .btn{
+
+    width:100%;
+  }
+
+}
+
+</style>
+</head>
+
+
+<body>
+
+
+<div class="wrap">
+
+<section class="module">
+
+
+<!-- ==========================================================
+     HEADER
+     ========================================================== -->
+
+<header class="header">
+
+
+<div class="header-row">
+
+
+<div class="brand">
+
+
+<img
+  class="brand-logo"
+  src="/assets/branding/novo-partners-logo.png"
+  alt="NOVO Partners"
+  onerror="this.style.display='none'"
+>
+
+
+<div class="brand-copy">
+
+<h1>
+<span>NOVO</span> Partners
+</h1>
+
+<p>
+Activación de tu cuenta de pagos
+</p>
+
+</div>
+
+
+</div>
+
+
+<div class="header-status">
+
+
+<div class="status-top">
+
+<span>
+Configuración
+</span>
+
+<strong id="progressText">
+25%
+</strong>
+
+</div>
+
+
+<div class="progress-track">
+
+<div
+  class="progress-bar"
+  id="progressBar"
+></div>
+
+</div>
+
+
+</div>
+
+
+</div>
+
+
+<!-- ==========================================================
+     NAVIGATION
+     ========================================================== -->
+
+<div class="steps">
+
+
+<button
+  class="step-tab active"
+  data-step="1"
+>
+
+<span class="step-number">
+1
+</span>
+
+<strong>
+Tu información
+</strong>
+
+<small>
+Perfil para pagos
+</small>
+
+</button>
+
+
+<button
+  class="step-tab"
+  data-step="2"
+>
+
+<span class="step-number">
+2
+</span>
+
+<strong>
+Datos bancarios
+</strong>
+
+<small>
+Cuenta y respaldo
+</small>
+
+</button>
+
+
+<button
+  class="step-tab"
+  data-step="3"
+>
+
+<span class="step-number">
+3
+</span>
+
+<strong>
+Método de pago
+</strong>
+
+<small>
+Elige y configúralo
+</small>
+
+</button>
+
+
+<button
+  class="step-tab"
+  data-step="4"
+>
+
+<span class="step-number">
+4
+</span>
+
+<strong>
+Revisión
+</strong>
+
+<small>
+Activar pagos
+</small>
+
+</button>
+
+
+</div>
+
+
+</header>
+
+
+<!-- ==========================================================
+     CONTENT
+     ========================================================== -->
+
+<main class="content">
+
+
+<!-- ==========================================================
+     STEP 1
+     ========================================================== -->
+
+<section
+  class="panel active"
+  data-panel="1"
+>
+
+
+<div class="hero hero-1">
+
+
+<div class="kicker">
+
+Paso 1 · Perfil de pagos
+
+</div>
+
+
+<h2>
+
+Primero, confirmemos quién recibirá las ganancias.
+
+</h2>
+
+
+<p>
+
+Ya eres Partner de NOVO. Esta información adicional
+nos permitirá organizar correctamente tus liquidaciones
+y mostrarte las opciones de pago disponibles para tu perfil.
+
+</p>
+
+
+</div>
+
+
+<div class="card">
+
+
+<h3 class="card-title">
+
+Información del titular
+
+</h3>
+
+
+<p class="card-desc">
+
+Utiliza la información legal de la persona o empresa
+que recibirá los pagos.
+
+</p>
+
+
+<div class="form-grid">
+
+
+<div class="field">
+
+<label>
+Nombre
+</label>
+
+<input
+  id="firstName"
+  data-save
+  placeholder="Ej. Laura"
+>
+
+</div>
+
+
+<div class="field">
+
+<label>
+Apellido
+</label>
+
+<input
+  id="lastName"
+  data-save
+  placeholder="Ej. Martínez"
+>
+
+</div>
+
+
+<div class="field">
+
+<label>
+Tipo de Partner
+</label>
+
+<select
+  id="partnerType"
+  data-save
+>
+
+<option value="">
+Seleccionar
+</option>
+
+<option value="individual">
+Persona natural
+</option>
+
+<option value="company">
+Empresa registrada
+</option>
+
+</select>
+
+</div>
+
+
+<div class="field">
+
+<label>
+País donde resides
+</label>
+
+<select
+  id="country"
+  data-save
+>
+
+<option value="">
+Seleccionar país
+</option>
+
+<option value="US">
+Estados Unidos
+</option>
+
+<option value="CA">
+Canadá
+</option>
+
+<option value="MX">
+México
+</option>
+
+<option value="CO">
+Colombia
+</option>
+
+<option value="EC">
+Ecuador
+</option>
+
+<option value="PE">
+Perú
+</option>
+
+<option value="AR">
+Argentina
+</option>
+
+<option value="CL">
+Chile
+</option>
+
+<option value="BR">
+Brasil
+</option>
+
+<option value="UY">
+Uruguay
+</option>
+
+<option value="CR">
+Costa Rica
+</option>
+
+<option value="PA">
+Panamá
+</option>
+
+<option value="DO">
+República Dominicana
+</option>
+
+<option value="ES">
+España
+</option>
+
+<option value="PT">
+Portugal
+</option>
+
+<option value="FR">
+Francia
+</option>
+
+<option value="DE">
+Alemania
+</option>
+
+<option value="IT">
+Italia
+</option>
+
+<option value="GB">
+Reino Unido
+</option>
+
+<option value="OTHER">
+Otro país
+</option>
+
+</select>
+
+</div>
+
+
+<div class="field">
+
+<label>
+Email de contacto
+</label>
+
+<input
+  id="email"
+  data-save
+  type="email"
+  placeholder="Ej. laura@empresa.com"
+>
+
+</div>
+
+
+<div class="field">
+
+<label>
+Teléfono
+</label>
+
+<input
+  id="phone"
+  data-save
+  placeholder="Ej. +57 300 000 0000"
+>
+
+</div>
+
+
+</div>
+
+
+<!-- ========================================================
+     USA ACCOUNT CHECK
+     ======================================================== -->
+
+<label class="check-card">
+
+
+<input
+  type="checkbox"
+  id="hasUSBank"
+  data-save
+>
+
+
+<div>
+
+
+<strong>
+
+Resido en Estados Unidos o tengo una cuenta bancaria en USA
+
+</strong>
+
+
+<span>
+
+Marca esta opción aunque vivas en otro país.
+Muchas personas trabajan internacionalmente pero tienen
+una cuenta bancaria estadounidense. Si es tu caso,
+podremos mostrarte una tercera alternativa para recibir
+tus ganancias.
+
+</span>
+
+
+</div>
+
+
+</label>
+
+
+<div class="actions">
+
+<span></span>
+
+<button
+  class="btn btn-primary"
+  onclick="goToStep(2)"
+>
+
+Continuar
+
+</button>
+
+</div>
+
+
+</div>
+
+
+</section>
+
+
+<!-- ==========================================================
+     STEP 2
+     ========================================================== -->
+
+<section
+  class="panel"
+  data-panel="2"
+>
+
+
+<div class="hero hero-2">
+
+
+<div class="kicker">
+
+Paso 2 · Información bancaria
+
+</div>
+
+
+<h2>
+
+Registra una cuenta bancaria de respaldo.
+
+</h2>
+
+
+<p>
+
+Esta información nos ayuda a validar tus datos y nos
+ofrece una vía alternativa si una liquidación requiere
+revisión o si el método principal presenta algún inconveniente.
+
+</p>
+
+
+</div>
+
+
+<div class="card">
+
+
+<h3 class="card-title">
+
+Cuenta bancaria principal
+
+</h3>
+
+
+<p class="card-desc">
+
+Registra una cuenta bancaria que podamos mantener como
+referencia dentro de tu perfil de pagos.
+
+</p>
+
+
+<div class="form-grid">
+
+
+<div class="field">
+
+<label>
+País de la cuenta
+</label>
+
+<select
+  id="bankCountry"
+  data-save
+>
+
+<option value="">
+Seleccionar
+</option>
+
+<option value="US">
+Estados Unidos
+</option>
+
+<option value="CA">
+Canadá
+</option>
+
+<option value="MX">
+México
+</option>
+
+<option value="CO">
+Colombia
+</option>
+
+<option value="EC">
+Ecuador
+</option>
+
+<option value="PE">
+Perú
+</option>
+
+<option value="AR">
+Argentina
+</option>
+
+<option value="CL">
+Chile
+</option>
+
+<option value="BR">
+Brasil
+</option>
+
+<option value="UY">
+Uruguay
+</option>
+
+<option value="CR">
+Costa Rica
+</option>
+
+<option value="PA">
+Panamá
+</option>
+
+<option value="DO">
+República Dominicana
+</option>
+
+<option value="ES">
+España
+</option>
+
+<option value="PT">
+Portugal
+</option>
+
+<option value="FR">
+Francia
+</option>
+
+<option value="DE">
+Alemania
+</option>
+
+<option value="IT">
+Italia
+</option>
+
+<option value="GB">
+Reino Unido
+</option>
+
+<option value="OTHER">
+Otro
+</option>
+
+</select>
+
+</div>
+
+
+<div class="field">
+
+<label>
+Nombre del banco
+</label>
+
+<input
+  id="bankName"
+  data-save
+  placeholder="Ej. Banco Nacional"
+>
+
+</div>
+
+
+<div class="field">
+
+<label>
+Titular
+</label>
+
+<input
+  id="bankHolder"
+  data-save
+  placeholder="Ej. Laura Martínez"
+>
+
+</div>
+
+
+<div class="field">
+
+<label>
+Tipo de cuenta
+</label>
+
+<select
+  id="bankType"
+  data-save
+>
+
+<option value="">
+Seleccionar
+</option>
+
+<option value="checking">
+Corriente / Checking
+</option>
+
+<option value="savings">
+Ahorros / Savings
+</option>
+
+<option value="other">
+Otra
+</option>
+
+</select>
+
+</div>
+
+
+<div class="field">
+
+<label>
+Número de cuenta
+</label>
+
+<input
+  id="bankAccount"
+  data-save
+  placeholder="Número de cuenta"
+>
+
+</div>
+
+
+<div class="field">
+
+<label>
+SWIFT / BIC
+</label>
+
+<input
+  id="bankSwift"
+  data-save
+  placeholder="Si corresponde"
+>
+
+</div>
+
+
+</div>
+
+
+<!-- ========================================================
+     COUNTRY SPECIFIC BANK DATA
+     ======================================================== -->
+
+<div
+  id="dynamicBankFields"
+  style="margin-top:14px"
+></div>
+
+
+<!-- ========================================================
+     LOCAL PAYMENT DATA
+     ======================================================== -->
+
+<div
+  class="local-method"
+  id="localMethodCard"
+  style="display:none"
+>
+
+
+<div class="local-method-head">
+
+
+<div class="local-icon">
+
+$
+
+</div>
+
+
+<div>
+
+<h4 id="localMethodTitle">
+
+Método local
+
+</h4>
+
+<p id="localMethodDescription">
+
+Información adicional opcional.
+
+</p>
+
+</div>
+
+
+</div>
+
+
+<div class="field">
+
+<label id="localMethodLabel">
+
+Identificador
+
+</label>
+
+<input
+  id="localPaymentId"
+  data-save
+>
+
+</div>
+
+
+</div>
+
+
+<!-- ========================================================
+     USA BANK DATA
+     ======================================================== -->
+
+<div
+  class="local-method"
+  id="usBankExtra"
+  style="display:none"
+>
+
+
+<div class="local-method-head">
+
+
+<div class="local-icon">
+
+US
+
+</div>
+
+
+<div>
+
+
+<h4>
+
+Cuenta bancaria en Estados Unidos
+
+</h4>
+
+
+<p>
+
+Como indicaste que resides o tienes una cuenta bancaria
+en USA, registra aquí esa información.
+
+</p>
+
+
+</div>
+
+
+</div>
+
+
+<div class="form-grid">
+
+
+<div class="field">
+
+<label>
+Banco USA
+</label>
+
+<input
+  id="usBankName"
+  data-save
+  placeholder="Ej. Chase"
+>
+
+</div>
+
+
+<div class="field">
+
+<label>
+Titular
+</label>
+
+<input
+  id="usBankHolder"
+  data-save
+  placeholder="Ej. Laura Martínez"
+>
+
+</div>
+
+
+<div class="field">
+
+<label>
+Routing / ABA
+</label>
+
+<input
+  id="usRouting"
+  data-save
+  placeholder="9 dígitos"
+>
+
+</div>
+
+
+<div class="field">
+
+<label>
+Número de cuenta
+</label>
+
+<input
+  id="usAccountNumber"
+  data-save
+  placeholder="Número de cuenta"
+>
+
+</div>
+
+
+<div class="field">
+
+<label>
+Tipo de cuenta
+</label>
+
+<select
+  id="usAccountType"
+  data-save
+>
+
+<option value="">
+Seleccionar
+</option>
+
+<option value="checking">
+Checking
+</option>
+
+<option value="savings">
+Savings
+</option>
+
+</select>
+
+</div>
+
+
+<div class="field">
+
+<label>
+Zelle
+</label>
+
+<input
+  id="zelle"
+  data-save
+  placeholder="Email o teléfono asociado"
+>
+
+<span class="field-help">
+
+Opcional. Lo conservaremos como información adicional
+de respaldo.
+
+</span>
+
+</div>
+
+
+</div>
+
+
+</div>
+
+
+<div class="info">
+
+<strong>
+Importante:
+</strong>
+
+esta información bancaria queda registrada como respaldo.
+En el siguiente paso seleccionarás el
+<strong>método oficial de pago</strong>
+que NOVO utilizará para enviarte tus ganancias.
+
+</div>
+
+
+<div class="actions">
+
+
+<button
+  class="btn btn-secondary"
+  onclick="goToStep(1)"
+>
+
+Atrás
+
+</button>
+
+
+<button
+  class="btn btn-primary"
+  onclick="goToStep(3)"
+>
+
+Ver mis opciones
+
+</button>
+
+
+</div>
+
+
+</div>
+
+
+</section>
+
+
+<!-- ==========================================================
+     STEP 3
+     ========================================================== -->
+
+<section
+  class="panel"
+  data-panel="3"
+>
+
+
+<div class="hero hero-3">
+
+
+<div class="kicker">
+
+Paso 3 · Método oficial de pago
+
+</div>
+
+
+<h2>
+
+Elige dónde quieres recibir tus ganancias.
+
+</h2>
+
+
+<p>
+
+Siempre verás las tres alternativas.
+Dependiendo de tu perfil pueden estar disponibles una,
+dos o incluso las tres. NOVO te recomendará una,
+pero tú decides cuál utilizar.
+
+</p>
+
+
+</div>
+
+
+<div
+  class="location-banner"
+  id="locationBanner"
+>
+
+
+<strong>
+
+Estamos analizando tus opciones.
+
+</strong>
+
+
+<span>
+
+Completa tu país y tu perfil para mostrarte
+las alternativas disponibles.
+
+</span>
+
+
+</div>
+
+
+<!-- ========================================================
+     PROVIDERS — ALWAYS THREE
+     ======================================================== -->
+
+<div class="provider-grid">
+
+
+<!-- ========================================================
+     AIRWALLEX
+     ======================================================== -->
+
+<article
+  class="provider"
+  id="provider-airwallex"
+>
+
+
+<div class="provider-top">
+
+
+<div class="provider-logo">
+
+Airwallex
+
+</div>
+
+
+<div class="provider-radio"></div>
+
+
+</div>
+
+
+<h3>
+
+Airwallex
+
+</h3>
+
+
+<div
+  class="badge available-badge"
+  data-provider-badge="airwallex"
+>
+
+Disponible
+
+</div>
+
+
+<p class="provider-copy">
+
+Recibe tus ganancias dentro de una cuenta Airwallex
+compatible y administra posteriormente desde allí
+tus fondos, monedas y retiros.
+
+</p>
+
+
+<div class="provider-list">
+
+
+<div class="provider-point">
+
+Cuenta financiera internacional
+
+</div>
+
+
+<div class="provider-point">
+
+Manejo de múltiples monedas
+
+</div>
+
+
+<div class="provider-point">
+
+Tú administras tus fondos después del pago
+
+</div>
+
+
+<div class="provider-point">
+
+Los costos posteriores son responsabilidad del Partner
+
+</div>
+
+
+</div>
+
+
+<div class="provider-actions">
+
+
+<button
+  class="more-btn"
+  onclick="openProviderInfo('airwallex')"
+>
+
+Cómo funciona, requisitos y costos
+
+</button>
+
+
+<button
+  class="choose-btn"
+  data-choose="airwallex"
+  onclick="chooseProvider('airwallex')"
+>
+
+Elegir Airwallex
+
+</button>
+
+
+</div>
+
+
+</article>
+
+
+<!-- ========================================================
+     WISE
+     ======================================================== -->
+
+<article
+  class="provider"
+  id="provider-wise"
+>
+
+
+<div class="provider-top">
+
+
+<div class="provider-logo">
+
+Wise
+
+</div>
+
+
+<div class="provider-radio"></div>
+
+
+</div>
+
+
+<h3>
+
+Wise
+
+</h3>
+
+
+<div
+  class="badge available-badge"
+  data-provider-badge="wise"
+>
+
+Disponible
+
+</div>
+
+
+<p class="provider-copy">
+
+Puedes recibir tus ganancias dentro de tu cuenta Wise
+o utilizar Wise como vía para enviarlas a tu cuenta bancaria.
+
+</p>
+
+
+<div class="provider-list">
+
+
+<div class="provider-point">
+
+Cuenta internacional multidivisa
+
+</div>
+
+
+<div class="provider-point">
+
+Puedes recibir dentro de Wise
+
+</div>
+
+
+<div class="provider-point">
+
+También puedes elegir recibir en tu banco
+
+</div>
+
+
+<div class="provider-point">
+
+Los costos de transferencia son responsabilidad del Partner
+
+</div>
+
+
+</div>
+
+
+<div class="provider-actions">
+
+
+<button
+  class="more-btn"
+  onclick="openProviderInfo('wise')"
+>
+
+Cómo funciona, requisitos y costos
+
+</button>
+
+
+<button
+  class="choose-btn"
+  data-choose="wise"
+  onclick="chooseProvider('wise')"
+>
+
+Elegir Wise
+
+</button>
+
+
+</div>
+
+
+</article>
+
+
+<!-- ========================================================
+     USA BANK
+     ======================================================== -->
+
+<article
+  class="provider"
+  id="provider-usbank"
+>
+
+
+<div class="provider-top">
+
+
+<div class="provider-logo">
+
+Bank USA
+
+</div>
+
+
+<div class="provider-radio"></div>
+
+
+</div>
+
+
+<h3>
+
+Cuenta bancaria USA
+
+</h3>
+
+
+<div
+  class="badge available-badge"
+  data-provider-badge="usbank"
+>
+
+Disponible
+
+</div>
+
+
+<p class="provider-copy">
+
+Si tienes una cuenta bancaria válida en Estados Unidos,
+NOVO puede utilizarla directamente como vía oficial
+para tus liquidaciones.
+
+</p>
+
+
+<div class="provider-list">
+
+
+<div class="provider-point">
+
+Disponible aunque vivas fuera de USA
+
+</div>
+
+
+<div class="provider-point">
+
+Routing + Account Number
+
+</div>
+
+
+<div class="provider-point">
+
+Zelle puede registrarse como respaldo
+
+</div>
+
+
+<div class="provider-point">
+
+Sin cargo adicional de NOVO
+
+</div>
+
+
+</div>
+
+
+<div class="provider-actions">
+
+
+<button
+  class="more-btn"
+  onclick="openProviderInfo('usbank')"
+>
+
+Cómo funciona
+
+</button>
+
+
+<button
+  class="choose-btn"
+  data-choose="usbank"
+  onclick="chooseProvider('usbank')"
+>
+
+Elegir Banco USA
+
+</button>
+
+
+</div>
+
+
+</article>
+
+
+</div>
+
+
+<!-- ========================================================
+     PROVIDER ACTIVATION
+     ======================================================== -->
+
+<section
+  class="method-activation"
+  id="methodActivation"
+>
+
+
+<div class="activation-head">
+
+
+<small>
+
+Método seleccionado
+
+</small>
+
+
+<h3 id="activationTitle">
+
+Configura tu método
+
+</h3>
+
+
+<p id="activationDescription">
+
+Completa la información necesaria para que NOVO sepa
+exactamente a dónde enviar tus próximas ganancias.
+
+</p>
+
+
+</div>
+
+
+<div
+  class="activation-body"
+  id="activationBody"
+></div>
+
+
+</section>
+
+
+<div class="actions">
+
+
+<button
+  class="btn btn-secondary"
+  onclick="goToStep(2)"
+>
+
+Atrás
+
+</button>
+
+
+<button
+  class="btn btn-primary"
+  onclick="validatePaymentMethod()"
+>
+
+Confirmar método de pago
+
+</button>
+
+
+</div>
+
+
+</section>
+
+
+<!-- ==========================================================
+     STEP 4
+     ========================================================== -->
+
+<section
+  class="panel"
+  data-panel="4"
+>
+
+
+<div class="hero hero-4">
+
+
+<div class="kicker">
+
+Paso 4 · Revisión final
+
+</div>
+
+
+<h2>
+
+Revisa cómo recibirás tus próximas ganancias.
+
+</h2>
+
+
+<p>
+
+Esta configuración se convertirá en tu vía oficial
+de liquidación. Podrás solicitar un cambio posteriormente
+desde tu Cuenta de Pagos.
+
+</p>
+
+
+</div>
+
+
+<div
+  class="review-grid"
+  id="reviewGrid"
+></div>
+
+
+<div class="payment-route">
+
+
+<small>
+
+MÉTODO OFICIAL DE LIQUIDACIÓN
+
+</small>
+
+
+<strong id="finalPaymentRoute">
+
+—
+
+</strong>
+
+
+</div>
+
+
+<label class="check-card">
+
+
+<input
+  type="checkbox"
+  id="finalConfirmation"
+  data-save
+>
+
+
+<div>
+
+
+<strong>
+
+Confirmo que la información suministrada es correcta.
+
+</strong>
+
+
+<span>
+
+Entiendo que los costos de retiro, conversión,
+SWIFT u otros cargos aplicados después de que NOVO
+envíe mis ganancias serán responsabilidad mía,
+excepto cuando NOVO indique expresamente lo contrario.
+
+</span>
+
+
+</div>
+
+
+</label>
+
+
+<div class="actions">
+
+
+<button
+  class="btn btn-secondary"
+  onclick="goToStep(3)"
+>
+
+Editar método
+
+</button>
+
+
+<button
+  class="btn btn-primary"
+  onclick="submitPaymentProfile()"
+>
+
+Enviar para activación
+
+</button>
+
+
+</div>
+
+
+</section>
+
+
+</main>
+
+
+</section>
+
+
+</div>
+
+
+<!-- ==========================================================
+     MODAL
+     ========================================================== -->
+
+<div
+  class="modal-backdrop"
+  id="providerModal"
+  onclick="closeModalFromBackdrop(event)"
+>
+
+
+<div class="modal">
+
+
+<div class="modal-header">
+
+
+<div>
+
+
+<div class="modal-kicker">
+
+Información del método
+
+</div>
+
+
+<h2 id="modalTitle">
+
+Método de pago
+
+</h2>
+
+
+</div>
+
+
+<button
+  class="modal-close"
+  onclick="closeProviderModal()"
+>
+
+×
+
+</button>
+
+
+</div>
+
+
+<div
+  class="modal-content"
+  id="modalContent"
+></div>
+
+
+</div>
+
+
+</div>
+
+
+<!-- ==========================================================
+     TOAST
+     ========================================================== -->
+
+<div
+  class="toast"
+  id="toast"
+>
+
+Cambios guardados
+
+</div>
+
+
+
+<script>
+
+/* ============================================================
+   LINKS
+   ============================================================ */
+
+/*
+  Reemplazar posteriormente por los LINKS OFICIALES
+  de afiliado/partner de NOVO.
+*/
+
+const PROVIDER_LINKS = {
+
+  airwallex:
+    "https://www.airwallex.com/",
+
+  wise:
+    "https://wise.com/"
+
+};
+
+
+/* ============================================================
+   AIRWALLEX
+   ============================================================ */
+
+/*
+  Esta lista representa mercados donde NOVO puede
+  presentar Airwallex como alternativa dentro de
+  la estrategia de Connected Accounts / infraestructura.
+
+  IMPORTANTE:
+  Backend debe terminar controlando esto.
+*/
+
+const AIRWALLEX_CONNECTED_COUNTRIES =
+new Set([
+
+  "US",
+  "CA",
+
+  "CO",
+  "EC",
+  "PE",
+  "AR",
+  "CL",
+  "UY",
+
+  "MX",
+  "BR",
+  "CR",
+
+  "ES",
+  "PT",
+  "FR",
+  "DE",
+  "IT",
+  "GB"
+
+]);
+
+
+/*
+  Países donde además puede existir
+  apertura empresarial tradicional.
+*/
+
+const AIRWALLEX_STANDARD_BUSINESS_COUNTRIES =
+new Set([
+
+  "US",
+  "CA",
+
+  "MX",
+  "BR",
+  "CR",
+
+  "ES",
+  "PT",
+  "FR",
+  "DE",
+  "IT",
+  "GB"
+
+]);
+
+
+/* ============================================================
+   WISE
+   ============================================================ */
+
+/*
+  Lista negativa simplificada para UI.
+
+  PRODUCCIÓN:
+  mover disponibilidad al backend.
+*/
+
+const WISE_UNSUPPORTED =
+new Set([
+
+  "AF",
+  "BY",
+  "BI",
+  "CF",
+  "TD",
+  "CG",
+  "CD",
+  "CU",
+  "ER",
+  "IR",
+  "IQ",
+  "KP",
+  "LY",
+  "MM",
+  "SO",
+  "SS",
+  "RU",
+  "SD",
+  "SY",
+  "VE",
+  "YE"
+
+]);
+
+
+/* ============================================================
+   LOCAL METHODS
+   ============================================================ */
+
+/*
+  Estos métodos NO son necesariamente la vía
+  principal de liquidación.
+
+  Son datos adicionales de respaldo del Partner.
+
+  Se puede ampliar este objeto posteriormente
+  sin tocar la UI.
+*/
+
+const LOCAL_METHODS = {
+
+
+  US:{
+
+    name:
+      "Zelle",
+
+    label:
+      "Email o teléfono asociado a Zelle",
+
+    placeholder:
+      "Ej. pagos@empresa.com",
+
+    description:
+      "Opcional. Lo conservaremos como información local de respaldo."
+
+  },
+
+
+  CO:{
+
+    name:
+      "Nequi",
+
+    label:
+      "Número asociado a Nequi",
+
+    placeholder:
+      "Ej. +57 300 000 0000",
+
+    description:
+      "Opcional. Puedes registrar tu Nequi como información adicional."
+
+  },
+
+
+  MX:{
+
+    name:
+      "CLABE",
+
+    label:
+      "CLABE interbancaria",
+
+    placeholder:
+      "18 dígitos",
+
+    description:
+      "Dato bancario utilizado frecuentemente para transferencias locales en México."
+
+  },
+
+
+  AR:{
+
+    name:
+      "Alias / CBU",
+
+    label:
+      "Alias o CBU",
+
+    placeholder:
+      "Alias o CBU",
+
+    description:
+      "Información bancaria local adicional de Argentina."
+
+  },
+
+
+  BR:{
+
+    name:
+      "PIX",
+
+    label:
+      "Clave PIX",
+
+    placeholder:
+      "Email, teléfono, CPF/CNPJ o clave PIX",
+
+    description:
+      "Opcional. Información local de pagos en Brasil."
+
+  }
+
+};
+
+
+/* ============================================================
+   STORAGE
+   ============================================================ */
+
+const STORAGE_KEY =
+  "novo_partner_payment_profile_v3";
+
+
+const DEFAULT_STATE = {
+
+  currentStep:1,
+
+  selectedProvider:"",
+
+  selectedWiseDestination:"",
+
+  accountCreationStatus:"",
+
+  paymentMethodConfirmed:false,
+
+  submitted:false
+
+};
+
+
+let state =
+  loadState();
+
+
+function loadState(){
+
+  try{
+
+    const saved =
+      JSON.parse(
+        localStorage.getItem(
+          STORAGE_KEY
+        ) || "{}"
+      );
+
+
+    return {
+
+      ...DEFAULT_STATE,
+
+      ...saved
+
+    };
+
+  }
+
+  catch(error){
+
+    return {
+
+      ...DEFAULT_STATE
+
+    };
+
+  }
+
+}
+
+
+/* ============================================================
+   PERSIST
+   ============================================================ */
+
+function persist(){
+
+  document
+    .querySelectorAll(
+      "[data-save]"
+    )
+    .forEach(el => {
+
+      state[el.id] =
+
+        el.type ===
+        "checkbox"
+
+        ? el.checked
+
+        : el.value;
+
+    });
+
+
+  localStorage.setItem(
+
+    STORAGE_KEY,
+
+    JSON.stringify(
+      state
+    )
+
+  );
+
+
+  updateProgress();
+
+}
+
+
+/* ============================================================
+   GLOBAL AUTOSAVE
+   ============================================================ */
+
+document
+  .querySelectorAll(
+    "[data-save]"
+  )
+  .forEach(el => {
+
+
+    el.addEventListener(
+      "change",
+      () => {
+
+        persist();
+
+        updateDynamicUI();
+
+        showToast(
+          "Cambios guardados"
+        );
+
+      }
+    );
+
+
+    el.addEventListener(
+      "blur",
+      persist
+    );
+
+
+  });
+
+
+/* ============================================================
+   RESTORE
+   ============================================================ */
+
+function restore(){
+
+  Object
+    .entries(
+      state
+    )
+    .forEach(
+      ([key,value]) => {
+
+
+        const el =
+          document.getElementById(
+            key
+          );
+
+
+        if(!el){
+
+          return;
+
+        }
+
+
+        if(
+          el.type ===
+          "checkbox"
+        ){
+
+          el.checked =
+            Boolean(value);
+
+        }
+
+        else{
+
+          el.value =
+            value || "";
+
+        }
+
+
+      }
+    );
+
+
+  updateDynamicUI();
+
+
+  goToStep(
+
+    state.currentStep || 1,
+
+    false
+
+  );
+
+}
+
+
+/* ============================================================
+   NAVIGATION
+   ============================================================ */
+
+document
+  .querySelectorAll(
+    ".step-tab"
+  )
+  .forEach(button => {
+
+
+    button.addEventListener(
+      "click",
+      () => {
+
+
+        goToStep(
+
+          Number(
+            button.dataset.step
+          )
+
+        );
+
+
+      }
+    );
+
+
+  });
+
+
+function goToStep(
+  step,
+  save = true
+){
+
+  state.currentStep =
+    step;
+
+
+  document
+    .querySelectorAll(
+      ".panel"
+    )
+    .forEach(panel => {
+
+
+      panel.classList.toggle(
+
+        "active",
+
+        Number(
+          panel.dataset.panel
+        ) === step
+
+      );
+
+
+    });
+
+
+  document
+    .querySelectorAll(
+      ".step-tab"
+    )
+    .forEach(tab => {
+
+
+      tab.classList.toggle(
+
+        "active",
+
+        Number(
+          tab.dataset.step
+        ) === step
+
+      );
+
+
+    });
+
+
+  if(
+    step === 3
+  ){
+
+    updateProviderAvailability();
+
+    renderProviderActivation();
+
+  }
+
+
+  if(
+    step === 4
+  ){
+
+    renderReview();
+
+  }
+
+
+  if(save){
+
+    persist();
+
+  }
+
+
+  window.scrollTo({
+
+    top:0,
+
+    behavior:
+      "smooth"
+
+  });
+
+}
+
+
+/* ============================================================
+   DYNAMIC UI
+   ============================================================ */
+
+function updateDynamicUI(){
+
+  const hasUSBank =
+
+    document
+      .getElementById(
+        "hasUSBank"
+      )
+      .checked;
+
+
+  document
+    .getElementById(
+      "usBankExtra"
+    )
+    .style.display =
+
+      hasUSBank
+
+      ? "block"
+
+      : "none";
+
+
+  renderLocalMethod();
+
+  renderDynamicBankFields();
+
+  updateProviderAvailability();
+
+}
+
+
+/* ============================================================
+   LOCAL METHOD
+   ============================================================ */
+
+function renderLocalMethod(){
+
+  const country =
+
+    document
+      .getElementById(
+        "bankCountry"
+      )
+      .value;
+
+
+  const config =
+
+    LOCAL_METHODS[
+      country
+    ];
+
+
+  const card =
+
+    document
+      .getElementById(
+        "localMethodCard"
+      );
+
+
+  if(
+    !config
+  ){
+
+    card.style.display =
+      "none";
+
+    return;
+
+  }
+
+
+  card.style.display =
+    "block";
+
+
+  document
+    .getElementById(
+      "localMethodTitle"
+    )
+    .textContent =
+
+      config.name;
+
+
+  document
+    .getElementById(
+      "localMethodDescription"
+    )
+    .textContent =
+
+      config.description;
+
+
+  document
+    .getElementById(
+      "localMethodLabel"
+    )
+    .textContent =
+
+      config.label;
+
+
+  document
+    .getElementById(
+      "localPaymentId"
+    )
+    .placeholder =
+
+      config.placeholder;
+
+}
+
+
+/* ============================================================
+   DYNAMIC BANK FIELDS
+   ============================================================ */
+
+function renderDynamicBankFields(){
+
+  const country =
+
+    document
+      .getElementById(
+        "bankCountry"
+      )
+      .value;
+
+
+  const container =
+
+    document
+      .getElementById(
+        "dynamicBankFields"
+      );
+
+
+  let html = "";
+
+
+  /*
+    USA
+  */
+
+  if(
+    country === "US"
+  ){
+
+    html = `
+
+      <div class="form-grid">
+
+        <div class="field">
+
+          <label>
+            Routing / ABA
+          </label>
+
+          <input
+            id="mainBankRouting"
+            data-dynamic-save
+            placeholder="9 dígitos"
+            value="${
+              escapeHtml(
+                state.mainBankRouting || ""
+              )
+            }"
+          >
+
+        </div>
+
+      </div>
+
+    `;
+
+  }
+
+
+  /*
+    EUROPE
+  */
+
+  if(
+    [
+      "ES",
+      "PT",
+      "FR",
+      "DE",
+      "IT"
+    ]
+    .includes(country)
+  ){
+
+    html = `
+
+      <div class="form-grid">
+
+        <div class="field">
+
+          <label>
+            IBAN
+          </label>
+
+          <input
+            id="mainBankIban"
+            data-dynamic-save
+            placeholder="IBAN"
+            value="${
+              escapeHtml(
+                state.mainBankIban || ""
+              )
+            }"
+          >
+
+        </div>
+
+      </div>
+
+    `;
+
+  }
+
+
+  container.innerHTML =
+    html;
+
+
+  container
+    .querySelectorAll(
+      "[data-dynamic-save]"
+    )
+    .forEach(el => {
+
+
+      el.addEventListener(
+        "change",
+        () => {
+
+          state[el.id] =
+            el.value;
+
+          persist();
+
+        }
+      );
+
+
+      el.addEventListener(
+        "blur",
+        () => {
+
+          state[el.id] =
+            el.value;
+
+          persist();
+
+        }
+      );
+
+
+    });
+
+}
+
+
+/* ============================================================
+   PROVIDER RULES
+   ============================================================ */
+
+function getProviderRules(){
+
+
+  const country =
+
+    state.country ||
+
+    document
+      .getElementById(
+        "country"
+      )
+      .value;
+
+
+  const type =
+
+    state.partnerType ||
+
+    document
+      .getElementById(
+        "partnerType"
+      )
+      .value;
+
+
+  const hasUSBank =
+
+    Boolean(
+
+      state.hasUSBank ||
+
+      document
+        .getElementById(
+          "hasUSBank"
+        )
+        .checked
+
+    );
+
+
+  /* ========================================================
+     AIRWALLEX
+     ======================================================== */
+
+
+  /*
+    VIA CONNECTED ACCOUNT
+
+    Puede potencialmente aplicar a individuo o empresa
+    dependiendo de la configuración definitiva de NOVO.
+  */
+
+  const airwallexViaConnectedAccount =
+
+    AIRWALLEX_CONNECTED_COUNTRIES
+      .has(country);
+
+
+  /*
+    BUSINESS ACCOUNT
+
+    Cuenta empresarial independiente.
+  */
+
+  const airwallexViaBusinessAccount =
+
+    type === "company" &&
+
+    AIRWALLEX_STANDARD_BUSINESS_COUNTRIES
+      .has(country);
+
+
+  /*
+    IMPORTANT:
+
+    Puede estar disponible por cualquiera de las dos vías.
+  */
+
+  const airwallexEnabled =
+
+    airwallexViaConnectedAccount ||
+
+    airwallexViaBusinessAccount;
+
+
+  /* ========================================================
+     WISE
+     ======================================================== */
+
+  const wiseEnabled =
+
+    Boolean(country) &&
+
+    country !== "OTHER" &&
+
+    !WISE_UNSUPPORTED
+      .has(country);
+
+
+  /* ========================================================
+     USA BANK
+     ======================================================== */
+
+  const usBankEnabled =
+
+    hasUSBank;
+
+
+  /* ========================================================
+     RECOMMENDATION
+
+     DISPONIBLE != RECOMENDADO
+
+     Puede haber 2 o las 3 opciones habilitadas.
+     Una sola recibe el destaque verde.
+     ======================================================== */
+
+
+  let recommended = "";
+
+
+  /*
+    USA BANK PRIORITY
+  */
+
+  if(
+    usBankEnabled
+  ){
+
+    recommended =
+      "usbank";
+
+  }
+
+
+  /*
+    AIRWALLEX
+  */
+
+  else if(
+    airwallexEnabled
+  ){
+
+    recommended =
+      "airwallex";
+
+  }
+
+
+  /*
+    WISE
+  */
+
+  else if(
+    wiseEnabled
+  ){
+
+    recommended =
+      "wise";
+
+  }
+
+
+  return{
+
+
+    country,
+
+    type,
+
+    recommended,
+
+
+    airwallex:{
+
+      enabled:
+        airwallexEnabled,
+
+
+      mode:
+
+        airwallexViaConnectedAccount
+
+        ? "CONNECTED_ACCOUNT"
+
+        : airwallexViaBusinessAccount
+
+          ? "BUSINESS_ACCOUNT"
+
+          : null,
+
+
+      reason:
+
+        "Airwallex no está habilitado actualmente para este perfil."
+
+    },
+
+
+    wise:{
+
+      enabled:
+        wiseEnabled,
+
+
+      reason:
+
+        "Wise no está habilitado actualmente para esta ubicación."
+
+    },
+
+
+    usbank:{
+
+      enabled:
+        usBankEnabled,
+
+
+      reason:
+
+        "Esta opción se habilita cuando indicas que tienes una cuenta bancaria en Estados Unidos."
+
+    }
+
+
+  };
+
+}
+
+
+/* ============================================================
+   UPDATE PROVIDER UI
+   ============================================================ */
+
+function updateProviderAvailability(){
+
+
+  const rules =
+    getProviderRules();
+
+
+  const countrySelect =
+
+    document
+      .getElementById(
+        "country"
+      );
+
+
+  const countryName =
+
+    countrySelect
+      .selectedOptions[0]
+      ?.textContent
+      ?.trim()
+
+    || "tu país";
+
+
+  const banner =
+
+    document
+      .getElementById(
+        "locationBanner"
+      );
+
+
+  if(
+    !rules.country
+  ){
+
+    banner.innerHTML = `
+
+      <strong>
+        Primero indícanos tu país.
+      </strong>
+
+      <span>
+        Utilizamos tu ubicación, tu perfil y si dispones
+        de una cuenta bancaria en Estados Unidos para
+        determinar qué opciones pueden utilizarse.
+      </span>
+
+    `;
+
+  }
+
+  else{
+
+    const available =
+      [];
+
+
+    if(
+      rules.airwallex.enabled
+    ){
+
+      available.push(
+        "Airwallex"
+      );
+
+    }
+
+
+    if(
+      rules.wise.enabled
+    ){
+
+      available.push(
+        "Wise"
+      );
+
+    }
+
+
+    if(
+      rules.usbank.enabled
+    ){
+
+      available.push(
+        "Banco USA"
+      );
+
+    }
+
+
+    banner.innerHTML = `
+
+      <strong>
+        Opciones disponibles para ${countryName}
+      </strong>
+
+      <span>
+
+        ${
+          available.length
+        } ${
+          available.length === 1
+          ? "alternativa disponible"
+          : "alternativas disponibles"
+        }:
+
+        <strong>
+          ${
+            available.join(", ") ||
+            "Pendiente de revisión"
+          }
+        </strong>.
+
+        NOVO destacará una recomendación,
+        pero tú decides cuál utilizar.
+
+      </span>
+
+    `;
+
+  }
+
+
+  [
+    "airwallex",
+    "wise",
+    "usbank"
+  ]
+  .forEach(provider => {
+
+
+    const card =
+
+      document
+        .getElementById(
+          `provider-${provider}`
+        );
+
+
+    const button =
+
+      card
+        .querySelector(
+          "[data-choose]"
+        );
+
+
+    const badge =
+
+      card
+        .querySelector(
+          "[data-provider-badge]"
+        );
+
+
+    const data =
+      rules[provider];
+
+
+    /*
+      RESET
+    */
+
+    card
+      .classList
+      .remove(
+
+        "available",
+        "disabled",
+        "recommended",
+        "selected"
+
+      );
+
+
+    /*
+      AVAILABLE
+    */
+
+    if(
+      data.enabled
+    ){
+
+      card
+        .classList
+        .add(
+          "available"
+        );
+
+
+      button.disabled =
+        false;
+
+
+      button.title =
+        "";
+
+
+      /*
+        RECOMMENDED
+      */
+
+      if(
+        rules.recommended ===
+        provider
+      ){
+
+        card
+          .classList
+          .add(
+            "recommended"
+          );
+
+
+        badge.className =
+          "badge recommended-badge";
+
+
+        badge.textContent =
+          "Recomendado para ti";
+
+      }
+
+      else{
+
+        badge.className =
+          "badge available-badge";
+
+
+        badge.textContent =
+          "Disponible";
+
+      }
+
+    }
+
+
+    /*
+      DISABLED
+    */
+
+    else{
+
+      card
+        .classList
+        .add(
+          "disabled"
+        );
+
+
+      badge.className =
+        "badge disabled-badge";
+
+
+      badge.textContent =
+        "No disponible";
+
+
+      button.disabled =
+        true;
+
+
+      button.title =
+        data.reason;
+
+    }
+
+
+    /*
+      SELECTED
+    */
+
+    if(
+      state.selectedProvider ===
+      provider &&
+
+      data.enabled
+    ){
+
+      card
+        .classList
+        .add(
+          "selected"
+        );
+
+    }
+
+
+  });
+
+
+  /*
+    Selected provider becomes unavailable
+  */
+
+  if(
+
+    state.selectedProvider &&
+
+    !rules[
+      state.selectedProvider
+    ]?.enabled
+
+  ){
+
+    state.selectedProvider =
+      "";
+
+
+    state.paymentMethodConfirmed =
+      false;
+
+
+    state.accountCreationStatus =
+      "";
+
+
+    state.selectedWiseDestination =
+      "";
+
+
+    persist();
+
+    renderProviderActivation();
+
+  }
+
+}
+
+
+/* ============================================================
+   CHOOSE PROVIDER
+   ============================================================ */
+
+function chooseProvider(
+  provider
+){
+
+
+  const rules =
+    getProviderRules();
+
+
+  if(
+    !rules[
+      provider
+    ]?.enabled
+  ){
+
+    showToast(
+      rules[
+        provider
+      ].reason
+    );
+
+    return;
+
+  }
+
+
+  /*
+    One provider only
+  */
+
+  state.selectedProvider =
+    provider;
+
+
+  /*
+    Reset provider-specific configuration
+  */
+
+  state.paymentMethodConfirmed =
+    false;
+
+
+  state.accountCreationStatus =
+    "";
+
+
+  state.selectedWiseDestination =
+    "";
+
+
+  persist();
+
+
+  updateProviderAvailability();
+
+
+  renderProviderActivation();
+
+
+  setTimeout(
+    () => {
+
+
+      document
+        .getElementById(
+          "methodActivation"
+        )
+        .scrollIntoView({
+
+          behavior:
+            "smooth",
+
+          block:
+            "center"
+
+        });
+
+
+    },
+    100
+  );
+
+}
+
+
+/* ============================================================
+   PROVIDER ACTIVATION
+   ============================================================ */
+
+function renderProviderActivation(){
+
+
+  const container =
+
+    document
+      .getElementById(
+        "methodActivation"
+      );
+
+
+  const body =
+
+    document
+      .getElementById(
+        "activationBody"
+      );
+
+
+  const title =
+
+    document
+      .getElementById(
+        "activationTitle"
+      );
+
+
+  /*
+    NOTHING SELECTED
+  */
+
+  if(
+    !state.selectedProvider
+  ){
+
+    container
+      .classList
+      .remove(
+        "visible"
+      );
+
+    return;
+
+  }
+
+
+  container
+    .classList
+    .add(
+      "visible"
+    );
+
+
+  /* ========================================================
+     AIRWALLEX
+     ======================================================== */
+
+  if(
+    state.selectedProvider ===
+    "airwallex"
+  ){
+
+    title.textContent =
+      "Configura tu cuenta Airwallex";
+
+
+    body.innerHTML = `
+
+
+      <div class="account-choice">
+
+
+        <button
+          onclick="setAccountStatus('create')"
+          class="${
+            state.accountCreationStatus ===
+            "create"
+
+            ? "active"
+
+            : ""
+          }"
+        >
+
+          <strong>
+            Necesito crear mi cuenta
+          </strong>
+
+          <span>
+            Te llevaremos al proceso correspondiente
+            para crear tu cuenta Airwallex.
+          </span>
+
+        </button>
+
+
+        <button
+          onclick="setAccountStatus('existing')"
+          class="${
+            state.accountCreationStatus ===
+            "existing"
+
+            ? "active"
+
+            : ""
+          }"
+        >
+
+          <strong>
+            Ya tengo Airwallex
+          </strong>
+
+          <span>
+            Registra la información de tu cuenta actual.
+          </span>
+
+        </button>
+
+
+      </div>
+
+
+      ${
+        state.accountCreationStatus ===
+        "create"
+
+        ? renderAirwallexCreateCTA()
+
+        : ""
+      }
+
+
+      ${
+        state.accountCreationStatus
+
+        ? renderAirwallexFields()
+
+        : ""
+      }
+
+
+    `;
+
+  }
+
+
+  /* ========================================================
+     WISE
+     ======================================================== */
+
+  if(
+    state.selectedProvider ===
+    "wise"
+  ){
+
+    title.textContent =
+      "Configura cómo deseas recibir por Wise";
+
+
+    body.innerHTML = `
+
+
+      <div class="account-choice">
+
+
+        <button
+          onclick="setAccountStatus('create')"
+          class="${
+            state.accountCreationStatus ===
+            "create"
+
+            ? "active"
+
+            : ""
+          }"
+        >
+
+          <strong>
+            Necesito crear Wise
+          </strong>
+
+          <span>
+            Utiliza el enlace de NOVO y vuelve cuando
+            tu cuenta esté creada.
+          </span>
+
+        </button>
+
+
+        <button
+          onclick="setAccountStatus('existing')"
+          class="${
+            state.accountCreationStatus ===
+            "existing"
+
+            ? "active"
+
+            : ""
+          }"
+        >
+
+          <strong>
+            Ya tengo Wise
+          </strong>
+
+          <span>
+            Configura tu cuenta existente.
+          </span>
+
+        </button>
+
+
+      </div>
+
+
+      ${
+        state.accountCreationStatus ===
+        "create"
+
+        ? renderWiseCreateCTA()
+
+        : ""
+      }
+
+
+      ${
+        state.accountCreationStatus
+
+        ? renderWiseDestination()
+
+        : ""
+      }
+
+
+    `;
+
+  }
+
+
+  /* ========================================================
+     USA BANK
+     ======================================================== */
+
+  if(
+    state.selectedProvider ===
+    "usbank"
+  ){
+
+    title.textContent =
+      "Confirma tu cuenta bancaria USA";
+
+
+    body.innerHTML = `
+
+
+      <div class="info">
+
+        Utilizaremos la cuenta bancaria estadounidense
+        registrada en el Paso 2 como tu vía oficial
+        de liquidación.
+
+        <strong>
+          NOVO no añade un fee adicional por utilizar
+          esta opción.
+        </strong>
+
+      </div>
+
+
+      <div
+        class="review-card"
+        style="margin-top:14px"
+      >
+
+
+        <h3>
+          Cuenta seleccionada
+        </h3>
+
+
+        <div class="review-row">
+
+          <span>
+            Banco
+          </span>
+
+          <strong>
+            ${
+              escapeHtml(
+                state.usBankName ||
+                "Sin registrar"
+              )
+            }
+          </strong>
+
+        </div>
+
+
+        <div class="review-row">
+
+          <span>
+            Titular
+          </span>
+
+          <strong>
+            ${
+              escapeHtml(
+                state.usBankHolder ||
+                "Sin registrar"
+              )
+            }
+          </strong>
+
+        </div>
+
+
+        <div class="review-row">
+
+          <span>
+            Cuenta
+          </span>
+
+          <strong>
+            ${
+              maskAccount(
+                state.usAccountNumber
+              )
+            }
+          </strong>
+
+        </div>
+
+
+        <div class="review-row">
+
+          <span>
+            Routing
+          </span>
+
+          <strong>
+            ${
+              escapeHtml(
+                state.usRouting ||
+                "—"
+              )
+            }
+          </strong>
+
+        </div>
+
+
+        <div class="review-row">
+
+          <span>
+            Zelle
+          </span>
+
+          <strong>
+            ${
+              escapeHtml(
+                state.zelle ||
+                "No indicado"
+              )
+            }
+          </strong>
+
+        </div>
+
+
+      </div>
+
+
+      ${renderMethodConfirmation()}
+
+
+    `;
+
+  }
+
+
+  bindActivationFields();
+
+}
+
+
+/* ============================================================
+   ACCOUNT STATUS
+   ============================================================ */
+
+function setAccountStatus(
+  status
+){
+
+  state.accountCreationStatus =
+    status;
+
+
+  state.paymentMethodConfirmed =
+    false;
+
+
+  persist();
+
+
+  renderProviderActivation();
+
+}
+
+
+/* ============================================================
+   AIRWALLEX CTA
+   ============================================================ */
+
+function renderAirwallexCreateCTA(){
+
+  return `
+
+
+    <div class="external-cta">
+
+
+      <div>
+
+
+        <strong>
+          Paso 1 · Crea tu cuenta Airwallex
+        </strong>
+
+
+        <span>
+          Airwallex se abrirá en una nueva pestaña.
+          Completa el proceso de registro correspondiente
+          y luego regresa a NOVO para registrar tu cuenta.
+        </span>
+
+
+      </div>
+
+
+      <a
+        href="${PROVIDER_LINKS.airwallex}"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="external-button"
+      >
+
+        Abrir Airwallex ↗
+
+      </a>
+
+
+    </div>
+
+
+  `;
+
+}
+
+
+/* ============================================================
+   AIRWALLEX ACCOUNT DATA
+   ============================================================ */
+
+function renderAirwallexFields(){
+
+  return `
+
+
+    <div class="info">
+
+      <strong>
+        Paso 2 · Registra tu cuenta Airwallex.
+      </strong>
+
+      Una vez creada o si ya la tenías,
+      necesitamos identificar correctamente la cuenta
+      receptora para que NOVO pueda asociarla a tu perfil.
+
+    </div>
+
+
+    <div
+      class="form-grid"
+      style="margin-top:14px"
+    >
+
+
+      <div class="field">
+
+        <label>
+          Número / ID de cuenta Airwallex
+        </label>
+
+        <input
+          id="airwallexAccountNumber"
+          data-activation-save
+          value="${
+            escapeHtml(
+              state.airwallexAccountNumber ||
+              ""
+            )
+          }"
+          placeholder="Número o ID de cuenta"
+        >
+
+      </div>
+
+
+      <div class="field">
+
+        <label>
+          Nombre legal
+        </label>
+
+        <input
+          id="airwallexAccountName"
+          data-activation-save
+          value="${
+            escapeHtml(
+              state.airwallexAccountName ||
+              ""
+            )
+          }"
+          placeholder="Ej. LM Digital LLC"
+        >
+
+      </div>
+
+
+      <div class="field">
+
+        <label>
+          Email de Airwallex
+        </label>
+
+        <input
+          id="airwallexEmail"
+          data-activation-save
+          value="${
+            escapeHtml(
+              state.airwallexEmail ||
+              ""
+            )
+          }"
+          placeholder="Email utilizado en Airwallex"
+        >
+
+      </div>
+
+
+    </div>
+
+
+    <div class="info">
+
+      En producción esta información podrá ser reemplazada
+      o complementada por la vinculación automática mediante
+      la API de Airwallex.
+
+    </div>
+
+
+    ${renderMethodConfirmation()}
+
+
+  `;
+
+}
+
+
+/* ============================================================
+   WISE CREATE
+   ============================================================ */
+
+function renderWiseCreateCTA(){
+
+  return `
+
+
+    <div class="external-cta">
+
+
+      <div>
+
+
+        <strong>
+          Paso 1 · Crea tu cuenta Wise
+        </strong>
+
+
+        <span>
+          Wise se abrirá en una nueva pestaña.
+          Completa el registro y luego vuelve a NOVO
+          para indicarnos dónde deseas recibir tus ganancias.
+        </span>
+
+
+      </div>
+
+
+      <a
+        href="${PROVIDER_LINKS.wise}"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="external-button"
+      >
+
+        Abrir Wise ↗
+
+      </a>
+
+
+    </div>
+
+
+  `;
+
+}
+
+
+/* ============================================================
+   WISE DESTINATION
+   ============================================================ */
+
+function renderWiseDestination(){
+
+  return `
+
+
+    <div class="info">
+
+      <strong>
+        Paso 2 · Elige dónde quieres recibir.
+      </strong>
+
+      Con Wise puedes dejar tus ganancias dentro de tu
+      propia cuenta Wise o utilizar Wise como vía
+      para recibirlas en tu cuenta bancaria.
+
+    </div>
+
+
+    <div
+      class="account-choice"
+      style="margin-top:14px"
+    >
+
+
+      <button
+        onclick="chooseWiseDestination('wise_account')"
+        class="${
+          state.selectedWiseDestination ===
+          "wise_account"
+
+          ? "active"
+
+          : ""
+        }"
+      >
+
+
+        <strong>
+          Recibir en mi cuenta Wise
+        </strong>
+
+
+        <span>
+          NOVO enviará tu liquidación a tu perfil Wise.
+        </span>
+
+
+      </button>
+
+
+      <button
+        onclick="chooseWiseDestination('bank')"
+        class="${
+          state.selectedWiseDestination ===
+          "bank"
+
+          ? "active"
+
+          : ""
+        }"
+      >
+
+
+        <strong>
+          Recibir en mi banco vía Wise
+        </strong>
+
+
+        <span>
+          Utilizaremos la cuenta bancaria registrada
+          como destino.
+        </span>
+
+
+      </button>
+
+
+    </div>
+
+
+    ${
+      state.selectedWiseDestination ===
+      "wise_account"
+
+      ? renderWiseAccountFields()
+
+      : ""
+    }
+
+
+    ${
+      state.selectedWiseDestination ===
+      "bank"
+
+      ? renderWiseBankConfirmation()
+
+      : ""
+    }
+
+
+  `;
+
+}
+
+
+/* ============================================================
+   CHOOSE WISE DESTINATION
+   ============================================================ */
+
+function chooseWiseDestination(
+  destination
+){
+
+  state.selectedWiseDestination =
+    destination;
+
+
+  state.paymentMethodConfirmed =
+    false;
+
+
+  persist();
+
+
+  renderProviderActivation();
+
+}
+
+
+/* ============================================================
+   WISE ACCOUNT FIELDS
+   ============================================================ */
+
+function renderWiseAccountFields(){
+
+  return `
+
+
+    <div class="form-grid">
+
+
+      <div class="field">
+
+        <label>
+          Wisetag
+        </label>
+
+        <input
+          id="wiseTag"
+          data-activation-save
+          value="${
+            escapeHtml(
+              state.wiseTag ||
+              ""
+            )
+          }"
+          placeholder="Ej. @lauramartinez"
+        >
+
+        <span class="field-help">
+          Si tu cuenta dispone de Wisetag.
+        </span>
+
+      </div>
+
+
+      <div class="field">
+
+        <label>
+          Email registrado en Wise
+        </label>
+
+        <input
+          id="wiseEmail"
+          data-activation-save
+          value="${
+            escapeHtml(
+              state.wiseEmail ||
+              ""
+            )
+          }"
+          placeholder="Email de tu cuenta Wise"
+        >
+
+      </div>
+
+
+      <div class="field">
+
+        <label>
+          Teléfono asociado
+        </label>
+
+        <input
+          id="wisePhone"
+          data-activation-save
+          value="${
+            escapeHtml(
+              state.wisePhone ||
+              ""
+            )
+          }"
+          placeholder="Opcional"
+        >
+
+      </div>
+
+
+      <div class="field">
+
+        <label>
+          Nombre legal en Wise
+        </label>
+
+        <input
+          id="wiseAccountName"
+          data-activation-save
+          value="${
+            escapeHtml(
+              state.wiseAccountName ||
+              ""
+            )
+          }"
+          placeholder="Ej. Laura Martínez"
+        >
+
+      </div>
+
+
+    </div>
+
+
+    <div class="info">
+
+      Para esta etapa necesitamos al menos
+      un identificador de tu cuenta:
+      <strong>
+        Wisetag, email o teléfono.
+      </strong>
+
+      La integración definitiva podrá validar automáticamente
+      estos datos mediante API.
+
+    </div>
+
+
+    ${renderMethodConfirmation()}
+
+
+  `;
+
+}
+
+
+/* ============================================================
+   WISE BANK
+   ============================================================ */
+
+function renderWiseBankConfirmation(){
+
+  return `
+
+
+    <div class="review-card">
+
+
+      <h3>
+        Cuenta bancaria seleccionada
+      </h3>
+
+
+      <div class="review-row">
+
+        <span>
+          Banco
+        </span>
+
+        <strong>
+          ${
+            escapeHtml(
+              state.bankName ||
+              "Sin registrar"
+            )
+          }
+        </strong>
+
+      </div>
+
+
+      <div class="review-row">
+
+        <span>
+          Titular
+        </span>
+
+        <strong>
+          ${
+            escapeHtml(
+              state.bankHolder ||
+              "Sin registrar"
+            )
+          }
+        </strong>
+
+      </div>
+
+
+      <div class="review-row">
+
+        <span>
+          Cuenta
+        </span>
+
+        <strong>
+          ${
+            maskAccount(
+              state.bankAccount
+            )
+          }
+        </strong>
+
+      </div>
+
+
+      <div class="review-row">
+
+        <span>
+          SWIFT
+        </span>
+
+        <strong>
+          ${
+            escapeHtml(
+              state.bankSwift ||
+              "No indicado"
+            )
+          }
+        </strong>
+
+      </div>
+
+
+    </div>
+
+
+    <div class="info">
+
+      NOVO utilizará Wise como infraestructura
+      de transferencia hacia esta cuenta bancaria.
+
+      Los costos correspondientes al movimiento,
+      conversión o transferencia se cargarán al Partner
+      según las condiciones del proveedor.
+
+    </div>
+
+
+    ${renderMethodConfirmation()}
+
+
+  `;
+
+}
+
+
+/* ============================================================
+   CONFIRM PAYMENT METHOD
+   ============================================================ */
+
+function renderMethodConfirmation(){
+
+  return `
+
+
+    <div class="confirm-box">
+
+
+      <label>
+
+
+        <input
+          type="checkbox"
+          id="paymentMethodConfirmed"
+          data-activation-save
+          ${
+            state.paymentMethodConfirmed
+            ? "checked"
+            : ""
+          }
+        >
+
+
+        <span>
+
+          Confirmo que esta información corresponde
+          al método y la cuenta donde deseo recibir
+          mis próximas liquidaciones de NOVO Partners.
+
+        </span>
+
+
+      </label>
+
+
+    </div>
+
+
+  `;
+
+}
+
+
+/* ============================================================
+   BIND DYNAMIC ACTIVATION FIELDS
+   ============================================================ */
+
+function bindActivationFields(){
+
+  document
+    .querySelectorAll(
+      "[data-activation-save]"
+    )
+    .forEach(el => {
+
+
+      el.addEventListener(
+        "change",
+        () => {
+
+
+          state[el.id] =
+
+            el.type ===
+            "checkbox"
+
+            ? el.checked
+
+            : el.value;
+
+
+          persist();
+
+        }
+      );
+
+
+      el.addEventListener(
+        "blur",
+        () => {
+
+
+          state[el.id] =
+
+            el.type ===
+            "checkbox"
+
+            ? el.checked
+
+            : el.value;
+
+
+          persist();
+
+        }
+      );
+
+
+    });
+
+}
+
+
+/* ============================================================
+   VALIDATE PAYMENT METHOD
+   ============================================================ */
+
+function validatePaymentMethod(){
+
+
+  if(
+    !state.selectedProvider
+  ){
+
+    showToast(
+      "Selecciona uno de los métodos disponibles"
+    );
+
+    return;
+
+  }
+
+
+  /* ========================================================
+     AIRWALLEX
+     ======================================================== */
+
+  if(
+    state.selectedProvider ===
+    "airwallex"
+  ){
+
+
+    if(
+      !state.accountCreationStatus
+    ){
+
+      showToast(
+        "Indica si necesitas crear o ya tienes Airwallex"
+      );
+
+      return;
+
+    }
+
+
+    if(
+      !state.airwallexAccountNumber ||
+      !state.airwallexAccountName
+    ){
+
+      showToast(
+        "Completa los datos de tu cuenta Airwallex"
+      );
+
+      return;
+
+    }
+
+
+  }
+
+
+  /* ========================================================
+     WISE
+     ======================================================== */
+
+  if(
+    state.selectedProvider ===
+    "wise"
+  ){
+
+
+    if(
+      !state.accountCreationStatus
+    ){
+
+      showToast(
+        "Indica si necesitas crear o ya tienes Wise"
+      );
+
+      return;
+
+    }
+
+
+    if(
+      !state.selectedWiseDestination
+    ){
+
+      showToast(
+        "Selecciona dónde quieres recibir mediante Wise"
+      );
+
+      return;
+
+    }
+
+
+    if(
+      state.selectedWiseDestination ===
+      "wise_account"
+    ){
+
+
+      const hasIdentifier =
+
+        state.wiseTag ||
+
+        state.wiseEmail ||
+
+        state.wisePhone;
+
+
+      if(
+        !hasIdentifier
+      ){
+
+        showToast(
+          "Registra al menos Wisetag, email o teléfono de Wise"
+        );
+
+        return;
+
+      }
+
+
+    }
+
+
+    if(
+
+      state.selectedWiseDestination ===
+      "bank" &&
+
+      !state.bankAccount
+
+    ){
+
+      showToast(
+        "Primero registra tu cuenta bancaria"
+      );
+
+      return;
+
+    }
+
+
+  }
+
+
+  /* ========================================================
+     USA BANK
+     ======================================================== */
+
+  if(
+    state.selectedProvider ===
+    "usbank"
+  ){
+
+
+    if(
+      !state.usRouting ||
+      !state.usAccountNumber
+    ){
+
+      showToast(
+        "Completa Routing y Account Number de tu cuenta USA"
+      );
+
+      return;
+
+    }
+
+
+  }
+
+
+  /*
+    FINAL CHECK IN STEP 3
+  */
+
+  if(
+    !state.paymentMethodConfirmed
+  ){
+
+    showToast(
+      "Confirma que esta será tu cuenta oficial de pago"
+    );
+
+    return;
+
+  }
+
+
+  persist();
+
+
+  goToStep(4);
+
+}
+
+
+/* ============================================================
+   REVIEW
+   ============================================================ */
+
+function renderReview(){
+
+
+  const providerNames = {
+
+
+    airwallex:
+      "Cuenta Airwallex",
+
+
+    wise:
+
+      state.selectedWiseDestination ===
+      "bank"
+
+      ? "Wise → Cuenta bancaria"
+
+      : "Cuenta Wise",
+
+
+    usbank:
+      "Cuenta bancaria USA"
+
+
+  };
+
+
+  const route =
+
+    providerNames[
+      state.selectedProvider
+    ]
+
+    || "Sin configurar";
+
+
+  document
+    .getElementById(
+      "finalPaymentRoute"
+    )
+    .textContent =
+
+      route;
+
+
+  const countryText =
+
+    document
+      .querySelector(
+        `#country option[value="${state.country}"]`
+      )
+      ?.textContent
+      ?.trim()
+
+    || state.country
+
+    || "—";
+
+
+  const localMethod =
+
+    LOCAL_METHODS[
+      state.bankCountry
+    ];
+
+
+  document
+    .getElementById(
+      "reviewGrid"
+    )
+    .innerHTML = `
+
+
+      <div class="review-card">
+
+
+        <h3>
+          Partner
+        </h3>
+
+
+        <div class="review-row">
+
+          <span>
+            Titular
+          </span>
+
+          <strong>
+            ${
+              escapeHtml(
+                `${
+                  state.firstName ||
+                  ""
+                } ${
+                  state.lastName ||
+                  ""
+                }`
+                .trim()
+              )
+
+              || "—"
+            }
+          </strong>
+
+        </div>
+
+
+        <div class="review-row">
+
+          <span>
+            País
+          </span>
+
+          <strong>
+            ${
+              escapeHtml(
+                countryText
+              )
+            }
+          </strong>
+
+        </div>
+
+
+        <div class="review-row">
+
+          <span>
+            Perfil
+          </span>
+
+          <strong>
+            ${
+              state.partnerType ===
+              "company"
+
+              ? "Empresa"
+
+              : "Persona natural"
+            }
+          </strong>
+
+        </div>
+
+
+      </div>
+
+
+      <div class="review-card">
+
+
+        <h3>
+          Cuenta bancaria de respaldo
+        </h3>
+
+
+        <div class="review-row">
+
+          <span>
+            Banco
+          </span>
+
+          <strong>
+            ${
+              escapeHtml(
+                state.bankName ||
+                "—"
+              )
+            }
+          </strong>
+
+        </div>
+
+
+        <div class="review-row">
+
+          <span>
+            Cuenta
+          </span>
+
+          <strong>
+            ${
+              maskAccount(
+                state.bankAccount
+              )
+            }
+          </strong>
+
+        </div>
+
+
+        ${
+          localMethod &&
+          state.localPaymentId
+
+          ? `
+
+            <div class="review-row">
+
+              <span>
+                ${escapeHtml(
+                  localMethod.name
+                )}
+              </span>
+
+              <strong>
+                ${
+                  escapeHtml(
+                    state.localPaymentId
+                  )
+                }
+              </strong>
+
+            </div>
+
+          `
+
+          : ""
+        }
+
+
+        <div class="review-row">
+
+          <span>
+            Tiene cuenta USA
+          </span>
+
+          <strong>
+            ${
+              state.hasUSBank
+              ? "Sí"
+              : "No"
+            }
+          </strong>
+
+        </div>
+
+
+      </div>
+
+
+      <div class="review-card">
+
+
+        <h3>
+          Método oficial
+        </h3>
+
+
+        <div class="review-row">
+
+          <span>
+            Vía
+          </span>
+
+          <strong>
+            ${
+              escapeHtml(
+                route
+              )
+            }
+          </strong>
+
+        </div>
+
+
+        <div class="review-row">
+
+          <span>
+            Cuenta confirmada
+          </span>
+
+          <strong>
+            ${
+              state.paymentMethodConfirmed
+
+              ? "Sí"
+
+              : "No"
+            }
+          </strong>
+
+        </div>
+
+
+      </div>
+
+
+      <div class="review-card">
+
+
+        <h3>
+          Estado
+        </h3>
+
+
+        <div class="review-row">
+
+          <span>
+            Configuración
+          </span>
+
+          <strong
+            style="color:#13a878"
+          >
+            Lista para revisión
+          </strong>
+
+        </div>
+
+
+        <div class="review-row">
+
+          <span>
+            Próximo paso
+          </span>
+
+          <strong>
+            Validación NOVO
+          </strong>
+
+        </div>
+
+
+      </div>
+
+
+    `;
+
+}
+
+
+/* ============================================================
+   SUBMIT PROFILE
+   ============================================================ */
+
+function submitPaymentProfile(){
+
+
+  const finalConfirmation =
+
+    document
+      .getElementById(
+        "finalConfirmation"
+      )
+      .checked;
+
+
+  if(
+    !finalConfirmation
+  ){
+
+    showToast(
+      "Confirma que los datos son correctos"
+    );
+
+    return;
+
+  }
+
+
+  state.submitted =
+    true;
+
+
+  persist();
+
+
+  /*
+    ===========================================================
+    BACKEND IMPLEMENTATION
+    ===========================================================
+
+    POST /api/partners/payment-profile
+
+
+    Suggested model:
+
+
+    {
+      partner_id,
+
+      legal_profile: {
+
+        first_name,
+        last_name,
+
+        partner_type,
+
+        residence_country,
+
+        email,
+        phone
+
+      },
+
+
+      backup_bank: {
+
+        country,
+
+        bank_name,
+
+        account_holder,
+
+        account_type,
+
+        account_number,
+
+        swift,
+
+        iban,
+
+        local_payment_method,
+
+        local_payment_id
+
+      },
+
+
+      has_us_bank,
+
+
+      us_bank: {
+
+        bank_name,
+
+        holder,
+
+        routing,
+
+        account_number,
+
+        account_type,
+
+        zelle
+
+      },
+
+
+      payment_route:
+
+        "AIRWALLEX_ACCOUNT"
+        | "WISE_ACCOUNT"
+        | "WISE_BANK"
+        | "USA_BANK",
+
+
+      provider_details: {
+
+        ...
+
+      },
+
+
+      status:
+
+        "PENDING_REVIEW"
+
+    }
+
+
+    ===========================================================
+  */
+
+
+  showToast(
+    "Cuenta de pagos enviada para activación"
+  );
+
+
+  updateProgress();
+
+}
+
+
+/* ============================================================
+   STEP COMPLETION
+   ============================================================ */
+
+function getCompletedSteps(){
+
+
+  return{
+
+
+    1:
+
+      Boolean(
+
+        state.firstName &&
+
+        state.lastName &&
+
+        state.partnerType &&
+
+        state.country
+
+      ),
+
+
+    2:
+
+      Boolean(
+
+        state.bankName &&
+
+        state.bankAccount
+
+      ),
+
+
+    3:
+
+      Boolean(
+
+        state.selectedProvider &&
+
+        state.paymentMethodConfirmed
+
+      ),
+
+
+    4:
+
+      Boolean(
+        state.submitted
+      )
+
+
+  };
+
+}
+
+
+/* ============================================================
+   PROGRESS
+   ============================================================ */
+
+function updateProgress(){
+
+
+  const completed =
+    getCompletedSteps();
+
+
+  const done =
+
+    Object
+      .values(
+        completed
+      )
+      .filter(Boolean)
+      .length;
+
+
+  const percentage =
+
+    Math.max(
+
+      25,
+
+      Math.round(
+
+        done / 4 * 100
+
+      )
+
+    );
+
+
+  document
+    .getElementById(
+      "progressBar"
+    )
+    .style.width =
+
+      `${percentage}%`;
+
+
+  document
+    .getElementById(
+      "progressText"
+    )
+    .textContent =
+
+      `${percentage}%`;
+
+
+  document
+    .querySelectorAll(
+      ".step-tab"
+    )
+    .forEach(tab => {
+
+
+      const step =
+
+        Number(
+          tab.dataset.step
+        );
+
+
+      tab
+        .classList
+        .toggle(
+
+          "done",
+
+          completed[
+            step
+          ]
+
+        );
+
+
+    });
+
+}
+
+
+/* ============================================================
+   PROVIDER INFO
+   ============================================================ */
+
+const PROVIDER_INFO = {
+
+
+  airwallex:{
+
+
+    title:
+      "Airwallex",
+
+
+    html:`
+
+      <p>
+
+        Airwallex es una infraestructura financiera
+        internacional que NOVO puede utilizar para
+        gestionar pagos y cuentas conectadas según
+        la disponibilidad del Partner.
+
+      </p>
+
+
+      <div class="modal-section">
+
+        <strong>
+          ¿Cómo funciona?
+        </strong>
+
+        Si esta opción está habilitada para ti,
+        podrás registrar una cuenta Airwallex compatible.
+
+        NOVO enviará allí las ganancias correspondientes
+        y posteriormente tú administrarás los fondos
+        desde Airwallex.
+
+      </div>
+
+
+      <div class="modal-section">
+
+        <strong>
+          ¿Necesito una cuenta?
+        </strong>
+
+        Sí.
+
+        Si todavía no tienes una cuenta compatible,
+        NOVO te proporcionará el enlace correspondiente
+        para iniciar el registro.
+
+        Después debes volver a este módulo para
+        completar la configuración.
+
+      </div>
+
+
+      <div class="modal-section">
+
+        <strong>
+          ¿Qué significa SWIFT?
+        </strong>
+
+        SWIFT es una red bancaria internacional
+        utilizada para mover dinero entre bancos
+        de diferentes países.
+
+        En algunas rutas pueden existir bancos
+        intermediarios, tiempos adicionales o cargos.
+
+      </div>
+
+
+      <div class="modal-section cost-note">
+
+        <strong>
+          Costos
+        </strong>
+
+        Cualquier costo relacionado con retiro,
+        conversión de moneda, transferencia internacional,
+        SWIFT u operaciones posteriores realizadas
+        por el Partner será responsabilidad del Partner.
+
+      </div>
+
+    `
+
+
+  },
+
+
+  wise:{
+
+
+    title:
+      "Wise",
+
+
+    html:`
+
+      <p>
+
+        Wise es una plataforma de pagos internacionales
+        y manejo de diferentes monedas.
+
+      </p>
+
+
+      <div class="modal-section">
+
+        <strong>
+          Opción 1 · Recibir en Wise
+        </strong>
+
+        NOVO registra tu cuenta Wise como destino
+        y envía allí tus ganancias.
+
+        Después tú decides si mantienes,
+        conviertes o retiras los fondos.
+
+      </div>
+
+
+      <div class="modal-section">
+
+        <strong>
+          Opción 2 · Recibir en tu banco
+        </strong>
+
+        También puedes elegir que Wise sea utilizado
+        como vía para enviar tus ganancias hacia
+        la cuenta bancaria que registraste.
+
+      </div>
+
+
+      <div class="modal-section">
+
+        <strong>
+          ¿Cómo te identificamos?
+        </strong>
+
+        Dependiendo de la integración definitiva,
+        podremos utilizar información como Wisetag,
+        email, teléfono o los datos del destinatario.
+
+      </div>
+
+
+      <div class="modal-section cost-note">
+
+        <strong>
+          Costos
+        </strong>
+
+        Las tarifas dependen de la moneda,
+        conversión, país y ruta utilizada.
+
+        Los costos correspondientes al movimiento
+        de las ganancias serán asumidos por el Partner.
+
+      </div>
+
+    `
+
+
+  },
+
+
+  usbank:{
+
+
+    title:
+      "Cuenta bancaria USA",
+
+
+    html:`
+
+      <p>
+
+        Puedes seleccionar esta opción si tienes
+        una cuenta bancaria válida en Estados Unidos,
+        aunque vivas en otro país.
+
+      </p>
+
+
+      <div class="modal-section">
+
+        <strong>
+          Datos necesarios
+        </strong>
+
+        Necesitaremos normalmente:
+
+        <br><br>
+
+        • Nombre del banco<br>
+        • Titular<br>
+        • Routing / ABA<br>
+        • Número de cuenta<br>
+        • Tipo de cuenta
+
+        <br><br>
+
+        También puedes registrar Zelle
+        como información adicional.
+
+      </div>
+
+
+      <div class="modal-section">
+
+        <strong>
+          Ventaja principal
+        </strong>
+
+        No necesitas crear una cuenta financiera
+        internacional adicional.
+
+        NOVO utiliza directamente la cuenta bancaria
+        estadounidense registrada.
+
+      </div>
+
+
+      <div class="modal-section cost-note">
+
+        <strong>
+          Costo NOVO
+        </strong>
+
+        NOVO no añade un cargo adicional
+        por seleccionar la vía bancaria USA.
+
+      </div>
+
+    `
+
+
+  }
+
+
+};
+
+
+/* ============================================================
+   MODAL
+   ============================================================ */
+
+function openProviderInfo(
+  provider
+){
+
+
+  const data =
+    PROVIDER_INFO[
+      provider
+    ];
+
+
+  if(
+    !data
+  ){
+
+    return;
+
+  }
+
+
+  document
+    .getElementById(
+      "modalTitle"
+    )
+    .textContent =
+
+      data.title;
+
+
+  document
+    .getElementById(
+      "modalContent"
+    )
+    .innerHTML =
+
+      data.html;
+
+
+  document
+    .getElementById(
+      "providerModal"
+    )
+    .classList
+    .add(
+      "visible"
+    );
+
+}
+
+
+function closeProviderModal(){
+
+
+  document
+    .getElementById(
+      "providerModal"
+    )
+    .classList
+    .remove(
+      "visible"
+    );
+
+}
+
+
+function closeModalFromBackdrop(
+  event
+){
+
+
+  if(
+    event.target.id ===
+    "providerModal"
+  ){
+
+    closeProviderModal();
+
+  }
+
+}
+
+
+/* ============================================================
+   ESCAPE
+   ============================================================ */
+
+function escapeHtml(
+  value
+){
+
+
+  return String(
+    value || ""
+  )
+
+  .replaceAll(
+    "&",
+    "&amp;"
+  )
+
+  .replaceAll(
+    "<",
+    "&lt;"
+  )
+
+  .replaceAll(
+    ">",
+    "&gt;"
+  )
+
+  .replaceAll(
+    '"',
+    "&quot;"
+  )
+
+  .replaceAll(
+    "'",
+    "&#039;"
+  );
+
+}
+
+
+/* ============================================================
+   MASK BANK ACCOUNT
+   ============================================================ */
+
+function maskAccount(
+  value
+){
+
+
+  if(
+    !value
+  ){
+
+    return "—";
+
+  }
+
+
+  const clean =
+    String(value);
+
+
+  if(
+    clean.length <= 4
+  ){
+
+    return clean;
+
+  }
+
+
+  return `•••• ${
+    clean.slice(-4)
+  }`;
+
+}
+
+
+/* ============================================================
+   TOAST
+   ============================================================ */
+
+let toastTimer;
+
+
+function showToast(
+  message
+){
+
+
+  const toast =
+
+    document
+      .getElementById(
+        "toast"
+      );
+
+
+  toast.textContent =
+    message;
+
+
+  toast
+    .classList
+    .add(
+      "visible"
+    );
+
+
+  clearTimeout(
+    toastTimer
+  );
+
+
+  toastTimer =
+
+    setTimeout(
+      () => {
+
+
+        toast
+          .classList
+          .remove(
+            "visible"
+          );
+
+
+      },
+      2200
+    );
+
+}
+
+
+/* ============================================================
+   INITIALIZE
+   ============================================================ */
+
+restore();
+
+</script>
+
+
+</body>
+</html>
