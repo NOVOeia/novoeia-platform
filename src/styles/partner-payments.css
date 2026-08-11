@@ -1,0 +1,673 @@
+/* Partner payments wizard — scoped under .novo-partner-payments */
+
+.novo-partner-payments {
+  --pp-ink: #15213d;
+  --pp-muted: #53627d;
+  --pp-muted-2: #65738e;
+  --pp-line: #dbe6f6;
+  --pp-line-soft: #edf2f9;
+  --pp-blue: #258dff;
+  --pp-cyan: #25d8ff;
+  --pp-purple: #7e4dff;
+  --pp-pink: #d84cff;
+  --pp-green: #21c894;
+  --pp-green-dark: #149f75;
+  --pp-green-soft: #edfff8;
+  --pp-yellow-soft: #fff9e9;
+  --pp-red: #ff6a82;
+  --pp-red-soft: #fff1f4;
+  --pp-gray: #f3f6fa;
+  --pp-gray-border: #e5eaf2;
+  --pp-gray-text: #8d98ab;
+  --pp-radius: 22px;
+
+  color: var(--pp-ink);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.novo-partner-payments * {
+  box-sizing: border-box;
+}
+
+.novo-partner-payments .pp-module {
+  overflow: hidden;
+  border-radius: 28px;
+  border: 1px solid rgba(255, 255, 255, 0.92);
+  background:
+    radial-gradient(circle at 10% 5%, rgba(37, 216, 255, 0.18), transparent 28%),
+    radial-gradient(circle at 92% 8%, rgba(216, 76, 255, 0.12), transparent 26%),
+    linear-gradient(135deg, #f6fbff 0%, #f7f3ff 45%, #effbff 100%);
+  box-shadow: 0 18px 50px rgba(52, 78, 140, 0.12);
+}
+
+.novo-partner-payments .pp-header {
+  padding: 18px 22px 0;
+  border-bottom: 1px solid var(--pp-line);
+  background: linear-gradient(120deg, rgba(255, 255, 255, 0.97), rgba(244, 249, 255, 0.97) 55%, rgba(250, 244, 255, 0.97));
+}
+
+.novo-partner-payments .pp-header-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.novo-partner-payments .pp-brand h1 {
+  margin: 0;
+  font-size: 22px;
+  letter-spacing: -0.03em;
+}
+
+.novo-partner-payments .pp-brand h1 span {
+  background: linear-gradient(90deg, var(--pp-blue), var(--pp-purple), var(--pp-pink));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.novo-partner-payments .pp-brand p {
+  margin: 4px 0 0;
+  color: var(--pp-muted);
+  font-size: 12px;
+}
+
+.novo-partner-payments .pp-status {
+  min-width: 210px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid #dbe7ff;
+  background: linear-gradient(135deg, #eef9ff, #f4efff);
+}
+
+.novo-partner-payments .pp-status-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: #596984;
+  font-size: 10px;
+}
+
+.novo-partner-payments .pp-status-top strong {
+  color: var(--pp-purple);
+}
+
+.novo-partner-payments .pp-progress-track {
+  height: 8px;
+  margin-top: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e9eef8;
+}
+
+.novo-partner-payments .pp-progress-bar {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--pp-cyan), var(--pp-blue), var(--pp-purple), var(--pp-pink));
+  transition: width 0.35s ease;
+}
+
+.novo-partner-payments .pp-steps {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-top: 16px;
+  padding-bottom: 14px;
+}
+
+.novo-partner-payments .pp-step-tab {
+  position: relative;
+  padding: 10px 12px;
+  border: 1px solid #e2e8f5;
+  border-radius: 14px;
+  background: #fff;
+  color: #5e6e89;
+  text-align: left;
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.novo-partner-payments .pp-step-tab.active {
+  border-color: #c9b6ff;
+  box-shadow: 0 8px 20px rgba(126, 77, 255, 0.12);
+  color: var(--pp-ink);
+}
+
+.novo-partner-payments .pp-step-tab.done {
+  border-color: #b7f0d8;
+}
+
+.novo-partner-payments .pp-step-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  margin-bottom: 6px;
+  border-radius: 999px;
+  background: #eef2fb;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.novo-partner-payments .pp-step-tab.active .pp-step-number {
+  background: linear-gradient(135deg, var(--pp-blue), var(--pp-purple));
+  color: #fff;
+}
+
+.novo-partner-payments .pp-step-tab strong {
+  display: block;
+  font-size: 12px;
+}
+
+.novo-partner-payments .pp-step-tab small {
+  display: block;
+  margin-top: 2px;
+  font-size: 10px;
+  color: var(--pp-muted-2);
+}
+
+.novo-partner-payments .pp-content {
+  padding: 22px;
+}
+
+.novo-partner-payments .pp-banner {
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--pp-line);
+  background: #fff;
+}
+
+.novo-partner-payments .pp-banner.pending {
+  border-color: #f0d48a;
+  background: var(--pp-yellow-soft);
+}
+
+.novo-partner-payments .pp-banner.approved {
+  border-color: #9fe4c8;
+  background: var(--pp-green-soft);
+}
+
+.novo-partner-payments .pp-banner.rejected,
+.novo-partner-payments .pp-banner.needs_changes {
+  border-color: #ffc1cb;
+  background: var(--pp-red-soft);
+}
+
+.novo-partner-payments .pp-banner strong {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.novo-partner-payments .pp-hero {
+  margin-bottom: 18px;
+}
+
+.novo-partner-payments .pp-kicker {
+  color: var(--pp-purple);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.novo-partner-payments .pp-hero h2 {
+  margin: 6px 0 8px;
+  font-size: 24px;
+  letter-spacing: -0.03em;
+}
+
+.novo-partner-payments .pp-hero p {
+  margin: 0;
+  max-width: 720px;
+  color: var(--pp-muted);
+}
+
+.novo-partner-payments .pp-card {
+  padding: 18px;
+  border-radius: var(--pp-radius);
+  border: 1px solid var(--pp-line);
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 10px 26px rgba(60, 83, 140, 0.06);
+}
+
+.novo-partner-payments .pp-card + .pp-card {
+  margin-top: 14px;
+}
+
+.novo-partner-payments .pp-card-title {
+  margin: 0 0 4px;
+  font-size: 16px;
+}
+
+.novo-partner-payments .pp-card-desc {
+  margin: 0 0 16px;
+  color: var(--pp-muted);
+  font-size: 13px;
+}
+
+.novo-partner-payments .pp-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.novo-partner-payments .pp-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.novo-partner-payments .pp-field.full {
+  grid-column: 1 / -1;
+}
+
+.novo-partner-payments .pp-field label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #3d4b66;
+}
+
+.novo-partner-payments .pp-field input,
+.novo-partner-payments .pp-field select,
+.novo-partner-payments .pp-field textarea {
+  width: 100%;
+  padding: 11px 12px;
+  border: 1px solid #d7e0ef;
+  border-radius: 12px;
+  background: #fff;
+  color: var(--pp-ink);
+  outline: none;
+}
+
+.novo-partner-payments .pp-field input:focus,
+.novo-partner-payments .pp-field select:focus,
+.novo-partner-payments .pp-field textarea:focus {
+  border-color: #b9a4ff;
+  box-shadow: 0 0 0 3px rgba(126, 77, 255, 0.12);
+}
+
+.novo-partner-payments .pp-field input:disabled,
+.novo-partner-payments .pp-field select:disabled,
+.novo-partner-payments .pp-field textarea:disabled {
+  background: var(--pp-gray);
+  border-color: var(--pp-gray-border);
+  color: var(--pp-gray-text);
+}
+
+.novo-partner-payments .pp-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid var(--pp-line-soft);
+  background: #fafcff;
+}
+
+.novo-partner-payments .pp-check input {
+  margin-top: 2px;
+}
+
+.novo-partner-payments .pp-check-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  margin-top: 16px;
+  padding: 16px 18px;
+  border-radius: 16px;
+  border: 1px solid var(--pp-line);
+  background: #fff;
+  cursor: pointer;
+  box-shadow: 0 8px 20px rgba(60, 83, 140, 0.05);
+}
+
+.novo-partner-payments .pp-check-card:has(input:checked) {
+  border-color: #b9a4ff;
+  background: linear-gradient(135deg, #fbfaff, #f4fbff);
+  box-shadow: 0 0 0 2px rgba(126, 77, 255, 0.1);
+}
+
+.novo-partner-payments .pp-check-card input {
+  margin-top: 3px;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.novo-partner-payments .pp-check-card strong {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 14px;
+  color: var(--pp-ink);
+}
+
+.novo-partner-payments .pp-check-card span {
+  display: block;
+  color: var(--pp-muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.novo-partner-payments .pp-info {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid #d7e7ff;
+  background: #f3f9ff;
+  color: var(--pp-muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.novo-partner-payments .pp-info strong {
+  color: var(--pp-ink);
+}
+
+.novo-partner-payments .pp-local-method {
+  margin-top: 14px;
+  padding: 16px;
+  border-radius: 16px;
+  border: 1px solid var(--pp-line);
+  background: linear-gradient(145deg, #ffffff, #f7fbff);
+}
+
+.novo-partner-payments .pp-local-method-head {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  margin-bottom: 14px;
+}
+
+.novo-partner-payments .pp-local-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, var(--pp-blue), var(--pp-purple));
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+.novo-partner-payments .pp-local-method h4 {
+  margin: 0 0 4px;
+  font-size: 15px;
+}
+
+.novo-partner-payments .pp-local-method p {
+  margin: 0;
+  color: var(--pp-muted);
+  font-size: 13px;
+}
+
+.novo-partner-payments .pp-field-help {
+  margin-top: 4px;
+  color: var(--pp-muted-2);
+  font-size: 11px;
+}
+
+.novo-partner-payments .pp-location-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid #d7e7ff;
+  background: #f3f9ff;
+  color: var(--pp-muted);
+}
+
+.novo-partner-payments .pp-provider-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.novo-partner-payments .pp-provider {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border-radius: 18px;
+  border: 1px solid var(--pp-line);
+  background: #fff;
+  min-height: 280px;
+}
+
+.novo-partner-payments .pp-provider.recommended {
+  border-color: #8be0c0;
+  box-shadow: 0 0 0 2px rgba(33, 200, 148, 0.15);
+}
+
+.novo-partner-payments .pp-provider.selected {
+  border-color: #b59cff;
+  box-shadow: 0 0 0 2px rgba(126, 77, 255, 0.18);
+}
+
+.novo-partner-payments .pp-provider.disabled {
+  opacity: 0.72;
+  background: var(--pp-gray);
+}
+
+.novo-partner-payments .pp-provider-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.novo-partner-payments .pp-provider-logo {
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.novo-partner-payments .pp-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  background: #eef2fb;
+  color: #5a6b88;
+}
+
+.novo-partner-payments .pp-badge.available {
+  background: var(--pp-green-soft);
+  color: var(--pp-green-dark);
+}
+
+.novo-partner-payments .pp-badge.unavailable {
+  background: #edf0f5;
+  color: var(--pp-gray-text);
+}
+
+.novo-partner-payments .pp-badge.rec {
+  background: #e7fff5;
+  color: var(--pp-green-dark);
+}
+
+.novo-partner-payments .pp-provider-copy,
+.novo-partner-payments .pp-provider-point {
+  color: var(--pp-muted);
+  font-size: 13px;
+}
+
+.novo-partner-payments .pp-provider-point {
+  position: relative;
+  padding-left: 14px;
+}
+
+.novo-partner-payments .pp-provider-point::before {
+  content: '•';
+  position: absolute;
+  left: 0;
+  color: var(--pp-purple);
+}
+
+.novo-partner-payments .pp-provider-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: auto;
+}
+
+.novo-partner-payments .pp-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.novo-partner-payments .pp-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.novo-partner-payments .pp-btn-primary {
+  background: linear-gradient(135deg, var(--pp-blue), var(--pp-purple));
+  color: #fff;
+}
+
+.novo-partner-payments .pp-btn-ghost {
+  background: #fff;
+  border-color: #d7e0ef;
+  color: #42536f;
+}
+
+.novo-partner-payments .pp-btn-choose {
+  background: #151f36;
+  color: #fff;
+}
+
+.novo-partner-payments .pp-btn-choose.selected {
+  background: linear-gradient(135deg, var(--pp-green), var(--pp-green-dark));
+}
+
+.novo-partner-payments .pp-footer-nav {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.novo-partner-payments .pp-review-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.novo-partner-payments .pp-review-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--pp-line-soft);
+  color: var(--pp-muted);
+}
+
+.novo-partner-payments .pp-review-row strong {
+  color: var(--pp-ink);
+  text-align: right;
+}
+
+.novo-partner-payments .pp-toast {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 40;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: #15213d;
+  color: #fff;
+  box-shadow: 0 12px 30px rgba(21, 33, 61, 0.25);
+}
+
+.novo-partner-payments .pp-toast.error {
+  background: #9f1239;
+}
+
+.novo-partner-payments .pp-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(17, 24, 39, 0.45);
+}
+
+.novo-partner-payments .pp-modal {
+  width: min(520px, 100%);
+  max-height: 80vh;
+  overflow: auto;
+  padding: 20px;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 24px 70px rgba(52, 78, 140, 0.25);
+}
+
+.novo-partner-payments .pp-modal h3 {
+  margin: 0 0 12px;
+}
+
+.novo-partner-payments .pp-modal ul {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--pp-muted);
+}
+
+.novo-partner-payments .pp-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
+.novo-partner-payments .pp-wise-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.novo-partner-payments .pp-wise-option {
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid var(--pp-line);
+  background: #fff;
+  cursor: pointer;
+  text-align: left;
+}
+
+.novo-partner-payments .pp-wise-option.active {
+  border-color: #b59cff;
+  box-shadow: 0 0 0 2px rgba(126, 77, 255, 0.12);
+}
+
+@media (max-width: 980px) {
+  .novo-partner-payments .pp-steps,
+  .novo-partner-payments .pp-provider-grid,
+  .novo-partner-payments .pp-form-grid,
+  .novo-partner-payments .pp-review-grid,
+  .novo-partner-payments .pp-wise-options {
+    grid-template-columns: 1fr;
+  }
+
+  .novo-partner-payments .pp-header-row {
+    flex-direction: column;
+  }
+}

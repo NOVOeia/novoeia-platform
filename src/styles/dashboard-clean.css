@@ -199,6 +199,30 @@
   scrollbar-color: var(--novo-scrollbar) transparent;
 }
 
+.novo-content.novo-content--flush {
+  padding: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.partner-center-embed {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  background: transparent;
+}
+
+.partner-center-embed__frame {
+  border: 0;
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+  background: transparent;
+}
+
 .novo-content::-webkit-scrollbar {
   width: 6px;
   height: 6px;

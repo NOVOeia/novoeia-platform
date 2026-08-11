@@ -7,6 +7,10 @@ import {
   PARTNER_CLIENT_EMAIL_CATALOG,
   sendPartnerClientTemplatedEmail,
 } from '../_shared/email-templates.ts';
+import {
+  buildPaymentProfilePatch,
+  validatePaymentProfileForSubmit,
+} from '../_shared/partner-payment-profile.ts';
 import Stripe from 'https://esm.sh/stripe@17.7.0?target=deno';
 
 const MAX_PARTNER_ADDITIONAL_SERVICES = 4;
@@ -459,6 +463,295 @@ Deno.serve(async (req) => {
         .single();
       if (error) throw error;
       return json({ partner: data });
+    }
+
+    if (action === 'getPaymentProfile') {
+      if (!partnerId) throw new Error('PARTNER_NOT_ASSIGNED');
+      const { data, error } = await supabase
+        .from('partner_payment_profiles')
+        .select('*')
+        .eq('partner_id', partnerId)
+        .maybeSingle();
+      if (error) throw error;
+      return json({ profile: data });
+    }
+
+    if (action === 'savePaymentProfile') {
+      if (!partnerId) throw new Error('PARTNER_NOT_ASSIGNED');
+
+      const { data: existing, error: existingError } = await supabase
+        .from('partner_payment_profiles')
+        .select('*')
+        .eq('partner_id', partnerId)
+        .maybeSingle();
+      if (existingError) throw existingError;
+
+      if (existing?.status === 'approved') {
+        throw new Error('PAYMENT_PROFILE_LOCKED');
+      }
+
+      const patch = buildPaymentProfilePatch(payload);
+      const nextStatus = existing?.status === 'pending_review'
+        ? 'pending_review'
+        : (existing?.status === 'rejected' || existing?.status === 'needs_changes'
+          ? existing.status
+          : 'draft');
+
+      const row = {
+        partner_id: partnerId,
+        ...patch,
+        status: nextStatus,
+        updated_at: new Date().toISOString(),
+      };
+
+      const { data, error } = await supabase
+        .from('partner_payment_profiles')
+        .upsert(row, { onConflict: 'partner_id' })
+        .select('*')
+        .single();
+      if (error) throw error;
+
+      await supabase.from('audit_logs').insert({
+        actor_user_id: profile.id,
+        action: 'partner.payment_profile_saved',
+        entity_type: 'partner_payment_profile',
+        entity_id: data.id,
+        metadata: { partnerId, status: data.status },
+      });
+
+      return json({ profile: data });
+    }
+
+    if (action === 'submitPaymentProfile') {
+      if (!partnerId) throw new Error('PARTNER_NOT_ASSIGNED');
+
+      const { data: existing, error: existingError } = await supabase
+        .from('partner_payment_profiles')
+        .select('*')
+        .eq('partner_id', partnerId)
+        .maybeSingle();
+      if (existingError) throw existingError;
+
+      if (existing?.status === 'approved') {
+        throw new Error('PAYMENT_PROFILE_LOCKED');
+      }
+      if (existing?.status === 'pending_review') {
+        throw new Error('PAYMENT_PROFILE_ALREADY_SUBMITTED');
+      }
+
+      const patch = buildPaymentProfilePatch({
+        ...(existing || {}),
+        ...payload,
+        legal_profile: payload.legal_profile ?? payload.legalProfile ?? existing?.legal_profile,
+        backup_bank: payload.backup_bank ?? payload.backupBank ?? existing?.backup_bank,
+        us_bank: payload.us_bank ?? payload.usBank ?? existing?.us_bank,
+        provider_details: payload.provider_details ?? payload.providerDetails ?? existing?.provider_details,
+        wizard_state: {
+          ...(existing?.wizard_state || {}),
+          ...(payload.wizard_state || payload.wizardState || {}),
+          paymentMethodConfirmed: true,
+          submitted: true,
+        },
+        has_us_bank: payload.has_us_bank ?? payload.hasUSBank ?? existing?.has_us_bank,
+      });
+
+      if (payload.finalConfirmation !== true) {
+        throw new Error('PAYMENT_PROFILE_CONFIRMATION_REQUIRED');
+      }
+
+      validatePaymentProfileForSubmit({
+        legal_profile: patch.legal_profile as Record<string, unknown>,
+        backup_bank: patch.backup_bank as Record<string, unknown>,
+        has_us_bank: patch.has_us_bank,
+        us_bank: patch.us_bank as Record<string, unknown>,
+        payment_route: patch.payment_route,
+        wizard_state: patch.wizard_state as Record<string, unknown>,
+      });
+
+      const row = {
+        partner_id: partnerId,
+        ...patch,
+        status: 'pending_review',
+        submitted_at: new Date().toISOString(),
+        reviewed_at: null,
+        reviewed_by: null,
+        review_notes: null,
+        updated_at: new Date().toISOString(),
+      };
+
+      const { data, error } = await supabase
+        .from('partner_payment_profiles')
+        .upsert(row, { onConflict: 'partner_id' })
+        .select('*')
+        .single();
+      if (error) throw error;
+
+      await supabase.from('audit_logs').insert({
+        actor_user_id: profile.id,
+        action: 'partner.payment_profile_submitted',
+        entity_type: 'partner_payment_profile',
+        entity_id: data.id,
+        metadata: {
+          partnerId,
+          paymentRoute: data.payment_route,
+        },
+      });
+
+      return json({ profile: data });
+    }
+
+    if (action === 'listSupportTickets') {
+      if (!partnerId) throw new Error('PARTNER_NOT_ASSIGNED');
+      let query = supabase
+        .from('support_tickets')
+        .select('id, partner_id, subject, priority, status, last_message_at, last_message_by, created_at, updated_at, resolved_at, closed_at')
+        .eq('partner_id', partnerId)
+        .order('last_message_at', { ascending: false });
+      if (payload.status) query = query.eq('status', payload.status);
+      const { data, error } = await query;
+      if (error) throw error;
+      return json({ tickets: data || [] });
+    }
+
+    if (action === 'getSupportTicket') {
+      if (!partnerId) throw new Error('PARTNER_NOT_ASSIGNED');
+      const ticketId = String(payload.ticketId || '').trim();
+      if (!ticketId) throw new Error('SUPPORT_TICKET_REQUIRED');
+
+      const { data: ticket, error: ticketError } = await supabase
+        .from('support_tickets')
+        .select('*')
+        .eq('id', ticketId)
+        .eq('partner_id', partnerId)
+        .single();
+      if (ticketError) throw ticketError;
+
+      const { data: messages, error: messagesError } = await supabase
+        .from('support_ticket_messages')
+        .select('id, ticket_id, author_user_id, author_role, body, created_at')
+        .eq('ticket_id', ticketId)
+        .order('created_at', { ascending: true });
+      if (messagesError) throw messagesError;
+
+      return json({ ticket, messages: messages || [] });
+    }
+
+    if (action === 'createSupportTicket') {
+      if (!partnerId) throw new Error('PARTNER_NOT_ASSIGNED');
+      const subject = String(payload.subject || '').trim();
+      const body = String(payload.message || payload.body || '').trim();
+      const priority = String(payload.priority || 'medium');
+      if (!subject || !body) throw new Error('SUPPORT_TICKET_FIELDS_REQUIRED');
+      if (!['low', 'medium', 'high'].includes(priority)) throw new Error('INVALID_SUPPORT_PRIORITY');
+
+      const now = new Date().toISOString();
+      const { data: ticket, error: ticketError } = await supabase
+        .from('support_tickets')
+        .insert({
+          partner_id: partnerId,
+          created_by: profile.id,
+          subject,
+          priority,
+          status: 'open',
+          last_message_at: now,
+          last_message_by: 'partner',
+          created_at: now,
+          updated_at: now,
+        })
+        .select('*')
+        .single();
+      if (ticketError) throw ticketError;
+
+      const { data: message, error: messageError } = await supabase
+        .from('support_ticket_messages')
+        .insert({
+          ticket_id: ticket.id,
+          author_user_id: profile.id,
+          author_role: 'partner',
+          body,
+          created_at: now,
+        })
+        .select('*')
+        .single();
+      if (messageError) throw messageError;
+
+      await supabase.from('platform_notifications').insert({
+        partner_id: null,
+        recipient_role: 'super_admin',
+        type: 'support_ticket_created',
+        title: 'Nuevo ticket de soporte',
+        body: subject,
+        metadata: { ticketId: ticket.id, partnerId, priority },
+      });
+
+      await supabase.from('audit_logs').insert({
+        actor_user_id: profile.id,
+        action: 'support.ticket_created',
+        entity_type: 'support_ticket',
+        entity_id: ticket.id,
+        metadata: { partnerId, priority },
+      });
+
+      return json({ ticket, message }, 201);
+    }
+
+    if (action === 'replySupportTicket') {
+      if (!partnerId) throw new Error('PARTNER_NOT_ASSIGNED');
+      const ticketId = String(payload.ticketId || '').trim();
+      const body = String(payload.message || payload.body || '').trim();
+      if (!ticketId || !body) throw new Error('SUPPORT_TICKET_FIELDS_REQUIRED');
+
+      const { data: ticket, error: ticketError } = await supabase
+        .from('support_tickets')
+        .select('*')
+        .eq('id', ticketId)
+        .eq('partner_id', partnerId)
+        .single();
+      if (ticketError) throw ticketError;
+      if (ticket.status === 'closed') throw new Error('SUPPORT_TICKET_CLOSED');
+
+      const now = new Date().toISOString();
+      const { data: message, error: messageError } = await supabase
+        .from('support_ticket_messages')
+        .insert({
+          ticket_id: ticketId,
+          author_user_id: profile.id,
+          author_role: 'partner',
+          body,
+          created_at: now,
+        })
+        .select('*')
+        .single();
+      if (messageError) throw messageError;
+
+      const nextStatus = ticket.status === 'waiting_partner' || ticket.status === 'resolved'
+        ? 'open'
+        : ticket.status;
+
+      const { data: updated, error: updateError } = await supabase
+        .from('support_tickets')
+        .update({
+          status: nextStatus,
+          last_message_at: now,
+          last_message_by: 'partner',
+          updated_at: now,
+          resolved_at: nextStatus === 'open' ? null : ticket.resolved_at,
+        })
+        .eq('id', ticketId)
+        .select('*')
+        .single();
+      if (updateError) throw updateError;
+
+      await supabase.from('platform_notifications').insert({
+        partner_id: null,
+        recipient_role: 'super_admin',
+        type: 'support_ticket_reply',
+        title: 'Respuesta de partner en ticket',
+        body: ticket.subject,
+        metadata: { ticketId, partnerId },
+      });
+
+      return json({ ticket: updated, message });
     }
 
     throw new Error('UNKNOWN_ACTION');

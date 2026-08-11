@@ -19,6 +19,8 @@ import {
   Shield,
   Mail,
   ClipboardList,
+  Wallet,
+  LifeBuoy,
 } from 'lucide-react';
 
 import { Logo } from '../components/ui.jsx';
@@ -42,6 +44,7 @@ const adminMenu = [
   ['links', 'Links de venta', Link2],
   ['subscriptions', 'Suscripciones', Activity],
   ['payments', 'Pagos', CreditCard],
+  ['support', 'Soporte', LifeBuoy],
   ['email-templates', 'Plantillas email', Mail],
   ['audit', 'Auditoría', ScrollText],
   ['settings', 'Configuración', Settings],
@@ -54,6 +57,7 @@ const partnerMenu = [
   ['products', 'Productos y servicios', Package],
   ['links', 'Links de venta', Link2],
   ['commissions', 'Comisiones', CreditCard],
+  ['payments', 'Pagos', Wallet],
   ['brand', 'Mi marca y páginas', Settings],
   ['client-emails', 'Emails a clientes', Mail],
   ['support', 'Soporte', Bell],
@@ -168,12 +172,12 @@ export default function AppShell({ role, section, go }) {
           </div>
         </header>
 
-        <div className="novo-content">
+        <div className={`novo-content${active === 'partner-center' ? ' novo-content--flush' : ''}`}>
           {isImpersonating && (
             <div
               className="novo-card"
               style={{
-                margin: '0 0 16px',
+                margin: active === 'partner-center' ? '16px 16px 0' : '0 0 16px',
                 border: '1px solid rgba(245,158,11,.35)',
                 background: 'rgba(245,158,11,.08)',
               }}

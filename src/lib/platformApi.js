@@ -250,6 +250,81 @@ const ERROR_HINTS = {
 
   UNKNOWN_ACTION:
     'Esta función aún no está desplegada en el servidor. Ejecuta: supabase functions deploy partner-commerce --project-ref jwtymqtwlbifojtvxwpx',
+
+  PAYMENT_PROFILE_LOCKED:
+    'Tu cuenta de pagos ya está aprobada y no se puede editar.',
+
+  PAYMENT_PROFILE_ALREADY_SUBMITTED:
+    'Tu cuenta de pagos ya está en revisión.',
+
+  PAYMENT_PROFILE_CONFIRMATION_REQUIRED:
+    'Confirma que los datos son correctos antes de enviar.',
+
+  PAYMENT_PROFILE_FIRST_NAME_REQUIRED:
+    'Indica el nombre del titular.',
+
+  PAYMENT_PROFILE_LAST_NAME_REQUIRED:
+    'Indica el apellido del titular.',
+
+  PAYMENT_PROFILE_TYPE_REQUIRED:
+    'Selecciona el tipo de Partner.',
+
+  PAYMENT_PROFILE_COUNTRY_REQUIRED:
+    'Selecciona el país de residencia.',
+
+  PAYMENT_PROFILE_EMAIL_REQUIRED:
+    'Indica el correo del titular.',
+
+  PAYMENT_PROFILE_BANK_COUNTRY_REQUIRED:
+    'Selecciona el país del banco de respaldo.',
+
+  PAYMENT_PROFILE_BANK_NAME_REQUIRED:
+    'Indica el nombre del banco de respaldo.',
+
+  PAYMENT_PROFILE_BANK_HOLDER_REQUIRED:
+    'Indica el titular de la cuenta de respaldo.',
+
+  PAYMENT_PROFILE_BANK_ACCOUNT_REQUIRED:
+    'Indica el número de cuenta de respaldo.',
+
+  PAYMENT_PROFILE_PROVIDER_REQUIRED:
+    'Elige un método oficial de pago.',
+
+  PAYMENT_PROFILE_WISE_DESTINATION_REQUIRED:
+    'Indica si recibirás en Wise o en tu banco vía Wise.',
+
+  PAYMENT_PROFILE_US_BANK_NAME_REQUIRED:
+    'Indica el banco USA.',
+
+  PAYMENT_PROFILE_US_BANK_HOLDER_REQUIRED:
+    'Indica el titular de la cuenta USA.',
+
+  PAYMENT_PROFILE_US_BANK_ROUTING_REQUIRED:
+    'Indica el routing/ABA de la cuenta USA.',
+
+  PAYMENT_PROFILE_US_BANK_ACCOUNT_REQUIRED:
+    'Indica el número de cuenta USA.',
+
+  PAYMENT_PROFILE_ROUTE_REQUIRED:
+    'No se pudo determinar la ruta de pago. Revisa el método seleccionado.',
+
+  INVALID_PAYMENT_PROFILE_REVIEW:
+    'Decisión de revisión inválida.',
+
+  SUPPORT_TICKET_REQUIRED:
+    'Indica el ticket de soporte.',
+
+  SUPPORT_TICKET_FIELDS_REQUIRED:
+    'Completa el asunto y el mensaje del ticket.',
+
+  INVALID_SUPPORT_PRIORITY:
+    'La prioridad del ticket no es válida.',
+
+  SUPPORT_TICKET_CLOSED:
+    'Este ticket está cerrado y no admite nuevas respuestas.',
+
+  INVALID_SUPPORT_TICKET_STATUS:
+    'El estado del ticket no es válido.',
 };
 
 function translateKnownError(rawError) {
@@ -551,10 +626,10 @@ export const platformApi = {
     });
   },
 
-  saveEmailTemplates(templates) {
+  saveEmailTemplates(templates, deleteIds = []) {
     return invoke('platform-admin', {
       action: 'saveEmailTemplates',
-      payload: { templates },
+      payload: { templates, deleteIds },
     });
   },
 
@@ -873,35 +948,11 @@ export const platformApi = {
     });
   },
 
-  async updatePartner(payload) {
-    await this.requireSuperAdmin();
-
-    const id = payload.id;
-    if (!id) {
-      throw new Error('MISSING_REQUIRED_FIELDS');
-    }
-
-    const patch = {
-      updated_at: new Date().toISOString(),
-    };
-
-    if (payload.name != null) patch.name = String(payload.name).trim();
-    if (payload.slug != null) patch.slug = String(payload.slug).trim().toLowerCase();
-    if (payload.plan_name != null) patch.plan_name = payload.plan_name;
-    if (payload.status != null) patch.status = payload.status;
-    if (payload.ghl_location_id !== undefined) {
-      patch.ghl_location_id = payload.ghl_location_id || null;
-    }
-
-    const { data, error } = await supabase
-      .from('partners')
-      .update(patch)
-      .eq('id', id)
-      .select()
-      .single();
-
-    if (error) throw error;
-    return { partner: data };
+  updatePartner(payload) {
+    return invoke('platform-admin', {
+      action: 'updatePartner',
+      payload,
+    });
   },
 
   listCatalog() {
@@ -1322,8 +1373,16 @@ export const platformApi = {
         paid_at,
         created_at,
         updated_at,
-        partners:partner_id ( name, slug ),
-        partner_clients:client_id ( company_name, name, email )
+        partners:partner_id ( id, name, slug ),
+        partner_clients:client_id ( company_name, name, email ),
+        sales_links:sales_link_id (
+          id,
+          product_id,
+          product_name,
+          sale_price,
+          billing_interval,
+          metadata
+        )
       `)
       .order('created_at', { ascending: false });
 
@@ -2354,5 +2413,94 @@ export const platformApi = {
     const { error } = await query;
     if (error) throw error;
     return { ok: true };
+  },
+  getPaymentProfile() {
+    return invoke('partner-commerce', {
+      action: 'getPaymentProfile',
+      payload: {},
+    });
+  },
+
+  savePaymentProfile(payload = {}) {
+    return invoke('partner-commerce', {
+      action: 'savePaymentProfile',
+      payload,
+    });
+  },
+
+  submitPaymentProfile(payload = {}) {
+    return invoke('partner-commerce', {
+      action: 'submitPaymentProfile',
+      payload,
+    });
+  },
+
+  listPaymentProfiles({ status = null, partnerId = null } = {}) {
+    return invoke('platform-admin', {
+      action: 'listPaymentProfiles',
+      payload: { status, partnerId },
+    });
+  },
+
+  reviewPaymentProfile({ profileId, decision, notes = null }) {
+    return invoke('platform-admin', {
+      action: 'reviewPaymentProfile',
+      payload: { profileId, decision, notes },
+    });
+  },
+  listSupportTickets(filters = {}) {
+    return invoke('partner-commerce', {
+      action: 'listSupportTickets',
+      payload: filters,
+    });
+  },
+
+  getSupportTicket(ticketId) {
+    return invoke('partner-commerce', {
+      action: 'getSupportTicket',
+      payload: { ticketId },
+    });
+  },
+
+  createSupportTicket(payload = {}) {
+    return invoke('partner-commerce', {
+      action: 'createSupportTicket',
+      payload,
+    });
+  },
+
+  replySupportTicket(payload = {}) {
+    return invoke('partner-commerce', {
+      action: 'replySupportTicket',
+      payload,
+    });
+  },
+
+  listAdminSupportTickets(filters = {}) {
+    return invoke('platform-admin', {
+      action: 'listSupportTickets',
+      payload: filters,
+    });
+  },
+
+  getAdminSupportTicket(ticketId) {
+    return invoke('platform-admin', {
+      action: 'getSupportTicket',
+      payload: { ticketId },
+    });
+  },
+
+  replyAdminSupportTicket(payload = {}) {
+    return invoke('platform-admin', {
+      action: 'replySupportTicket',
+      payload,
+    });
+  },
+
+  updateSupportTicketStatus(payload = {}) {
+    return invoke('platform-admin', {
+      action: 'updateSupportTicketStatus',
+      payload,
+    });
   },
 };

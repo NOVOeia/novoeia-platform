@@ -138,8 +138,27 @@ export function renderEmailTemplate(template: string, variables: Record<string, 
   return template.replace(/\{\{(\w+)\}\}/g, (_, key: string) => merged[key] ?? '');
 }
 
-export function mergeEmailTemplates(stored: Record<string, Partial<{ subject: string; html: string; enabled: boolean }>> = {}) {
-  const merged: Record<string, { subject: string; html: string; enabled: boolean }> = {};
+export function mergeEmailTemplates(stored: Record<string, Partial<{
+  subject: string;
+  html: string;
+  enabled: boolean;
+  custom?: boolean;
+  name?: string;
+  description?: string;
+  trigger?: string;
+  variables?: string[];
+}>> = {}) {
+  const merged: Record<string, {
+    subject: string;
+    html: string;
+    enabled: boolean;
+    custom?: boolean;
+    name?: string;
+    description?: string;
+    trigger?: string;
+    variables?: string[];
+  }> = {};
+
   for (const item of EMAIL_TEMPLATE_CATALOG) {
     const defaults = DEFAULT_EMAIL_TEMPLATES[item.id] || { subject: '', html: '', enabled: false };
     const override = stored[item.id] || {};
@@ -149,7 +168,63 @@ export function mergeEmailTemplates(stored: Record<string, Partial<{ subject: st
       enabled: override.enabled !== undefined ? override.enabled : defaults.enabled,
     };
   }
+
+  for (const [id, value] of Object.entries(stored)) {
+    if (merged[id]) continue;
+    if (!value || typeof value !== 'object') continue;
+    const isCustom = value.custom === true || String(id).startsWith('custom_');
+    if (!isCustom) continue;
+    merged[id] = {
+      subject: String(value.subject || ''),
+      html: String(value.html || ''),
+      enabled: value.enabled !== false,
+      custom: true,
+      name: String(value.name || id),
+      description: String(value.description || 'Plantilla personalizada'),
+      trigger: String(value.trigger || 'manual'),
+      variables: Array.isArray(value.variables) ? value.variables.map(String) : ['fullName', 'email', 'appName'],
+    };
+  }
+
   return merged;
+}
+
+export function listEmailTemplatesForAdmin(
+  stored: Record<string, Partial<{
+    subject: string;
+    html: string;
+    enabled: boolean;
+    custom?: boolean;
+    name?: string;
+    description?: string;
+    trigger?: string;
+    variables?: string[];
+  }>> = {},
+) {
+  const merged = mergeEmailTemplates(stored);
+  const system = EMAIL_TEMPLATE_CATALOG.map((meta) => ({
+    ...meta,
+    ...merged[meta.id],
+    custom: false,
+  }));
+
+  const custom = Object.entries(merged)
+    .filter(([id, value]) => value.custom === true || !EMAIL_TEMPLATE_CATALOG.some((item) => item.id === id))
+    .filter(([id]) => !EMAIL_TEMPLATE_CATALOG.some((item) => item.id === id))
+    .map(([id, value]) => ({
+      id,
+      name: value.name || id,
+      description: value.description || 'Plantilla personalizada',
+      trigger: value.trigger || 'manual',
+      variables: value.variables || ['fullName', 'email', 'appName'],
+      subject: value.subject,
+      html: value.html,
+      enabled: value.enabled,
+      custom: true,
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name, 'es'));
+
+  return [...system, ...custom];
 }
 
 export async function loadEmailTemplates(supabase: SupabaseAdmin) {
@@ -160,7 +235,25 @@ export async function loadEmailTemplates(supabase: SupabaseAdmin) {
     .maybeSingle();
 
   const stored = ((data?.public_config || {}) as { templates?: Record<string, unknown> }).templates || {};
-  return mergeEmailTemplates(stored as Record<string, Partial<{ subject: string; html: string; enabled: boolean }>>);
+  return mergeEmailTemplates(stored as Record<string, Partial<{
+    subject: string;
+    html: string;
+    enabled: boolean;
+    custom?: boolean;
+    name?: string;
+    description?: string;
+    trigger?: string;
+    variables?: string[];
+  }>>);
+}
+
+export async function loadStoredEmailTemplateConfig(supabase: SupabaseAdmin) {
+  const { data } = await supabase
+    .from('platform_integrations')
+    .select('public_config')
+    .eq('provider', 'email_templates')
+    .maybeSingle();
+  return ((data?.public_config || {}) as { templates?: Record<string, unknown> }).templates || {};
 }
 
 export async function loadPlatformAppUrl(supabase: SupabaseAdmin) {
@@ -179,6 +272,8 @@ export async function sendTemplatedEmail(
   params: {
     to: string;
     variables?: Record<string, string>;
+    /** En pruebas permite enviar aunque la plantilla esté desactivada */
+    force?: boolean;
   },
 ) {
   const to = String(params.to || '').trim().toLowerCase();
@@ -189,7 +284,8 @@ export async function sendTemplatedEmail(
 
   const templates = await loadEmailTemplates(supabase);
   const template = templates[String(templateId)];
-  if (!template?.enabled) return { skipped: true, reason: 'template_disabled' };
+  if (!template) return { skipped: true, reason: 'template_not_found' };
+  if (!template.enabled && !params.force) return { skipped: true, reason: 'template_disabled' };
 
   const appUrl = await loadPlatformAppUrl(supabase);
   const variables = {

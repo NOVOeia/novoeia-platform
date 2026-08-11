@@ -4,6 +4,18 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>NOVO Partner Center</title>
+<script>
+(function () {
+  try {
+    var params = new URLSearchParams(window.location.search);
+    if (params.get('embed') === '1' || window.self !== window.top) {
+      document.documentElement.classList.add('embed');
+    }
+  } catch (e) {
+    document.documentElement.classList.add('embed');
+  }
+})();
+</script>
 <style>
 :root {
   --ink:#15213d;
@@ -63,6 +75,38 @@ body::after{background:#b46cff;right:-90px;bottom:60px;animation-delay:-4s}
   border-bottom:1px solid var(--line);
   position:sticky;top:0;z-index:10;
 }
+
+/* Embedded in partner dashboard: flush, no floating card */
+html.embed,html.embed body{
+  background:transparent !important;
+  min-height:100%;
+}
+html.embed body::before,
+html.embed body::after{display:none !important}
+html.embed .wrap{
+  max-width:none;
+  margin:0;
+  padding:20px 28px 36px;
+}
+html.embed .center{
+  background:transparent;
+  border:none;
+  box-shadow:none;
+  backdrop-filter:none;
+  border-radius:0;
+  min-height:0;
+  overflow:visible;
+}
+html.embed .header{
+  margin:0 -28px 0;
+  padding:8px 28px 0;
+  background:rgba(244,247,251,.88);
+  backdrop-filter:blur(10px);
+  border-bottom:1px solid rgba(15,23,42,.06);
+}
+html.embed .content{padding:22px 0 8px}
+html.embed .brand h1{font-size:22px}
+html.embed .brand p{font-size:12px}
 .headrow{display:flex;justify-content:space-between;gap:20px;align-items:center}
 .brand{display:flex;align-items:center;gap:14px}
 .brand img{width:76px;height:62px;object-fit:contain;filter:drop-shadow(0 10px 20px rgba(82,70,220,.2))}
@@ -657,7 +701,8 @@ function setTab(i){
   active=i;
   tabs.forEach((t,n)=>t.classList.toggle("active",n===i));
   panels.forEach((p,n)=>p.classList.toggle("active",n===i));
-  window.scrollTo({top:0,behavior:"smooth"});
+  const scroller = document.scrollingElement || document.documentElement;
+  scroller.scrollTo({top:0,behavior:"smooth"});
 }
 document.getElementById("next").onclick=()=>setTab(active===5?0:active+1);
 
