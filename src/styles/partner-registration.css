@@ -125,11 +125,24 @@ body.pr-partner-reg-modal-open {
 
     .partner-registration-page .topbar {
       max-width: 1240px;
+      height: auto;
       margin: 0 auto 24px;
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 20px;
+      padding: 14px 18px;
+      /* Override global dashboard .topbar (dark sticky bar). */
+      position: relative;
+      top: auto;
+      z-index: 1;
+      background: rgba(255, 255, 255, 0.92);
+      border: 1px solid rgba(226, 230, 239, 0.94);
+      border-bottom: 1px solid rgba(226, 230, 239, 0.94);
+      border-radius: 18px;
+      backdrop-filter: blur(18px);
+      box-shadow: 0 10px 30px rgba(25, 30, 55, 0.06);
+      color: var(--text);
     }
 
     .partner-registration-page .brand {
@@ -156,6 +169,7 @@ body.pr-partner-reg-modal-open {
     }
 
     .partner-registration-page .brand-name {
+      color: #16181d;
       font-size: 15px;
       font-weight: 850;
       letter-spacing: -0.02em;
@@ -164,7 +178,7 @@ body.pr-partner-reg-modal-open {
     .partner-registration-page .brand-sub {
       display: block;
       margin-top: 2px;
-      color: var(--muted);
+      color: #737b8b;
       font-size: 11px;
       font-weight: 650;
     }
@@ -173,8 +187,9 @@ body.pr-partner-reg-modal-open {
       display: flex;
       align-items: center;
       gap: 7px;
-      color: var(--muted);
+      color: #5b6475;
       font-size: 13px;
+      font-weight: 600;
     }
 
     /* =====================================================
@@ -1087,6 +1102,7 @@ body.pr-partner-reg-modal-open {
 
       .partner-registration-page .topbar {
         margin-bottom: 14px;
+        padding: 12px 14px;
       }
 
       .partner-registration-page .secure-label {
