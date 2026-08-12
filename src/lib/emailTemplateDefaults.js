@@ -113,7 +113,7 @@ export const DEFAULT_EMAIL_TEMPLATES = {
 <p>Recibimos una solicitud para restablecer la contraseña de <strong>{{email}}</strong>.</p>
 <p><a href="{{resetUrl}}" style="display:inline-block;background:#5b5df0;color:#fff;text-decoration:none;padding:12px 18px;border-radius:10px;font-weight:600">Crear nueva contraseña</a></p>
 <p style="color:#737b8b;font-size:13px">El enlace expira en {{expiresIn}}. Si no solicitaste esto, ignora este correo.</p>`),
-    enabled: false,
+    enabled: true,
   },
   ghl_provision_success: {
     subject: 'Tu servicio está en activación — {{productName}}',

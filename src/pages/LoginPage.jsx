@@ -4,30 +4,18 @@ import {
   ShieldCheck,
   Mail,
   LockKeyhole,
-  PlugZap,
 } from 'lucide-react';
 import { Button, Logo, Field } from '../components/ui.jsx';
 import { platformApi } from '../lib/platformApi.js';
 import '../styles/site-wow.css';
 
 export default function LoginPage({ go }) {
+  const [mode, setMode] = useState('login'); // login | forgot | sent
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-
-  async function loginWithGhl() {
-    try {
-      setBusy(true);
-      setError('');
-      const data = await platformApi.startGhlLogin();
-      if (!data?.authorizationUrl) throw new Error('No se recibió URL de HighLevel.');
-      window.location.href = data.authorizationUrl;
-    } catch (err) {
-      setError(err.message || 'No se pudo iniciar el login con HighLevel.');
-      setBusy(false);
-    }
-  }
+  const [notice, setNotice] = useState('');
 
   async function loginWithPassword() {
     try {
@@ -40,6 +28,28 @@ export default function LoginPage({ go }) {
       setError(err.message || 'Correo o contraseña incorrectos.');
       setBusy(false);
     }
+  }
+
+  async function requestReset() {
+    try {
+      setBusy(true);
+      setError('');
+      setNotice('');
+      const data = await platformApi.requestPasswordReset(email.trim());
+      setNotice(data?.message || 'Si el correo está registrado, te enviamos un enlace.');
+      setMode('sent');
+    } catch (err) {
+      setError(err.message || 'No se pudo enviar el enlace de recuperación.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function backToLogin() {
+    setMode('login');
+    setError('');
+    setNotice('');
+    setPassword('');
   }
 
   return (
@@ -58,60 +68,107 @@ export default function LoginPage({ go }) {
 
         <div className="eyebrow">ACCESO NOVO</div>
 
-        <h2>Entra a tu experiencia NOVO</h2>
+        <h2>
+          {mode === 'login' && 'Entra a tu experiencia NOVO'}
+          {mode === 'forgot' && 'Recuperar contraseña'}
+          {mode === 'sent' && 'Revisa tu correo'}
+        </h2>
 
         <p className="auth-intro">
-          Acceso para partners y Super Admin. Los clientes finales no ingresan aquí.
+          {mode === 'login' && 'Acceso para partners y Super Admin. Los clientes finales no ingresan aquí.'}
+          {mode === 'forgot' && 'Te enviaremos un enlace para crear una nueva contraseña.'}
+          {mode === 'sent' && 'Si el correo está registrado, el enlace llegará en unos minutos. Revisa también spam.'}
         </p>
 
         <div className="login-security">
           <ShieldCheck />
-          <span>Sesión segura Supabase + OAuth HighLevel</span>
+          <span>Sesión segura con Supabase</span>
         </div>
 
         {error && <div className="login-error">{error}</div>}
+        {notice && <div className="login-notice">{notice}</div>}
 
-        <Field label="Correo">
-          <div className="wow-input-wrap">
-            <Mail />
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="correo@empresa.com"
-              autoComplete="email"
-            />
+        {mode !== 'sent' && (
+          <Field label="Correo">
+            <div className="wow-input-wrap">
+              <Mail />
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="correo@empresa.com"
+                autoComplete="email"
+              />
+            </div>
+          </Field>
+        )}
+
+        {mode === 'login' && (
+          <>
+            <div className="login-password-label">
+              <span>Contraseña</span>
+              <button
+                type="button"
+                className="text-link login-forgot-link"
+                onClick={() => {
+                  setMode('forgot');
+                  setError('');
+                  setNotice('');
+                }}
+              >
+                ¿Olvidaste tu contraseña?
+              </button>
+            </div>
+            <Field label="">
+              <div className="wow-input-wrap">
+                <LockKeyhole />
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Tu contraseña"
+                  autoComplete="current-password"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') loginWithPassword();
+                  }}
+                />
+              </div>
+            </Field>
+
+            <Button className="full" onClick={loginWithPassword} disabled={busy}>
+              {busy ? 'Entrando…' : 'Entrar con correo'}
+            </Button>
+          </>
+        )}
+
+        {mode === 'forgot' && (
+          <Button className="full" onClick={requestReset} disabled={busy || !email.trim()}>
+            {busy ? 'Enviando…' : 'Enviar enlace'}
+          </Button>
+        )}
+
+        {mode === 'sent' && (
+          <Button className="full" onClick={backToLogin}>
+            Volver al login
+          </Button>
+        )}
+
+        {mode === 'forgot' && (
+          <div className="login-register-row">
+            <button type="button" className="text-link" onClick={backToLogin}>
+              Volver al login
+            </button>
           </div>
-        </Field>
+        )}
 
-        <Field label="Contraseña">
-          <div className="wow-input-wrap">
-            <LockKeyhole />
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Tu contraseña"
-              autoComplete="current-password"
-            />
+        {mode === 'login' && (
+          <div className="login-register-row">
+            <span>¿Eres partner?</span>
+            <button type="button" className="text-link" onClick={() => go('registro-partner')}>
+              Regístrate aquí
+            </button>
           </div>
-        </Field>
-
-        <Button className="full" onClick={loginWithPassword} disabled={busy}>
-          {busy ? 'Entrando…' : 'Entrar con correo'}
-        </Button>
-
-        <div className="login-divider"><span>o</span></div>
-
-        <Button className="full ghl-login-btn" variant="ghost" onClick={loginWithGhl} disabled={busy}>
-          <PlugZap size={18} />
-          Continuar con HighLevel
-        </Button>
-
-        <p className="auth-intro" style={{ marginTop: 16 }}>
-          ¿Eres partner?{' '}
-          <button type="button" className="text-link" onClick={() => go('registro-partner')}>Regístrate aquí</button>
-        </p>
+        )}
       </div>
     </div>
   );

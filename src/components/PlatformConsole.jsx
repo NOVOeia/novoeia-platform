@@ -303,6 +303,27 @@ function AdminPartners({ go }) {
     }
   }
 
+  async function sendPasswordReset(partner, owner) {
+    const email = owner?.email;
+    if (!email) {
+      setNotice({ type: 'error', text: 'Este partner no tiene un correo de owner vinculado.' });
+      return;
+    }
+    if (!window.confirm(`¿Enviar correo de recuperación de contraseña a ${email}?`)) return;
+    try {
+      setBusy(true);
+      const data = await platformApi.sendPartnerPasswordReset(partner.id);
+      setNotice({
+        type: 'success',
+        text: `Correo de recuperación enviado a ${data?.to || email}.`,
+      });
+    } catch (e) {
+      setNotice({ type: 'error', text: e.message });
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function openEdit(p) {
     setForm({ name: p.name, slug: p.slug, plan_name: p.plan_name || 'partner', status: p.status || 'pending' });
     setSelected(p); setEditMode(true); setShowForm(true);
@@ -426,8 +447,16 @@ function AdminPartners({ go }) {
                             <Info label="Creado" value={new Date(p.created_at).toLocaleDateString()} />
                           </div>
                           <AdminPartnerOffers partnerId={p.id} partnerName={p.name} />
-                          <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+                          <div style={{ display: 'flex', gap: 10, marginTop: 16, flexWrap: 'wrap' }}>
                             <button className="novo-btn novo-btn-primary" onClick={() => openEdit(p)}><Edit2 size={13} /> Editar partner</button>
+                            <button
+                              className="novo-btn novo-btn-secondary"
+                              onClick={() => sendPasswordReset(p, owner)}
+                              disabled={busy || !owner?.email}
+                              title={owner?.email ? `Enviar recuperación a ${owner.email}` : 'Sin correo de owner'}
+                            >
+                              <KeyRound size={13} /> Enviar recuperación
+                            </button>
                             <button
                               className="novo-btn novo-btn-secondary"
                               onClick={() => openPartnerPanel(p)}
@@ -1038,7 +1067,20 @@ function AdminProducts() {
   const [editItem, setEditItem] = useState(null);
   const [notice, setNotice] = useState(null);
   const [busy, setBusy] = useState(false);
-  const [form, setForm] = useState({ name: '', description: '', wholesalePrice: '', suggestedPrice: '', interval: 'month', stripeProductId: '', stripePriceId: '', ghlProductId: '', ghlPriceId: '', active: true });
+  const emptyForm = {
+    name: '',
+    description: '',
+    includes: '',
+    wholesalePrice: '',
+    suggestedPrice: '',
+    interval: 'month',
+    stripeProductId: '',
+    stripePriceId: '',
+    ghlProductId: '',
+    ghlPriceId: '',
+    active: true,
+  };
+  const [form, setForm] = useState(emptyForm);
 
   const load = useCallback(async () => {
     try { setLoading(true); const data = await platformApi.listCatalogProducts(); setProducts(data?.products || []); }
@@ -1049,7 +1091,19 @@ function AdminProducts() {
   useEffect(() => { load(); }, [load]);
 
   function openEdit(p) {
-    setForm({ name: p.name, description: p.description || '', wholesalePrice: p.wholesale_price, suggestedPrice: p.suggested_price || '', interval: p.interval || 'month', stripeProductId: p.stripe_product_id || '', stripePriceId: p.stripe_price_id || '', ghlProductId: p.ghl_product_id || '', ghlPriceId: p.ghl_price_id || '', active: p.active !== false });
+    setForm({
+      name: p.name,
+      description: p.description || '',
+      includes: p.includes || '',
+      wholesalePrice: p.wholesale_price,
+      suggestedPrice: p.suggested_price || '',
+      interval: p.interval || 'month',
+      stripeProductId: p.stripe_product_id || '',
+      stripePriceId: p.stripe_price_id || '',
+      ghlProductId: p.ghl_product_id || '',
+      ghlPriceId: p.ghl_price_id || '',
+      active: p.active !== false,
+    });
     setEditItem(p); setShowForm(true);
   }
 
@@ -1067,7 +1121,7 @@ function AdminProducts() {
     <div className="novo-page">
       <div className="novo-page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div><span className="kicker">CATÁLOGO</span><h1>Productos</h1><p>Catálogo central conectado con Stripe y GHL SaaS.</p></div>
-        <button className="novo-btn novo-btn-primary" onClick={() => { setForm({ name: '', description: '', wholesalePrice: '', suggestedPrice: '', interval: 'month', stripeProductId: '', stripePriceId: '', ghlProductId: '', ghlPriceId: '', active: true }); setEditItem(null); setShowForm(true); }}><Plus size={15} /> Nuevo producto</button>
+        <button className="novo-btn novo-btn-primary" onClick={() => { setForm(emptyForm); setEditItem(null); setShowForm(true); }}><Plus size={15} /> Nuevo producto</button>
       </div>
       {notice && <Notice {...notice} onClose={() => setNotice(null)} />}
       {showForm && (
@@ -1078,9 +1132,6 @@ function AdminProducts() {
           </div>
           <div className="novo-grid-2">
             <NField label="Nombre" value={form.name} onChange={v => setForm({ ...form, name: v })} />
-            <NField label="Descripción" value={form.description} onChange={v => setForm({ ...form, description: v })} />
-            <NField label="Costo mayorista (USD)" type="number" value={form.wholesalePrice} onChange={v => setForm({ ...form, wholesalePrice: v })} />
-            <NField label="Precio sugerido (USD)" type="number" value={form.suggestedPrice} onChange={v => setForm({ ...form, suggestedPrice: v })} />
             <div className="novo-field">
               <label>Intervalo</label>
               <select value={form.interval} onChange={e => setForm({ ...form, interval: e.target.value })}>
@@ -1088,6 +1139,31 @@ function AdminProducts() {
                 <option value="year">Anual</option>
               </select>
             </div>
+            <div className="novo-field" style={{ gridColumn: '1 / -1' }}>
+              <label>Descripción del producto</label>
+              <textarea
+                rows={3}
+                value={form.description}
+                onChange={e => setForm({ ...form, description: e.target.value })}
+                placeholder="Resumen del plan para el partner"
+                style={{ width: '100%', resize: 'vertical', background: 'var(--novo-card-hover)', border: '1px solid var(--novo-border)', borderRadius: 8, padding: '10px 12px', color: 'var(--novo-text)', fontSize: 13, outline: 'none' }}
+              />
+            </div>
+            <div className="novo-field" style={{ gridColumn: '1 / -1' }}>
+              <label>Qué incluye</label>
+              <textarea
+                rows={5}
+                value={form.includes}
+                onChange={e => setForm({ ...form, includes: e.target.value })}
+                placeholder={'Un ítem por línea, por ejemplo:\nSubcuenta GoHighLevel\nAutomatizaciones incluidas\nSoporte prioritario'}
+                style={{ width: '100%', resize: 'vertical', background: 'var(--novo-card-hover)', border: '1px solid var(--novo-border)', borderRadius: 8, padding: '10px 12px', color: 'var(--novo-text)', fontSize: 13, outline: 'none', fontFamily: 'inherit' }}
+              />
+              <small style={{ color: 'var(--novo-muted)', display: 'block', marginTop: 6 }}>
+                Visible para el partner. Escribe un beneficio o característica por línea.
+              </small>
+            </div>
+            <NField label="Costo mayorista (USD)" type="number" value={form.wholesalePrice} onChange={v => setForm({ ...form, wholesalePrice: v })} />
+            <NField label="Precio sugerido (USD)" type="number" value={form.suggestedPrice} onChange={v => setForm({ ...form, suggestedPrice: v })} />
             <div className="novo-field">
               <label>Estado</label>
               <select value={String(form.active)} onChange={e => setForm({ ...form, active: e.target.value === 'true' })}>
@@ -1120,9 +1196,15 @@ function AdminProducts() {
           <table className="novo-table">
             <thead><tr><th>Producto</th><th>Intervalo</th><th>Mayorista</th><th>Sugerido</th><th>Stripe</th><th>GHL</th><th>Estado</th><th>Acciones</th></tr></thead>
             <tbody>
-              {products.map(p => (
+              {products.map(p => {
+                const includeCount = String(p.includes || '').split('\n').map((line) => line.trim()).filter(Boolean).length;
+                return (
                 <tr key={p.id}>
-                  <td><strong style={{ color: 'var(--novo-text)' }}>{p.name}</strong>{p.description && <><br /><small style={{ color: 'var(--novo-muted)', fontSize: 11 }}>{p.description}</small></>}</td>
+                  <td>
+                    <strong style={{ color: 'var(--novo-text)' }}>{p.name}</strong>
+                    {p.description && <><br /><small style={{ color: 'var(--novo-muted)', fontSize: 11 }}>{p.description}</small></>}
+                    {includeCount > 0 && <><br /><small style={{ color: 'var(--novo-purple)', fontSize: 11 }}>{includeCount} ítems incluidos</small></>}
+                  </td>
                   <td style={{ textTransform: 'capitalize' }}>{p.interval}</td>
                   <td><span style={{ color: 'var(--novo-success)', fontWeight: 600 }}>${p.wholesale_price}</span></td>
                   <td><span style={{ color: 'var(--novo-purple)' }}>${p.suggested_price || '—'}</span></td>
@@ -1139,7 +1221,8 @@ function AdminProducts() {
                   <td><Badge status={p.active ? 'active' : 'inactive'} /></td>
                   <td><button className="novo-btn novo-btn-ghost" style={{ padding: '4px 10px', fontSize: 11 }} onClick={() => openEdit(p)}><Edit2 size={12} /> Editar</button></td>
                 </tr>
-              ))}
+              );
+              })}
             </tbody>
           </table>
         )}
@@ -3199,12 +3282,28 @@ function PartnerDashboard() {
           <div className="novo-card-header"><div className="novo-card-title">Productos disponibles</div></div>
           {loading && <div className="novo-empty">Cargando…</div>}
           {!loading && catalog.length === 0 && <div className="novo-empty">El Super Admin aún no ha publicado productos.</div>}
-          {!loading && catalog.map(p => (
-            <div key={p.id} className="status-row">
-              <span style={{ color: 'var(--novo-text)', fontWeight: 500 }}>{p.name}</span>
-              <span style={{ color: 'var(--novo-success)', fontSize: 13 }}>${p.wholesale_price}/{p.interval}</span>
-            </div>
-          ))}
+          {!loading && catalog.map(p => {
+            const includes = String(p.includes || '')
+              .split('\n')
+              .map((line) => line.trim())
+              .filter(Boolean);
+            return (
+              <div key={p.id} className="status-row" style={{ alignItems: 'flex-start', flexDirection: 'column', gap: 6 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', gap: 12 }}>
+                  <span style={{ color: 'var(--novo-text)', fontWeight: 500 }}>{p.name}</span>
+                  <span style={{ color: 'var(--novo-success)', fontSize: 13, whiteSpace: 'nowrap' }}>${p.wholesale_price}/{p.interval}</span>
+                </div>
+                {p.description && (
+                  <div style={{ fontSize: 12, color: 'var(--novo-muted)', lineHeight: 1.4 }}>{p.description}</div>
+                )}
+                {includes.length > 0 && (
+                  <ul style={{ margin: 0, paddingLeft: 16, color: 'var(--novo-muted)', fontSize: 12, lineHeight: 1.45 }}>
+                    {includes.slice(0, 4).map((item) => <li key={item}>{item}</li>)}
+                  </ul>
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>
@@ -3589,6 +3688,30 @@ function PartnerProductServices({ onNavigate }) {
                       <div style={{ fontSize: 12, color: 'var(--novo-muted)', textTransform: 'capitalize' }}>
                         {product.billingType} · {product.interval}
                       </div>
+                      {product.catalogDescription && (
+                        <p style={{ margin: '8px 0 0', fontSize: 13, color: 'var(--novo-text)', lineHeight: 1.45 }}>
+                          {product.catalogDescription}
+                        </p>
+                      )}
+                      {(() => {
+                        const includes = String(product.catalogIncludes || '')
+                          .split('\n')
+                          .map((line) => line.trim())
+                          .filter(Boolean);
+                        if (!includes.length) return null;
+                        return (
+                          <ul style={{ margin: '10px 0 0', paddingLeft: 18, color: 'var(--novo-muted)', fontSize: 12, lineHeight: 1.5 }}>
+                            {includes.slice(0, expanded ? includes.length : 3).map((item) => (
+                              <li key={item}>{item}</li>
+                            ))}
+                            {!expanded && includes.length > 3 && (
+                              <li style={{ listStyle: 'none', marginLeft: -18, color: 'var(--novo-purple)' }}>
+                                +{includes.length - 3} más
+                              </li>
+                            )}
+                          </ul>
+                        );
+                      })()}
                       {product.published ? (
                         <span style={{ display: 'inline-block', marginTop: 8, fontSize: 11, color: 'var(--novo-success)' }}>Publicado en tu landing</span>
                       ) : (
@@ -3628,6 +3751,35 @@ function PartnerProductServices({ onNavigate }) {
 
                   {expanded && (
                     <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--novo-border)' }}>
+                      {(product.catalogDescription || product.catalogIncludes) && (
+                        <div
+                          style={{
+                            marginBottom: 14,
+                            padding: 12,
+                            borderRadius: 10,
+                            background: 'rgba(37,99,235,.06)',
+                            border: '1px solid rgba(37,99,235,.14)',
+                          }}
+                        >
+                          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--novo-info)', letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: 6 }}>
+                            Info del catálogo NOVO
+                          </div>
+                          {product.catalogDescription && (
+                            <p style={{ margin: '0 0 8px', fontSize: 13, color: 'var(--novo-text)', lineHeight: 1.45 }}>
+                              {product.catalogDescription}
+                            </p>
+                          )}
+                          {String(product.catalogIncludes || '').trim() && (
+                            <ul style={{ margin: 0, paddingLeft: 18, color: 'var(--novo-muted)', fontSize: 12, lineHeight: 1.5 }}>
+                              {String(product.catalogIncludes)
+                                .split('\n')
+                                .map((line) => line.trim())
+                                .filter(Boolean)
+                                .map((item) => <li key={item}>{item}</li>)}
+                            </ul>
+                          )}
+                        </div>
+                      )}
                       <div className="novo-grid-2" style={{ marginBottom: 12 }}>
                         <NField
                           label="Nombre público *"

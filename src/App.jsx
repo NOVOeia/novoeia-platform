@@ -5,6 +5,7 @@ import PartnersPage from './pages/PartnersPage.jsx';
 import WebsPage from './pages/WebsPage.jsx';
 import RegistrationPage from './pages/RegistrationPage.jsx';
 import LoginPage from './pages/LoginPage.jsx';
+import ResetPasswordPage from './pages/ResetPasswordPage.jsx';
 import GhlCallbackPage from './pages/GhlCallbackPage.jsx';
 import ClientInterestPage from './pages/ClientInterestPage.jsx';
 import CheckoutPage from './pages/CheckoutPage.jsx';
@@ -12,9 +13,23 @@ import PartnerLandingPage from './pages/PartnerLandingPage.jsx';
 import PartnerCheckoutPage from './pages/PartnerCheckoutPage.jsx';
 import AppShell from './dashboards/AppShell.jsx';
 import { platformApi } from './lib/platformApi.js';
+import { supabase } from './lib/supabase.js';
 
 function parseRoute() {
   const hashBody = location.hash.slice(1) || 'home';
+  // Supabase recovery/session tokens arrive in the hash; ignore them for routing.
+  if (
+    hashBody.startsWith('access_token=')
+    || hashBody.includes('type=recovery')
+    || hashBody.startsWith('error=')
+  ) {
+    return {
+      page: 'reset-password',
+      section: null,
+      slug: null,
+      productId: null,
+    };
+  }
   const hashPath = hashBody.split('?')[0];
   const parts = hashPath.split('/').filter(Boolean);
   const page = parts[0];
@@ -139,6 +154,19 @@ export default function App() {
   };
 
   useEffect(() => {
+    const { data } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setPage('reset-password');
+        setSection(null);
+        setLandingSlug(null);
+        setCheckoutProductId(null);
+        location.hash = 'reset-password';
+      }
+    });
+    return () => data.subscription.unsubscribe();
+  }, []);
+
+  useEffect(() => {
     const onHashChange = () => {
       const route = parseRoute();
       setPage(route.page);
@@ -207,6 +235,7 @@ export default function App() {
     if (page === 'webs') return <WebsPage go={go} />;
     if (page === 'registro-cliente') return <ClientInterestPage go={go} />;
     if (page === 'login') return <LoginPage go={go} />;
+    if (page === 'reset-password') return <ResetPasswordPage go={go} />;
     if (page === 'checkout') {
       return (
         <CheckoutPage

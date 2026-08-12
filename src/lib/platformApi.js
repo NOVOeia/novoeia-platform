@@ -155,6 +155,30 @@ const ERROR_HINTS = {
   PUBLIC_APP_URL_NOT_CONFIGURED:
     'Falta la URL pública de la app. Configúrala en Super Admin → Configuración → App y Webhooks.',
 
+  RESET_EMAIL_REQUIRED:
+    'Indica el correo con el que te registraste.',
+
+  PASSWORD_RESET_EMAIL_FAILED:
+    'No se pudo enviar el correo de recuperación. Revisa la configuración de envío en Super Admin.',
+
+  PASSWORD_TOO_SHORT:
+    'La contraseña debe tener al menos 8 caracteres.',
+
+  PARTNER_REQUIRED:
+    'Indica el partner.',
+
+  PARTNER_NOT_FOUND:
+    'No se encontró el partner.',
+
+  PARTNER_OWNER_EMAIL_MISSING:
+    'Este partner no tiene un correo de owner vinculado.',
+
+  PASSWORD_RESET_LINK_FAILED:
+    'No se pudo generar el enlace de recuperación. Verifica que el correo exista en Auth.',
+
+  EMAIL_NOT_CONFIGURED:
+    'El correo de la plataforma no está configurado. Revisa Super Admin → Configuración → Correo.',
+
   STRIPE_PRODUCT_NOT_CONFIGURED:
     'El producto no tiene stripe_product_id.',
 
@@ -955,6 +979,13 @@ export const platformApi = {
     });
   },
 
+  sendPartnerPasswordReset(partnerId) {
+    return invoke('platform-admin', {
+      action: 'sendPartnerPasswordReset',
+      payload: { partnerId },
+    });
+  },
+
   listCatalog() {
     return invoke('partner-commerce', {
       action: 'listCatalog',
@@ -999,6 +1030,9 @@ export const platformApi = {
       name: payload.name,
       description:
         payload.description || null,
+
+      includes:
+        payload.includes || null,
 
       wholesale_price:
         Number(payload.wholesalePrice),
@@ -1082,7 +1116,7 @@ export const platformApi = {
     const [productsResult, offersResult] = await Promise.all([
       supabase
         .from('catalog_products')
-        .select('id, name, description, wholesale_price, suggested_price, currency, interval, ghl_product_id, ghl_price_id, active')
+        .select('id, name, description, includes, wholesale_price, suggested_price, currency, interval, ghl_product_id, ghl_price_id, active')
         .order('name'),
       supabase
         .from('partner_offers')
@@ -2182,6 +2216,26 @@ export const platformApi = {
       session: data.session,
       profile,
     };
+  },
+
+  requestPasswordReset(email) {
+    return invoke('auth-register', {
+      action: 'requestPasswordReset',
+      payload: { email },
+    });
+  },
+
+  async updatePassword(password) {
+    const next = String(password || '');
+    if (next.length < 8) {
+      throw new Error(ERROR_HINTS.PASSWORD_TOO_SHORT);
+    }
+
+    const { data, error } = await supabase.auth.updateUser({
+      password: next,
+    });
+    if (error) throw error;
+    return { user: data.user };
   },
 
   registerAccount(payload) {
