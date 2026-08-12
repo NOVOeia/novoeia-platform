@@ -1,6 +1,6 @@
 import { adminClient, corsHeaders, handleError, json, loadSuperAdminEmails } from '../_shared/core.ts';
 import { createPartnerAccount } from '../_shared/partner-account.ts';
-import { forceActionLinkRedirect, loadPlatformAppUrl, resolvePasswordResetAppUrl, sendTemplatedEmail } from '../_shared/email-templates.ts';
+import { buildAppPasswordResetUrl, forceActionLinkRedirect, loadPlatformAppUrl, resolvePasswordResetAppUrl, sendTemplatedEmail } from '../_shared/email-templates.ts';
 
 async function verifyPassword(email: string, password: string) {
   const url = Deno.env.get('SUPABASE_URL');
@@ -29,6 +29,13 @@ async function findUserIdByEmail(supabase: ReturnType<typeof adminClient>, email
 
 function withForcedRedirect(actionLink: string, appUrl: string) {
   return forceActionLinkRedirect(actionLink, appUrl);
+}
+
+function buildResetUrl(appUrl: string, linkData: { properties?: Record<string, unknown> | null }) {
+  const hashedToken = String(linkData?.properties?.hashed_token || '').trim();
+  if (hashedToken) return buildAppPasswordResetUrl(appUrl, hashedToken);
+  // Fallback for older GoTrue responses.
+  return withForcedRedirect(String(linkData?.properties?.action_link || ''), appUrl);
 }
 
 Deno.serve(async (req) => {
@@ -95,12 +102,7 @@ Deno.serve(async (req) => {
         return okResponse;
       }
 
-      // GoTrue may rewrite redirect_to to Site URL if the target is not allowlisted.
-      // Force the intended app origin before emailing the link.
-      const resetUrl = withForcedRedirect(
-        String(linkData.properties.action_link),
-        appUrl,
-      );
+      const resetUrl = buildResetUrl(appUrl, linkData);
 
       const { data: profile } = await supabase
         .from('profiles')
