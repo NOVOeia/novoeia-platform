@@ -8,6 +8,7 @@ import {
   listEmailTemplatesForAdmin,
   resolvePasswordResetAppUrl,
   forceActionLinkRedirect,
+  buildAppPasswordResetUrl,
   sendTemplatedEmail,
   trySendTemplatedEmail,
 } from '../_shared/email-templates.ts';
@@ -314,10 +315,10 @@ Deno.serve(async (req) => {
         throw new Error('PASSWORD_RESET_LINK_FAILED');
       }
 
-      const resetUrl = forceActionLinkRedirect(
-        String(linkData.properties.action_link),
-        appUrl,
-      );
+      const hashedToken = String(linkData.properties?.hashed_token || '').trim();
+      const resetUrl = hashedToken
+        ? buildAppPasswordResetUrl(appUrl, hashedToken)
+        : forceActionLinkRedirect(String(linkData.properties.action_link), appUrl);
 
       await sendTemplatedEmail(supabase, 'password_reset', {
         to: email,

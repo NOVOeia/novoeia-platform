@@ -9,6 +9,26 @@ import { platformApi } from '../lib/platformApi.js';
 import { supabase } from '../lib/supabase.js';
 import '../styles/site-wow.css';
 
+function readHashParams() {
+  const hashBody = location.hash.slice(1) || '';
+  const query = hashBody.includes('?')
+    ? hashBody.split('?').slice(1).join('?')
+    : (hashBody.includes('=') ? hashBody : '');
+  return new URLSearchParams(query);
+}
+
+function recoveryErrorMessage(params) {
+  const code = params.get('error_code') || '';
+  const description = decodeURIComponent(params.get('error_description') || '').replace(/\+/g, ' ');
+  if (code === 'otp_expired' || /expired|invalid/i.test(description)) {
+    return 'El enlace ya no es válido o expiró (a veces el correo lo abre automáticamente). Solicita uno nuevo desde el login.';
+  }
+  if (params.get('error')) {
+    return description || 'No se pudo validar el enlace de recuperación.';
+  }
+  return '';
+}
+
 export default function ResetPasswordPage({ go }) {
   const [ready, setReady] = useState(false);
   const [password, setPassword] = useState('');
@@ -21,6 +41,41 @@ export default function ResetPasswordPage({ go }) {
     let cancelled = false;
 
     (async () => {
+      const params = readHashParams();
+      const hashError = recoveryErrorMessage(params);
+      if (hashError) {
+        if (!cancelled) {
+          setError(hashError);
+          setReady(false);
+        }
+        return;
+      }
+
+      const tokenHash = params.get('token_hash');
+      const type = params.get('type') || 'recovery';
+
+      if (tokenHash) {
+        const { error: verifyError } = await supabase.auth.verifyOtp({
+          token_hash: tokenHash,
+          type,
+        });
+        if (cancelled) return;
+        if (verifyError) {
+          setError(
+            /expired|invalid/i.test(verifyError.message || '')
+              ? 'El enlace ya no es válido o expiró. Solicita uno nuevo desde el login.'
+              : (verifyError.message || 'No se pudo validar el enlace de recuperación.'),
+          );
+          setReady(false);
+          return;
+        }
+        // Avoid re-consuming the token on refresh.
+        location.hash = 'reset-password';
+        setReady(true);
+        setError('');
+        return;
+      }
+
       const { data } = await supabase.auth.getSession();
       if (cancelled) return;
       if (!data.session) {

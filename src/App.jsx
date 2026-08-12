@@ -160,7 +160,10 @@ export default function App() {
         setSection(null);
         setLandingSlug(null);
         setCheckoutProductId(null);
-        location.hash = 'reset-password';
+        // Keep token_hash query until ResetPasswordPage consumes it.
+        if (!location.hash.includes('token_hash=')) {
+          location.hash = 'reset-password';
+        }
       }
     });
     return () => data.subscription.unsubscribe();

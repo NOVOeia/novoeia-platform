@@ -360,6 +360,17 @@ export function forceActionLinkRedirect(actionLink: string, appUrl: string) {
   }
 }
 
+/**
+ * App-hosted recovery URL. Avoids Supabase /auth/v1/verify (Site URL / email scanners).
+ * The SPA verifies with verifyOtp({ token_hash, type: 'recovery' }).
+ */
+export function buildAppPasswordResetUrl(appUrl: string, hashedToken: string) {
+  const origin = normalizeAppOrigin(appUrl) || PRODUCTION_APP_ORIGIN;
+  const token = String(hashedToken || '').trim();
+  if (!token) return `${origin}/#reset-password`;
+  return `${origin}/#reset-password?token_hash=${encodeURIComponent(token)}&type=recovery`;
+}
+
 export async function sendTemplatedEmail(
   supabase: SupabaseAdmin,
   templateId: EmailTemplateId | string,
