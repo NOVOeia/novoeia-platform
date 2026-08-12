@@ -1,5 +1,6 @@
 import { adminClient, corsHeaders, handleError, json, loadSuperAdminEmails } from '../_shared/core.ts';
 import { createPartnerAccount } from '../_shared/partner-account.ts';
+import { loadPlatformAppUrl, sendTemplatedEmail } from '../_shared/email-templates.ts';
 
 async function verifyPassword(email: string, password: string) {
   const url = Deno.env.get('SUPABASE_URL');
@@ -55,6 +56,70 @@ Deno.serve(async (req) => {
       if (profileError) throw new Error(`PROFILE_SYNC:${profileError.message}`);
 
       return json({ ok: true, promoted: true, role: 'super_admin' });
+    }
+
+    if (action === 'requestPasswordReset') {
+      const email = String(payload.email || '').trim().toLowerCase();
+      if (!email || !email.includes('@')) throw new Error('RESET_EMAIL_REQUIRED');
+
+      const supabase = adminClient();
+      const appUrl = await loadPlatformAppUrl(supabase);
+      if (!appUrl) throw new Error('PUBLIC_APP_URL_NOT_CONFIGURED');
+
+      const okResponse = json({
+        ok: true,
+        message: 'Si el correo está registrado, te enviamos un enlace para restablecer la contraseña.',
+      });
+
+      const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
+        type: 'recovery',
+        email,
+        options: {
+          redirectTo: `${appUrl}/#reset-password`,
+        },
+      });
+
+      if (linkError || !linkData?.properties?.action_link) {
+        console.error('[auth-register] password reset link', linkError);
+        return okResponse;
+      }
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('full_name, email')
+        .eq('id', linkData.user?.id || '')
+        .maybeSingle();
+
+      const fullName = profile?.full_name
+        || linkData.user?.user_metadata?.full_name
+        || email.split('@')[0]
+        || 'Usuario';
+
+      try {
+        await sendTemplatedEmail(supabase, 'password_reset', {
+          to: email,
+          force: true,
+          variables: {
+            fullName: String(fullName),
+            email,
+            resetUrl: String(linkData.properties.action_link),
+            expiresIn: '60 minutos',
+          },
+        });
+      } catch (sendError) {
+        console.error('[auth-register] password reset email', sendError);
+        throw new Error('PASSWORD_RESET_EMAIL_FAILED');
+      }
+
+      await supabase.from('audit_logs').insert({
+        actor_user_id: linkData.user?.id || null,
+        action: 'auth.password_reset_requested',
+        entity_type: 'profile',
+        entity_id: linkData.user?.id || null,
+        metadata: { email },
+      });
+
+      return okResponse;
     }
 
     if (action !== 'register') throw new Error('UNKNOWN_ACTION');

@@ -43,6 +43,53 @@
 @keyframes ghlSpin{to{transform:rotate(360deg)}}
 .text-link{border:0;background:transparent;padding:0;color:#7eb8ff;cursor:pointer;text-decoration:underline}
 .text-link:hover{color:#a8d0ff}
+.login-register-row{
+  margin-top:22px;
+  padding-top:18px;
+  border-top:1px solid rgba(255,255,255,.08);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  flex-wrap:wrap;
+  color:#8b95a8;
+  font-size:13px;
+  line-height:1.4;
+}
+.login-register-row .text-link{
+  text-decoration:none;
+  font-weight:600;
+  color:#9ec5ff;
+}
+.login-register-row .text-link:hover{
+  color:#c4dcff;
+  text-decoration:underline;
+}
+.login-password-label{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  margin:0 0 8px;
+  color:#a9b4c7;
+  font-size:13px;
+}
+.login-forgot-link{
+  font-size:12px;
+  text-decoration:none;
+  white-space:nowrap;
+}
+.login-notice{
+  margin-bottom:14px;
+  padding:12px 14px;
+  border:1px solid rgba(94,180,255,.28);
+  border-radius:12px;
+  background:rgba(70,140,255,.08);
+  color:#b7d6ff;
+  font-size:13px;
+  line-height:1.45;
+}
+.wow-login-card .field > span:empty{display:none}
 .client-interest-points{margin:22px 0;display:grid;gap:12px;color:#93a6bb;font-size:13px}
 .client-interest-points div{display:flex;align-items:center;gap:10px}
 .client-interest-points svg{color:#6fdb9b;flex-shrink:0}

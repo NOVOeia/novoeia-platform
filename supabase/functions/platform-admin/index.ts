@@ -3,6 +3,7 @@ import { createPartnerAccount } from '../_shared/partner-account.ts';
 import { isEmailConfigReady, loadEmailConfig, sendPlatformEmail } from '../_shared/email.ts';
 import {
   EMAIL_TEMPLATE_CATALOG,
+  loadPlatformAppUrl,
   loadStoredEmailTemplateConfig,
   listEmailTemplatesForAdmin,
   sendTemplatedEmail,
@@ -246,6 +247,89 @@ Deno.serve(async (req) => {
       });
 
       return json({ partner: data });
+    }
+
+    if (action === 'sendPartnerPasswordReset') {
+      const partnerId = String(payload.partnerId || '').trim();
+      if (!partnerId) throw new Error('PARTNER_REQUIRED');
+
+      const { data: partner, error: partnerError } = await supabase
+        .from('partners')
+        .select('id, name, owner_user_id, branding')
+        .eq('id', partnerId)
+        .maybeSingle();
+      if (partnerError) throw partnerError;
+      if (!partner) throw new Error('PARTNER_NOT_FOUND');
+
+      let email = '';
+      let fullName = partner.name || 'Partner';
+
+      if (partner.owner_user_id) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('email, full_name')
+          .eq('id', partner.owner_user_id)
+          .maybeSingle();
+        email = String(profile?.email || '').trim().toLowerCase();
+        fullName = profile?.full_name || fullName;
+      }
+
+      if (!email) {
+        const branding = (partner.branding || {}) as Record<string, unknown>;
+        const brand = (branding.brand || {}) as Record<string, unknown>;
+        email = String(
+          branding.contactEmail
+          || brand.supportEmail
+          || '',
+        ).trim().toLowerCase();
+      }
+
+      if (!email || !email.includes('@')) {
+        throw new Error('PARTNER_OWNER_EMAIL_MISSING');
+      }
+
+      const appUrl = await loadPlatformAppUrl(supabase);
+      if (!appUrl) throw new Error('PUBLIC_APP_URL_NOT_CONFIGURED');
+
+      const emailConfig = await loadEmailConfig(supabase);
+      if (!isEmailConfigReady(emailConfig)) throw new Error('EMAIL_NOT_CONFIGURED');
+
+      const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
+        type: 'recovery',
+        email,
+        options: {
+          redirectTo: `${appUrl}/#reset-password`,
+        },
+      });
+
+      if (linkError || !linkData?.properties?.action_link) {
+        console.error('[platform-admin] partner password reset link', linkError);
+        throw new Error('PASSWORD_RESET_LINK_FAILED');
+      }
+
+      await sendTemplatedEmail(supabase, 'password_reset', {
+        to: email,
+        force: true,
+        variables: {
+          fullName: String(fullName),
+          email,
+          resetUrl: String(linkData.properties.action_link),
+          expiresIn: '60 minutos',
+        },
+      });
+
+      await supabase.from('audit_logs').insert({
+        actor_user_id: user.id,
+        action: 'partner.password_reset_sent',
+        entity_type: 'partner',
+        entity_id: partnerId,
+        metadata: {
+          email,
+          ownerUserId: partner.owner_user_id || null,
+        },
+      });
+
+      return json({ ok: true, to: email, partnerId });
     }
 
     if (action === 'getIntegrationSettings') {

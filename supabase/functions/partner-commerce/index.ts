@@ -153,6 +153,7 @@ Deno.serve(async (req) => {
           id: product.id,
           catalogName: product.name,
           catalogDescription: product.description,
+          catalogIncludes: product.includes || '',
           wholesalePrice: product.wholesale_price,
           suggestedPrice: product.suggested_price,
           currency: product.currency,
