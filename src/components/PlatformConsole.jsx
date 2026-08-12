@@ -3536,8 +3536,8 @@ function PartnerProductServices({ onNavigate }) {
         const next = {};
         rows.forEach(product => {
           next[product.id] = {
-            displayName: product.displayName || '',
-            displayDescription: product.displayDescription || '',
+            displayName: product.displayName || product.catalogName || '',
+            displayDescription: product.displayDescription || product.catalogDescription || '',
             retailPrice: product.retailPrice != null ? String(product.retailPrice) : '',
           };
         });
@@ -3588,6 +3588,7 @@ function PartnerProductServices({ onNavigate }) {
       });
       setNotice({ type: 'success', text: `Producto "${draft.displayName.trim()}" guardado.` });
       notifyPartnerCatalogUpdated({ source: 'product', productId: product.id });
+      setExpandedProductId(null);
       await load();
     } catch (error) {
       setNotice({ type: 'error', text: error.message });
@@ -3753,14 +3754,16 @@ function PartnerProductServices({ onNavigate }) {
                   </div>
 
                   <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
-                    <button
-                      type="button"
-                      className="novo-btn novo-btn-ghost"
-                      style={{ padding: '4px 10px', fontSize: 11 }}
-                      onClick={() => setExpandedProductId(expanded ? null : product.id)}
-                    >
-                      <Edit2 size={12} /> {expanded ? 'Cerrar' : 'Editar producto'}
-                    </button>
+                    {!expanded && (
+                      <button
+                        type="button"
+                        className="novo-btn novo-btn-ghost"
+                        style={{ padding: '4px 10px', fontSize: 11 }}
+                        onClick={() => setExpandedProductId(product.id)}
+                      >
+                        <Edit2 size={12} /> Editar producto
+                      </button>
+                    )}
                     {product.published && onNavigate && (
                       <button
                         type="button"
@@ -3775,39 +3778,10 @@ function PartnerProductServices({ onNavigate }) {
 
                   {expanded && (
                     <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--novo-border)' }}>
-                      {(product.catalogDescription || product.catalogIncludes) && (
-                        <div
-                          style={{
-                            marginBottom: 14,
-                            padding: 12,
-                            borderRadius: 10,
-                            background: 'rgba(37,99,235,.06)',
-                            border: '1px solid rgba(37,99,235,.14)',
-                          }}
-                        >
-                          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--novo-info)', letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: 6 }}>
-                            Info del catálogo NOVO
-                          </div>
-                          {product.catalogDescription && (
-                            <p style={{ margin: '0 0 8px', fontSize: 13, color: 'var(--novo-text)', lineHeight: 1.45 }}>
-                              {product.catalogDescription}
-                            </p>
-                          )}
-                          {String(product.catalogIncludes || '').trim() && (
-                            <ul style={{ margin: 0, paddingLeft: 18, color: 'var(--novo-muted)', fontSize: 12, lineHeight: 1.5 }}>
-                              {String(product.catalogIncludes)
-                                .split('\n')
-                                .map((line) => line.trim())
-                                .filter(Boolean)
-                                .map((item) => <li key={item}>{item}</li>)}
-                            </ul>
-                          )}
-                        </div>
-                      )}
                       <div className="novo-grid-2" style={{ marginBottom: 12 }}>
                         <NField
                           label="Nombre público *"
-                          value={draft.displayName || ''}
+                          value={draft.displayName ?? product.catalogName ?? ''}
                           onChange={value => updateDraft(product.id, 'displayName', value)}
                         />
                         <NField
@@ -3821,8 +3795,9 @@ function PartnerProductServices({ onNavigate }) {
                         <label>Descripción pública</label>
                         <textarea
                           rows={3}
-                          value={draft.displayDescription || ''}
+                          value={draft.displayDescription ?? product.catalogDescription ?? ''}
                           onChange={event => updateDraft(product.id, 'displayDescription', event.target.value)}
+                          placeholder={product.catalogDescription || 'Descripción que verá el cliente'}
                           style={{ width: '100%', resize: 'vertical', background: 'var(--novo-card-hover)', border: '1px solid var(--novo-border)', borderRadius: 8, padding: '10px 12px', color: 'var(--novo-text)', fontSize: 13, outline: 'none' }}
                         />
                       </div>
@@ -3835,15 +3810,26 @@ function PartnerProductServices({ onNavigate }) {
                           tone={Number(draft.retailPrice || 0) >= Number(product.wholesalePrice || 0) ? 'success' : 'danger'}
                         />
                       </div>
-                      <button
-                        type="button"
-                        className="novo-btn novo-btn-primary"
-                        disabled={busy}
-                        onClick={() => saveProduct(product)}
-                      >
-                        {busy ? <Loader2 size={14} style={{ animation: 'novoSpin .8s linear infinite' }} /> : <Save size={14} />}
-                        Guardar producto
-                      </button>
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                        <button
+                          type="button"
+                          className="novo-btn novo-btn-primary"
+                          disabled={busy}
+                          onClick={() => saveProduct(product)}
+                        >
+                          {busy ? <Loader2 size={14} style={{ animation: 'novoSpin .8s linear infinite' }} /> : <Save size={14} />}
+                          Guardar producto
+                        </button>
+                        <button
+                          type="button"
+                          className="novo-btn novo-btn-ghost"
+                          disabled={busy}
+                          onClick={() => setExpandedProductId(null)}
+                        >
+                          <X size={14} />
+                          Cerrar
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>
