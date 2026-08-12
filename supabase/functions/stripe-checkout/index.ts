@@ -5,6 +5,7 @@ import {
   loadPlatformUrls,
   requireRole,
 } from '../_shared/core.ts';
+import { resolvePublicAppUrl } from '../_shared/email-templates.ts';
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -50,6 +51,7 @@ Deno.serve(async (req) => {
     const selectedServiceIds = Array.isArray(payload.selectedServiceIds)
       ? payload.selectedServiceIds.map(String)
       : [];
+    const showOtherServices = payload.showOtherServices !== false;
 
     if (!clientId) {
       throw new Error('CLIENT_REQUIRED');
@@ -251,6 +253,7 @@ Deno.serve(async (req) => {
         client_status: client.status || null,
         requested_retail_price: retailPrice,
         selectedServiceIds,
+        showOtherServices,
         checkout_type: 'partner_embedded',
       },
     };
@@ -303,7 +306,12 @@ Deno.serve(async (req) => {
        7. VALIDAR URL PÚBLICA
     ===================================================== */
 
-    const { publicAppUrl: publicUrl } = await loadPlatformUrls(supabase);
+    const { publicAppUrl: configuredAppUrl } = await loadPlatformUrls(supabase);
+    const requestOrigin = req.headers.get('origin') || req.headers.get('referer') || '';
+    const publicUrl = resolvePublicAppUrl(
+      configuredAppUrl,
+      payload.appUrl || requestOrigin,
+    );
 
     if (!publicUrl) {
       await supabase
@@ -376,6 +384,7 @@ Deno.serve(async (req) => {
           client_status: client.status || null,
           requested_retail_price: retailPrice,
           selectedServiceIds,
+          showOtherServices,
           checkout_type: 'partner_embedded',
         },
       })
@@ -421,6 +430,7 @@ Deno.serve(async (req) => {
           retailPrice,
           wholesalePrice,
           selectedServiceIds,
+          showOtherServices,
           checkoutUrl,
         },
       });

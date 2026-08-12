@@ -1166,9 +1166,13 @@ export const platformApi = {
   },
 
   generateCheckoutLink(payload) {
+    const appUrl = typeof window !== 'undefined' ? window.location.origin : '';
     return invoke('stripe-checkout', {
       action: 'createSession',
-      payload,
+      payload: {
+        ...payload,
+        appUrl,
+      },
     });
   },
 
