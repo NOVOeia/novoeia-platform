@@ -499,9 +499,16 @@ Deno.serve(async (req) => {
         throw new Error('PRODUCT_REQUIRES_CUSTOM_QUOTE');
       }
 
-      const preselectedServiceIds = Array.isArray((salesLink?.metadata as Record<string, unknown>)?.selectedServiceIds)
-        ? ((salesLink?.metadata as Record<string, unknown>).selectedServiceIds as unknown[]).map(String)
+      const linkMetadata = (salesLink?.metadata || {}) as Record<string, unknown>;
+      const preselectedServiceIds = Array.isArray(linkMetadata.selectedServiceIds)
+        ? linkMetadata.selectedServiceIds.map(String)
         : [];
+      const showOtherServices = linkMetadata.showOtherServices !== false;
+
+      if (!showOtherServices) {
+        checkout.additionalServices = (checkout.additionalServices as Array<Record<string, unknown>>)
+          .filter(service => preselectedServiceIds.includes(String(service.id)));
+      }
 
       return json({
         checkout,
@@ -511,6 +518,7 @@ Deno.serve(async (req) => {
             id: salesLink.id,
             clientEmail: salesLink.client_email,
             preselectedServiceIds,
+            showOtherServices,
           }
           : null,
         stripePublishableKey: (await loadStripeConfig(supabase)).publishableKey || null,
@@ -571,8 +579,19 @@ Deno.serve(async (req) => {
 
       const activeServices = (storefront.additionalServices as Array<Record<string, unknown>>)
         .filter(service => service.active !== false);
+      const linkMetadata = (salesLink?.metadata || {}) as Record<string, unknown>;
+      const showOtherServices = !salesLink || linkMetadata.showOtherServices !== false;
+      const allowedServiceIds = showOtherServices
+        ? null
+        : new Set(
+          (Array.isArray(linkMetadata.selectedServiceIds) ? linkMetadata.selectedServiceIds : [])
+            .map(String),
+        );
+      const effectiveSelectedServiceIds = allowedServiceIds
+        ? selectedServiceIds.filter(id => allowedServiceIds.has(id))
+        : selectedServiceIds;
       const selectedServices = activeServices.filter(service =>
-        selectedServiceIds.includes(String(service.id))
+        effectiveSelectedServiceIds.includes(String(service.id))
       );
 
       const additionalLineItems = buildAdditionalLineItems(
@@ -639,7 +658,7 @@ Deno.serve(async (req) => {
         product_name: String(product.name),
         source: salesLink ? 'partner_sales_link_checkout' : 'public_storefront_checkout',
         storefront_slug: slug,
-        selected_services: JSON.stringify(selectedServiceIds),
+        selected_services: JSON.stringify(effectiveSelectedServiceIds),
         deferred_addon_service_ids: JSON.stringify(deferredAddonServiceIds),
         product_interval: interval,
         wholesale_cents: String(Math.round(wholesalePrice * 100)),
@@ -682,7 +701,7 @@ Deno.serve(async (req) => {
           productId,
           email,
           sessionId: session.id,
-          selectedServiceIds,
+          selectedServiceIds: effectiveSelectedServiceIds,
         },
       });
 

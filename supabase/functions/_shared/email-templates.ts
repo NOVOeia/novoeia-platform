@@ -311,10 +311,10 @@ function preferViteLocalOrigin(url: string) {
 }
 
 /**
- * Prefer the browser origin for recovery redirects.
+ * Prefer the browser origin for public app links (reset, sales links, etc.).
  * Local Vite (:5173) and https://partners.novoeia.com are the known hosts.
  */
-export function resolvePasswordResetAppUrl(configured = '', requested = '') {
+export function resolvePublicAppUrl(configured = '', requested = '') {
   const configuredUrl = normalizeAppOrigin(configured);
   const requestedUrl = normalizeAppOrigin(requested);
 
@@ -339,6 +339,11 @@ export function resolvePasswordResetAppUrl(configured = '', requested = '') {
   }
 
   return PRODUCTION_APP_ORIGIN;
+}
+
+/** @deprecated Prefer resolvePublicAppUrl */
+export function resolvePasswordResetAppUrl(configured = '', requested = '') {
+  return resolvePublicAppUrl(configured, requested);
 }
 
 export async function sendTemplatedEmail(

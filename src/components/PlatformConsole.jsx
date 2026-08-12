@@ -3961,6 +3961,7 @@ function PartnerLinks({ linkProductPreset, onClearLinkPreset }) {
   const [links, setLinks] = useState([]);
   const [additionalServices, setAdditionalServices] = useState([]);
   const [selectedServiceIds, setSelectedServiceIds] = useState([]);
+  const [showOtherServices, setShowOtherServices] = useState(true);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState(null);
@@ -4070,6 +4071,7 @@ function PartnerLinks({ linkProductPreset, onClearLinkPreset }) {
         clientEmail: selectedClient?.email || null,
         retailPrice: Number(linkPrice),
         selectedServiceIds,
+        showOtherServices,
       });
       setCheckout(data.checkoutUrl || '');
       setNotice({
@@ -4150,6 +4152,7 @@ function PartnerLinks({ linkProductPreset, onClearLinkPreset }) {
               const product = products.find(row => row.id === value);
               setLinkPrice(product?.retailPrice != null ? String(product.retailPrice) : '');
               setSelectedServiceIds([]);
+              setShowOtherServices(true);
               setCheckout('');
             }}
             disabled={publishedProducts.length === 0}
@@ -4246,6 +4249,39 @@ function PartnerLinks({ linkProductPreset, onClearLinkPreset }) {
                     Total estimado de hoy: {money(estimatedFirstPayment, selectedLinkProduct.currency)}
                   </p>
                 )}
+                <label
+                  style={{
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: 10,
+                    marginTop: 12,
+                    padding: '12px 14px',
+                    borderRadius: 10,
+                    border: '1px solid var(--novo-border)',
+                    background: 'var(--novo-card-hover)',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={showOtherServices}
+                    onChange={(event) => {
+                      setShowOtherServices(event.target.checked);
+                      setCheckout('');
+                    }}
+                    style={{ marginTop: 2 }}
+                  />
+                  <span>
+                    <strong style={{ display: 'block', fontSize: 13 }}>
+                      Mostrar otros servicios disponibles en el checkout
+                    </strong>
+                    <small style={{ color: 'var(--novo-muted)', fontSize: 11, lineHeight: 1.45 }}>
+                      {showOtherServices
+                        ? 'El cliente verá todos tus servicios activos y podrá agregar más además de los preseleccionados.'
+                        : 'El cliente solo verá los servicios que seleccionaste arriba (ningún otro upsell).'}
+                    </small>
+                  </span>
+                </label>
               </div>
             )}
           </>
