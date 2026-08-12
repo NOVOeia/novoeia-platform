@@ -6,6 +6,7 @@ import {
   loadPlatformAppUrl,
   loadStoredEmailTemplateConfig,
   listEmailTemplatesForAdmin,
+  resolvePasswordResetAppUrl,
   sendTemplatedEmail,
   trySendTemplatedEmail,
 } from '../_shared/email-templates.ts';
@@ -288,7 +289,12 @@ Deno.serve(async (req) => {
         throw new Error('PARTNER_OWNER_EMAIL_MISSING');
       }
 
-      const appUrl = await loadPlatformAppUrl(supabase);
+      const configuredAppUrl = await loadPlatformAppUrl(supabase);
+      const requestOrigin = req.headers.get('origin') || req.headers.get('referer') || '';
+      const appUrl = resolvePasswordResetAppUrl(
+        configuredAppUrl,
+        payload.appUrl || requestOrigin,
+      );
       if (!appUrl) throw new Error('PUBLIC_APP_URL_NOT_CONFIGURED');
 
       const emailConfig = await loadEmailConfig(supabase);
@@ -298,7 +304,7 @@ Deno.serve(async (req) => {
         type: 'recovery',
         email,
         options: {
-          redirectTo: `${appUrl}/#reset-password`,
+          redirectTo: `${appUrl}/`,
         },
       });
 

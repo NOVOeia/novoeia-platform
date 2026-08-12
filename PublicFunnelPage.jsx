@@ -31,6 +31,7 @@ export const DEFAULT_BRAND = {
   secondaryColor: '#0A0F1E',
   accentColor: '#22C55E',
   backgroundColor: '#F7F8FC',
+  headerBackgroundColor: '#FFFFFF',
   textColor: '#111827',
 };
 
@@ -416,6 +417,18 @@ function cleanPhone(value) {
   return String(value || '').replace(/\D/g, '');
 }
 
+function isLightHex(value = '#ffffff') {
+  const raw = String(value || '').trim().replace('#', '');
+  const hex = raw.length === 3
+    ? raw.split('').map((char) => `${char}${char}`).join('')
+    : raw;
+  if (!/^[0-9a-fA-F]{6}$/.test(hex)) return true;
+  const r = parseInt(hex.slice(0, 2), 16);
+  const g = parseInt(hex.slice(2, 4), 16);
+  const b = parseInt(hex.slice(4, 6), 16);
+  return ((0.299 * r + 0.587 * g + 0.114 * b) / 255) > 0.72;
+}
+
 function normalizeVideoUrl(url = '') {
   if (!url) return '';
   // YouTube
@@ -549,7 +562,10 @@ export default function PublicFunnelPage({
     '--fa': brand.accentColor || DEFAULT_BRAND.accentColor,
     '--fb': brand.backgroundColor || DEFAULT_BRAND.backgroundColor,
     '--ft': brand.textColor || DEFAULT_BRAND.textColor,
+    '--fh': brand.headerBackgroundColor || DEFAULT_BRAND.headerBackgroundColor,
   };
+
+  const headerIsLight = isLightHex(brand.headerBackgroundColor || DEFAULT_BRAND.headerBackgroundColor);
 
   const heroStyle = settings.hero.backgroundImageUrl
     ? {
@@ -641,9 +657,9 @@ export default function PublicFunnelPage({
       <style>{CSS}</style>
 
       {/* HEADER */}
-      <header className="fp-header">
+      <header className={`fp-header${headerIsLight ? '' : ' fp-header--dark'}`}>
         <div className="fp-container fp-header-inner">
-          <FPLogo brand={brand} />
+          <FPLogo brand={brand} light={!headerIsLight} />
           <nav className="fp-nav">
             <button onClick={() => scrollTo('problema')}>¿Por qué?</button>
             <button onClick={() => scrollTo('como-funciona')}>Cómo funciona</button>
@@ -1644,8 +1660,18 @@ const CSS = `
     top: 0;
     z-index: 100;
     border-bottom: 1px solid rgba(15,23,42,.07);
-    background: rgba(255,255,255,.9);
+    background: color-mix(in srgb, var(--fh, #ffffff) 92%, transparent);
     backdrop-filter: blur(20px);
+  }
+  .fp-header--dark {
+    border-bottom-color: rgba(255,255,255,.1);
+  }
+  .fp-header--dark .fp-nav button {
+    color: rgba(248,250,252,.78);
+  }
+  .fp-header--dark .fp-nav button:hover {
+    background: rgba(255,255,255,.1);
+    color: #fff;
   }
   .fp-header-inner {
     display: flex;
@@ -1684,7 +1710,9 @@ const CSS = `
 
   /* LOGO / BRAND MARK */
   .fp-logo { max-width: 160px; max-height: 44px; object-fit: contain; }
-  .fp-logo-light { filter: brightness(0) invert(1); }
+  /* Solo para logos oscuros sobre header oscuro: no invertir logos ya claros/blancos.
+     El partner elige header oscuro para logos blancos; light=true se usa como hint de contraste de tipografía. */
+  .fp-logo-light { filter: none; }
   .fp-brand-mark { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
   .fp-brand-mark > span {
     width: 40px; height: 40px;

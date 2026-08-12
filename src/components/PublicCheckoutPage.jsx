@@ -18,6 +18,18 @@ import {
   serviceBillingLabel,
 } from '../lib/checkoutLineItems.js';
 
+function isLightHex(value = '#ffffff') {
+  const raw = String(value || '').trim().replace('#', '');
+  const hex = raw.length === 3
+    ? raw.split('').map((char) => `${char}${char}`).join('')
+    : raw;
+  if (!/^[0-9a-fA-F]{6}$/.test(hex)) return true;
+  const r = parseInt(hex.slice(0, 2), 16);
+  const g = parseInt(hex.slice(2, 4), 16);
+  const b = parseInt(hex.slice(4, 6), 16);
+  return ((0.299 * r + 0.587 * g + 0.114 * b) / 255) > 0.72;
+}
+
 const DEMO_CHECKOUT_DATA = {
   partner: {
     businessName: 'Agencia Partner',
@@ -33,6 +45,7 @@ const DEMO_CHECKOUT_DATA = {
     secondaryColor: '#111827',
     accentColor: '#22C55E',
     backgroundColor: '#F5F7FB',
+    headerBackgroundColor: '#FFFFFF',
     surfaceColor: '#FFFFFF',
     textColor: '#111827',
     mutedTextColor: '#64748B',
@@ -214,6 +227,9 @@ export default function PublicCheckoutPage({
     '--checkout-background':
       theme.backgroundColor || '#F5F7FB',
 
+    '--checkout-header':
+      theme.headerBackgroundColor || theme.surfaceColor || '#FFFFFF',
+
     '--checkout-surface':
       theme.surfaceColor || '#FFFFFF',
 
@@ -224,6 +240,10 @@ export default function PublicCheckoutPage({
       theme.mutedTextColor || '#64748B',
   };
 
+  const headerIsLight = isLightHex(
+    theme.headerBackgroundColor || theme.surfaceColor || '#FFFFFF',
+  );
+
   return (
     <div
       className="public-checkout"
@@ -231,7 +251,7 @@ export default function PublicCheckoutPage({
     >
       <style>{checkoutStyles}</style>
 
-      <header className="checkout-header">
+      <header className={`checkout-header${headerIsLight ? '' : ' checkout-header--dark'}`}>
         <div className="checkout-container checkout-header-inner">
           <PartnerLogo partner={partner} />
 
@@ -701,8 +721,16 @@ const checkoutStyles = `
   }
 
   .checkout-header {
-    background: var(--checkout-surface);
+    background: var(--checkout-header, var(--checkout-surface));
     border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+  }
+
+  .checkout-header--dark {
+    border-bottom-color: rgba(255, 255, 255, 0.12);
+  }
+
+  .checkout-header--dark .checkout-secure-header {
+    color: rgba(248, 250, 252, 0.78);
   }
 
   .checkout-header-inner {

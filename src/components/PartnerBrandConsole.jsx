@@ -35,6 +35,7 @@ const INITIAL_BRAND = {
   secondaryColor: '#111827',
   accentColor: '#22C55E',
   backgroundColor: '#F8FAFC',
+  headerBackgroundColor: '#FFFFFF',
   textColor: '#111827',
   facebookUrl: '',
   instagramUrl: '',
@@ -316,6 +317,8 @@ function BrandForm({ brand, updateBrand, onSave, busy }) {
             onChange={value => updateBrand('logoUrl', value)}
             uploadFolder="logos"
             required
+            contrastPreview
+            helper="PNG, JPG o WEBP. Máximo 2 MB. Si el logo es blanco o claro, la miniatura usa fondo contrastado para que se vea."
           />
           <BrandImageField
             label="Imagen de portada"
@@ -332,7 +335,15 @@ function BrandForm({ brand, updateBrand, onSave, busy }) {
             <ColorField label="Color secundario" value={brand.secondaryColor} onChange={value => updateBrand('secondaryColor', value)} />
             <ColorField label="Color de acento" value={brand.accentColor} onChange={value => updateBrand('accentColor', value)} />
             <ColorField label="Color de fondo" value={brand.backgroundColor} onChange={value => updateBrand('backgroundColor', value)} />
+            <ColorField
+              label="Color del header"
+              value={brand.headerBackgroundColor || '#FFFFFF'}
+              onChange={value => updateBrand('headerBackgroundColor', value)}
+            />
             <ColorField label="Color del texto" value={brand.textColor} onChange={value => updateBrand('textColor', value)} />
+            <p style={{ gridColumn: '1 / -1', margin: 0, fontSize: 11, color: 'var(--novo-muted)', lineHeight: 1.45 }}>
+              Si tu logo es blanco o claro, usa un header oscuro para que se vea en la landing.
+            </p>
           </div>
         </div>
       </FormSection>
@@ -573,18 +584,44 @@ function ToggleField({ label, description, checked, onChange }) {
   );
 }
 
+function isLightColor(value = '#ffffff') {
+  const raw = String(value || '').trim().replace('#', '');
+  const hex = raw.length === 3
+    ? raw.split('').map((char) => `${char}${char}`).join('')
+    : raw;
+  if (!/^[0-9a-fA-F]{6}$/.test(hex)) return true;
+  const r = parseInt(hex.slice(0, 2), 16);
+  const g = parseInt(hex.slice(2, 4), 16);
+  const b = parseInt(hex.slice(4, 6), 16);
+  // Luminancia relativa aproximada.
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return luminance > 0.72;
+}
+
 function LogoPreview({ brand }) {
+  const headerBg = brand.headerBackgroundColor || '#FFFFFF';
+  const lightHeader = isLightColor(headerBg);
   return (
-    <div className="brand-logo-preview" style={{ background: brand.backgroundColor, color: brand.textColor }}>
-      {brand.logoUrl ? (
-        <img src={brand.logoUrl} alt={brand.businessName || 'Logo'} />
-      ) : (
-        <div className="brand-logo-fallback" style={{ background: brand.primaryColor }}>
-          {brand.businessName?.trim()?.charAt(0)?.toUpperCase() || 'P'}
+    <div className="brand-logo-preview" style={{ padding: 0, overflow: 'hidden' }}>
+      <div
+        className={`brand-logo-header-preview${lightHeader ? '' : ' brand-logo-header-preview--dark'}`}
+        style={{ background: headerBg }}
+      >
+        {brand.logoUrl ? (
+          <img src={brand.logoUrl} alt={brand.businessName || 'Logo'} />
+        ) : (
+          <div className="brand-logo-fallback" style={{ background: brand.primaryColor }}>
+            {brand.businessName?.trim()?.charAt(0)?.toUpperCase() || 'P'}
+          </div>
+        )}
+        <div className="brand-logo-header-preview-meta" style={{ color: lightHeader ? brand.textColor : '#f8fafc' }}>
+          <strong>{brand.businessName || 'Nombre de tu marca'}</strong>
+          <span>{brand.tagline || 'Tu frase de marca'}</span>
         </div>
-      )}
-      <strong>{brand.businessName || 'Nombre de tu marca'}</strong>
-      <span>{brand.tagline || 'Tu frase de marca'}</span>
+      </div>
+      <small className="brand-logo-preview-hint" style={{ padding: '10px 14px 14px' }}>
+        Vista previa del header de la landing. Ajusta “Color del header” si el logo no se ve.
+      </small>
     </div>
   );
 }
@@ -644,7 +681,17 @@ const styles = `
     border: 1px solid var(--novo-border); background: var(--novo-card-hover);
     display: grid; place-items: center; flex-shrink: 0;
   }
-  .brand-image-preview img { width: 100%; height: 100%; object-fit: contain; }
+  .brand-image-preview--contrast {
+    background-color: #c5cedd;
+    background-image:
+      linear-gradient(45deg, #e8edf5 25%, transparent 25%),
+      linear-gradient(-45deg, #e8edf5 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, #e8edf5 75%),
+      linear-gradient(-45deg, transparent 75%, #e8edf5 75%);
+    background-size: 10px 10px;
+    background-position: 0 0, 0 5px, 5px -5px, -5px 0;
+  }
+  .brand-image-preview img { width: 100%; height: 100%; object-fit: contain; padding: 4px; box-sizing: border-box; }
   .brand-image-preview video { width: 100%; height: 100%; object-fit: cover; background: #000; }
   .brand-media-preview-video { position: relative; }
   .brand-media-embed-badge {
@@ -659,10 +706,25 @@ const styles = `
   .brand-image-remove-btn { flex-shrink: 0; }
   .brand-textarea { width: 100%; resize: vertical; background: var(--novo-card-hover); border: 1px solid var(--novo-border); border-radius: 8px; padding: 10px 12px; color: var(--novo-text); font-size: 13px; outline: none; }
   .brand-preview-row { display: grid; grid-template-columns: 280px 1fr; gap: 22px; }
-  .brand-logo-preview { min-height: 190px; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 8px; border: 1px solid var(--novo-border); border-radius: 14px; padding: 20px; text-align: center; }
-  .brand-logo-preview img { max-width: 180px; max-height: 70px; object-fit: contain; }
-  .brand-logo-preview span { opacity: 0.65; font-size: 12px; }
-  .brand-logo-fallback { width: 54px; height: 54px; display: grid; place-items: center; border-radius: 13px; color: white; font-size: 21px; font-weight: 800; }
+  .brand-logo-preview { min-height: 190px; display: flex; flex-direction: column; justify-content: flex-start; align-items: stretch; gap: 0; border: 1px solid var(--novo-border); border-radius: 14px; padding: 0; text-align: center; overflow: hidden; }
+  .brand-logo-header-preview {
+    min-height: 120px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 12px;
+    padding: 18px 16px;
+    border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+  }
+  .brand-logo-header-preview img { max-width: 140px; max-height: 48px; object-fit: contain; }
+  .brand-logo-header-preview-meta { display: grid; gap: 2px; text-align: left; min-width: 0; }
+  .brand-logo-header-preview-meta strong { font-size: 13px; line-height: 1.2; }
+  .brand-logo-header-preview-meta span { font-size: 11px; opacity: 0.72; }
+  .brand-logo-header-preview--dark {
+    border-bottom-color: rgba(255, 255, 255, 0.12);
+  }
+  .brand-logo-preview-hint { display: block; font-size: 10px; line-height: 1.4; opacity: 0.72; color: var(--novo-muted); text-align: left; }
+  .brand-logo-fallback { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 12px; color: white; font-size: 18px; font-weight: 800; flex-shrink: 0; }
   .brand-color-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 13px; }
   .brand-color-field label { display: block; margin-bottom: 6px; color: var(--novo-muted); font-size: 11px; font-weight: 600; }
   .brand-color-field > div { display: flex; gap: 7px; }

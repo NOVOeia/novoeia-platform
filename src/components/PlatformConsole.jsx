@@ -3034,7 +3034,7 @@ function AdminSettings() {
               label="App URL (PUBLIC_APP_URL)"
               value={settings.publicAppUrl}
               onChange={v=>setSettings({...settings,publicAppUrl:v.trim().replace(/\/$/, '')})}
-              placeholder="http://localhost:5173 o https://app.tudominio.com"
+              placeholder="http://localhost:5173 o https://partners.novoeia.com"
             />
             <NField
               label="Functions base URL"
@@ -3049,6 +3049,30 @@ function AdminSettings() {
               <li>Checkout partner: <code>{settings.publicAppUrl || '…'}/#p/&#123;slug&#125;/checkout/&#123;productId&#125;</code></li>
               <li>Stripe webhook: <code>{settings.webhookBaseUrl || '…'}/stripe-webhook</code></li>
             </ul>
+            {/localhost:3000|127\.0\.0\.1:3000/i.test(settings.publicAppUrl || '') && (
+              <p style={{ margin: '10px 0 0', color: '#B45309' }}>
+                App URL apunta a :3000. En local usa <code>http://localhost:5173</code>;
+                en producción <code>https://partners.novoeia.com</code>.
+                Actualízala aquí y en Supabase → Authentication → URL Configuration.
+              </p>
+            )}
+            {/localhost:5173|127\.0\.0\.1:5173/i.test(settings.publicAppUrl || '') && (
+              <p style={{ margin: '10px 0 0' }}>
+                Modo local. Para producción guarda <code>https://partners.novoeia.com</code>
+                y agrega ambas URLs en Supabase Auth → Redirect URLs.
+              </p>
+            )}
+            {/^https:\/\/partners\.novoeia\.com\/?$/i.test(settings.publicAppUrl || '') && (
+              <p style={{ margin: '10px 0 0' }}>
+                Producción OK. Mantén también <code>http://localhost:5173</code> en Supabase Redirect URLs para desarrollo.
+              </p>
+            )}
+            {/localhost|127\.0\.0\.1/i.test(settings.publicAppUrl || '') && !/localhost:3000|127\.0\.0\.1:3000|localhost:5173|127\.0\.0\.1:5173/i.test(settings.publicAppUrl || '') && (
+              <p style={{ margin: '10px 0 0', color: '#B45309' }}>
+                App URL apunta a localhost: los correos de recuperación / checkout usarán esa URL.
+                En producción pon <code>https://partners.novoeia.com</code>.
+              </p>
+            )}
           </div>
         </div>
       )}
