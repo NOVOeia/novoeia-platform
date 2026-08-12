@@ -1,6 +1,6 @@
 import { adminClient, corsHeaders, handleError, json, loadSuperAdminEmails } from '../_shared/core.ts';
 import { createPartnerAccount } from '../_shared/partner-account.ts';
-import { loadPlatformAppUrl, resolvePasswordResetAppUrl, sendTemplatedEmail } from '../_shared/email-templates.ts';
+import { forceActionLinkRedirect, loadPlatformAppUrl, resolvePasswordResetAppUrl, sendTemplatedEmail } from '../_shared/email-templates.ts';
 
 async function verifyPassword(email: string, password: string) {
   const url = Deno.env.get('SUPABASE_URL');
@@ -25,6 +25,10 @@ async function findUserIdByEmail(supabase: ReturnType<typeof adminClient>, email
   });
   if (error) return null;
   return data.user?.id || null;
+}
+
+function withForcedRedirect(actionLink: string, appUrl: string) {
+  return forceActionLinkRedirect(actionLink, appUrl);
 }
 
 Deno.serve(async (req) => {
@@ -65,16 +69,16 @@ Deno.serve(async (req) => {
       const supabase = adminClient();
       const configuredAppUrl = await loadPlatformAppUrl(supabase);
       const requestOrigin = req.headers.get('origin') || req.headers.get('referer') || '';
+      // Prefer explicit production host for live partners site even if Origin is stripped.
       const appUrl = resolvePasswordResetAppUrl(
-        configuredAppUrl,
-        payload.appUrl || requestOrigin,
+        configuredAppUrl || 'https://partners.novoeia.com',
+        payload.appUrl || requestOrigin || 'https://partners.novoeia.com',
       );
       if (!appUrl) throw new Error('PUBLIC_APP_URL_NOT_CONFIGURED');
 
       const okResponse = json({
         ok: true,
         message: 'Si el correo está registrado, te enviamos un enlace para restablecer la contraseña.',
-        // Helps debug misconfigured Auth Site URL without leaking tokens.
         redirectTo: `${appUrl}/`,
       });
 
@@ -82,7 +86,6 @@ Deno.serve(async (req) => {
         type: 'recovery',
         email,
         options: {
-          // No hash: Supabase strips fragments from redirect_to; App.jsx detects type=recovery.
           redirectTo: `${appUrl}/`,
         },
       });
@@ -91,6 +94,13 @@ Deno.serve(async (req) => {
         console.error('[auth-register] password reset link', linkError);
         return okResponse;
       }
+
+      // GoTrue may rewrite redirect_to to Site URL if the target is not allowlisted.
+      // Force the intended app origin before emailing the link.
+      const resetUrl = withForcedRedirect(
+        String(linkData.properties.action_link),
+        appUrl,
+      );
 
       const { data: profile } = await supabase
         .from('profiles')
@@ -110,7 +120,7 @@ Deno.serve(async (req) => {
           variables: {
             fullName: String(fullName),
             email,
-            resetUrl: String(linkData.properties.action_link),
+            resetUrl,
             expiresIn: '60 minutos',
           },
         });
@@ -124,7 +134,7 @@ Deno.serve(async (req) => {
         action: 'auth.password_reset_requested',
         entity_type: 'profile',
         entity_id: linkData.user?.id || null,
-        metadata: { email },
+        metadata: { email, appUrl, redirectTo: `${appUrl}/` },
       });
 
       return okResponse;

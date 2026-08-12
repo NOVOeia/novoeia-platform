@@ -7,6 +7,7 @@ import {
   loadStoredEmailTemplateConfig,
   listEmailTemplatesForAdmin,
   resolvePasswordResetAppUrl,
+  forceActionLinkRedirect,
   sendTemplatedEmail,
   trySendTemplatedEmail,
 } from '../_shared/email-templates.ts';
@@ -292,8 +293,8 @@ Deno.serve(async (req) => {
       const configuredAppUrl = await loadPlatformAppUrl(supabase);
       const requestOrigin = req.headers.get('origin') || req.headers.get('referer') || '';
       const appUrl = resolvePasswordResetAppUrl(
-        configuredAppUrl,
-        payload.appUrl || requestOrigin,
+        configuredAppUrl || 'https://partners.novoeia.com',
+        payload.appUrl || requestOrigin || 'https://partners.novoeia.com',
       );
       if (!appUrl) throw new Error('PUBLIC_APP_URL_NOT_CONFIGURED');
 
@@ -313,13 +314,18 @@ Deno.serve(async (req) => {
         throw new Error('PASSWORD_RESET_LINK_FAILED');
       }
 
+      const resetUrl = forceActionLinkRedirect(
+        String(linkData.properties.action_link),
+        appUrl,
+      );
+
       await sendTemplatedEmail(supabase, 'password_reset', {
         to: email,
         force: true,
         variables: {
           fullName: String(fullName),
           email,
-          resetUrl: String(linkData.properties.action_link),
+          resetUrl,
           expiresIn: '60 minutos',
         },
       });

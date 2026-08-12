@@ -333,9 +333,10 @@ export function resolvePublicAppUrl(configured = '', requested = '') {
     return configuredUrl;
   }
 
-  // Stale localhost config (often :3000) → Vite.
+  // Stale localhost config without a browser origin → production, not :3000.
   if (configuredUrl && isLocalAppUrl(configuredUrl)) {
-    return preferViteLocalOrigin(configuredUrl);
+    // Only keep local when an explicit local request was provided (handled above).
+    return PRODUCTION_APP_ORIGIN;
   }
 
   return PRODUCTION_APP_ORIGIN;
@@ -344,6 +345,19 @@ export function resolvePublicAppUrl(configured = '', requested = '') {
 /** @deprecated Prefer resolvePublicAppUrl */
 export function resolvePasswordResetAppUrl(configured = '', requested = '') {
   return resolvePublicAppUrl(configured, requested);
+}
+
+/** Force redirect_to on a Supabase verify/action link. */
+export function forceActionLinkRedirect(actionLink: string, appUrl: string) {
+  try {
+    const origin = normalizeAppOrigin(appUrl);
+    if (!origin) return actionLink;
+    const url = new URL(actionLink);
+    url.searchParams.set('redirect_to', `${origin}/`);
+    return url.toString();
+  } catch {
+    return actionLink;
+  }
 }
 
 export async function sendTemplatedEmail(
