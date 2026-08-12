@@ -266,6 +266,81 @@ export async function loadPlatformAppUrl(supabase: SupabaseAdmin) {
   return (publicConfig.publicAppUrl || Deno.env.get('PUBLIC_APP_URL') || '').trim().replace(/\/$/, '');
 }
 
+function isLocalAppUrl(url: string) {
+  try {
+    const host = new URL(url).hostname;
+    return host === 'localhost' || host === '127.0.0.1';
+  } catch {
+    return false;
+  }
+}
+
+function normalizeAppOrigin(value = '') {
+  const raw = String(value || '').trim().replace(/\/$/, '');
+  if (!raw) return '';
+  try {
+    const parsed = new URL(raw);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return '';
+    return `${parsed.protocol}//${parsed.host}`;
+  } catch {
+    return '';
+  }
+}
+
+/** Vite local default for this app (not CRA/Next :3000). */
+const LOCAL_VITE_ORIGIN = 'http://localhost:5173';
+const PRODUCTION_APP_ORIGIN = 'https://partners.novoeia.com';
+
+function preferViteLocalOrigin(url: string) {
+  const normalized = normalizeAppOrigin(url);
+  if (!normalized || !isLocalAppUrl(normalized)) return normalized;
+  try {
+    const parsed = new URL(normalized);
+    // Legacy defaults (CRA / Supabase Site URL) → Vite.
+    if (parsed.port === '3000' || parsed.port === '') {
+      return LOCAL_VITE_ORIGIN;
+    }
+    // Keep explicit Vite / other local ports (5173, 4173, etc.).
+    if (parsed.hostname === '127.0.0.1') {
+      return `http://localhost:${parsed.port || '5173'}`;
+    }
+    return normalized;
+  } catch {
+    return LOCAL_VITE_ORIGIN;
+  }
+}
+
+/**
+ * Prefer the browser origin for recovery redirects.
+ * Local Vite (:5173) and https://partners.novoeia.com are the known hosts.
+ */
+export function resolvePasswordResetAppUrl(configured = '', requested = '') {
+  const configuredUrl = normalizeAppOrigin(configured);
+  const requestedUrl = normalizeAppOrigin(requested);
+
+  // Local request always stays local (map legacy :3000 → :5173).
+  if (requestedUrl && isLocalAppUrl(requestedUrl)) {
+    return preferViteLocalOrigin(requestedUrl);
+  }
+
+  // Production host from the browser.
+  if (requestedUrl === PRODUCTION_APP_ORIGIN) {
+    return PRODUCTION_APP_ORIGIN;
+  }
+
+  // Super Admin public URL when it is a real non-local host.
+  if (configuredUrl && !isLocalAppUrl(configuredUrl)) {
+    return configuredUrl;
+  }
+
+  // Stale localhost config (often :3000) → Vite.
+  if (configuredUrl && isLocalAppUrl(configuredUrl)) {
+    return preferViteLocalOrigin(configuredUrl);
+  }
+
+  return PRODUCTION_APP_ORIGIN;
+}
+
 export async function sendTemplatedEmail(
   supabase: SupabaseAdmin,
   templateId: EmailTemplateId | string,

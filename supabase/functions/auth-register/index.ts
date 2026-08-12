@@ -1,6 +1,6 @@
 import { adminClient, corsHeaders, handleError, json, loadSuperAdminEmails } from '../_shared/core.ts';
 import { createPartnerAccount } from '../_shared/partner-account.ts';
-import { loadPlatformAppUrl, sendTemplatedEmail } from '../_shared/email-templates.ts';
+import { loadPlatformAppUrl, resolvePasswordResetAppUrl, sendTemplatedEmail } from '../_shared/email-templates.ts';
 
 async function verifyPassword(email: string, password: string) {
   const url = Deno.env.get('SUPABASE_URL');
@@ -63,19 +63,27 @@ Deno.serve(async (req) => {
       if (!email || !email.includes('@')) throw new Error('RESET_EMAIL_REQUIRED');
 
       const supabase = adminClient();
-      const appUrl = await loadPlatformAppUrl(supabase);
+      const configuredAppUrl = await loadPlatformAppUrl(supabase);
+      const requestOrigin = req.headers.get('origin') || req.headers.get('referer') || '';
+      const appUrl = resolvePasswordResetAppUrl(
+        configuredAppUrl,
+        payload.appUrl || requestOrigin,
+      );
       if (!appUrl) throw new Error('PUBLIC_APP_URL_NOT_CONFIGURED');
 
       const okResponse = json({
         ok: true,
         message: 'Si el correo está registrado, te enviamos un enlace para restablecer la contraseña.',
+        // Helps debug misconfigured Auth Site URL without leaking tokens.
+        redirectTo: `${appUrl}/`,
       });
 
       const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
         type: 'recovery',
         email,
         options: {
-          redirectTo: `${appUrl}/#reset-password`,
+          // No hash: Supabase strips fragments from redirect_to; App.jsx detects type=recovery.
+          redirectTo: `${appUrl}/`,
         },
       });
 

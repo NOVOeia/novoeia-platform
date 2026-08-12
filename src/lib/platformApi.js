@@ -980,9 +980,10 @@ export const platformApi = {
   },
 
   sendPartnerPasswordReset(partnerId) {
+    const appUrl = typeof window !== 'undefined' ? window.location.origin : '';
     return invoke('platform-admin', {
       action: 'sendPartnerPasswordReset',
-      payload: { partnerId },
+      payload: { partnerId, appUrl },
     });
   },
 
@@ -2219,9 +2220,10 @@ export const platformApi = {
   },
 
   requestPasswordReset(email) {
+    const appUrl = typeof window !== 'undefined' ? window.location.origin : '';
     return invoke('auth-register', {
       action: 'requestPasswordReset',
-      payload: { email },
+      payload: { email, appUrl },
     });
   },
 
@@ -2285,11 +2287,12 @@ export const platformApi = {
     const extension = sanitizeStorageFileName(
       (file.name.split('.').pop() || (isVideo ? 'mp4' : 'png')).toLowerCase(),
     ).replace(/\.+/g, '');
-    const partnerScope = profile.partner_id
-      ? `partners/${profile.partner_id}`
-      : 'partners/unassigned';
     const cleanFolder = String(folder || 'logos').replace(/[^a-zA-Z0-9/_-]/g, '-');
-    const storagePath = `${partnerScope}/${cleanFolder}/${userData.user.id}-${crypto.randomUUID()}.${extension}`;
+    // El user id debe ir como carpeta: las policies de Storage usan
+    // auth.uid() = ANY(storage.foldername(name)).
+    const storagePath = profile.partner_id
+      ? `partners/${profile.partner_id}/${userData.user.id}/${cleanFolder}/${crypto.randomUUID()}.${extension}`
+      : `${cleanFolder}/${userData.user.id}/${crypto.randomUUID()}.${extension}`;
 
     const { error: uploadError } = await supabase.storage
       .from(BRAND_ASSETS_BUCKET)

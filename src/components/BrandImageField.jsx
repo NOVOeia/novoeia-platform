@@ -9,6 +9,7 @@ export default function BrandImageField({
   uploadFolder = 'logos',
   required = false,
   helper = 'PNG, JPG o WEBP. Máximo 2 MB.',
+  contrastPreview = false,
 }) {
   const [mode, setMode] = useState(value ? 'url' : 'upload');
   const [uploading, setUploading] = useState(false);
@@ -23,7 +24,8 @@ export default function BrandImageField({
       setError('');
       const result = await platformApi.uploadBrandAsset(file, { folder: uploadFolder });
       onChange(result.url);
-      setMode('url');
+      // Mantener modo archivo para facilitar reemplazos.
+      setMode('upload');
     } catch (err) {
       setError(err.message);
     } finally {
@@ -54,7 +56,7 @@ export default function BrandImageField({
       </div>
 
       <div className="brand-image-row">
-        <div className="brand-image-preview">
+        <div className={`brand-image-preview${contrastPreview ? ' brand-image-preview--contrast' : ''}`}>
           {value ? (
             <img src={value} alt={label} />
           ) : (
@@ -79,7 +81,7 @@ export default function BrandImageField({
             ) : (
               <UploadCloud size={14} />
             )}
-            {uploading ? 'Subiendo…' : 'Seleccionar imagen'}
+            {uploading ? 'Subiendo…' : (value ? 'Cambiar imagen' : 'Seleccionar imagen')}
             <input
               type="file"
               accept="image/png,image/jpeg,image/webp"
