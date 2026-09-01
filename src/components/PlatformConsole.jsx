@@ -3668,6 +3668,18 @@ function PartnerProductServices({ onNavigate }) {
 
   return (
     <div className="novo-page">
+      <style>{`
+        @media (max-width: 820px) {
+          .partner-product-card-split {
+            grid-template-columns: 1fr !important;
+          }
+          .partner-product-card-split > div:last-child {
+            border-left: 0 !important;
+            border-top: 1px solid var(--novo-border);
+            margin-top: 14px;
+          }
+        }
+      `}</style>
       <div className="novo-page-header">
         <span className="kicker">CATÁLOGO PARTNER</span>
         <h1>Productos y servicios</h1>
@@ -3680,7 +3692,7 @@ function PartnerProductServices({ onNavigate }) {
         <div className="novo-card-header">
           <div>
             <div className="novo-card-title">Mis productos</div>
-            <div className="novo-card-sub">Define nombre, descripción y precio público de cada plan del catálogo NOVO.</div>
+            <div className="novo-card-sub">Valor al cliente, tu costo, ahorro anual y ganancia por cada plan del catálogo NOVO.</div>
           </div>
           <button type="button" className="novo-btn novo-btn-ghost" onClick={load}><RefreshCw size={13} /></button>
         </div>
@@ -3691,10 +3703,18 @@ function PartnerProductServices({ onNavigate }) {
         )}
 
         {!loading && products.length > 0 && (
-          <div className="novo-grid-2">
+          <div style={{ display: 'grid', gap: 14 }}>
             {products.map(product => {
               const draft = drafts[product.id] || {};
               const expanded = expandedProductId === product.id;
+              const retail = Number(draft.retailPrice ?? product.retailPrice ?? 0);
+              const wholesale = Number(product.wholesalePrice || 0);
+              const profit = retail - wholesale;
+              const annualSavings = annualPlanCustomerSavings(product, products, drafts);
+              const includes = String(product.catalogIncludes || '')
+                .split('\n')
+                .map((line) => line.trim())
+                .filter(Boolean);
               return (
                 <div
                   key={product.id}
@@ -3703,77 +3723,110 @@ function PartnerProductServices({ onNavigate }) {
                     marginBottom: 0,
                     border: expanded ? '1px solid #7C3AED' : '1px solid var(--novo-card-border)',
                     background: expanded ? 'rgba(124,58,237,.05)' : 'var(--novo-card)',
+                    overflow: 'hidden',
                   }}
                 >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }}>
-                    <div>
-                      <div style={{ fontWeight: 700, color: 'var(--novo-text)', marginBottom: 4 }}>
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'minmax(0, 7fr) minmax(220px, 3fr)',
+                      gap: 0,
+                      alignItems: 'stretch',
+                    }}
+                    className="partner-product-card-split"
+                  >
+                    <div style={{ paddingRight: 18, minWidth: 0 }}>
+                      <div style={{ fontWeight: 750, color: 'var(--novo-text)', marginBottom: 4, fontSize: 16 }}>
                         {draft.displayName || product.catalogName}
                       </div>
-                      <div style={{ fontSize: 12, color: 'var(--novo-muted)', textTransform: 'capitalize' }}>
-                        {product.billingType} · {product.interval}
+                      <div style={{ fontSize: 12, color: 'var(--novo-muted)' }}>
+                        {product.billingType} · {intervalLabel(product.interval)}
                       </div>
                       {product.catalogDescription && (
-                        <p style={{ margin: '8px 0 0', fontSize: 13, color: 'var(--novo-text)', lineHeight: 1.45 }}>
+                        <p style={{ margin: '10px 0 0', fontSize: 13, color: 'var(--novo-text)', lineHeight: 1.45 }}>
                           {product.catalogDescription}
                         </p>
                       )}
-                      {(() => {
-                        const includes = String(product.catalogIncludes || '')
-                          .split('\n')
-                          .map((line) => line.trim())
-                          .filter(Boolean);
-                        if (!includes.length) return null;
-                        return (
-                          <ul style={{ margin: '10px 0 0', paddingLeft: 18, color: 'var(--novo-muted)', fontSize: 12, lineHeight: 1.5 }}>
-                            {includes.slice(0, expanded ? includes.length : 3).map((item) => (
-                              <li key={item}>{item}</li>
-                            ))}
-                            {!expanded && includes.length > 3 && (
-                              <li style={{ listStyle: 'none', marginLeft: -18, color: 'var(--novo-purple)' }}>
-                                +{includes.length - 3} más
-                              </li>
-                            )}
-                          </ul>
-                        );
-                      })()}
-                      {product.published ? (
-                        <span style={{ display: 'inline-block', marginTop: 8, fontSize: 11, color: 'var(--novo-success)' }}>Publicado en tu landing</span>
-                      ) : (
-                        <span style={{ display: 'inline-block', marginTop: 8, fontSize: 11, color: 'var(--novo-muted)' }}>Sin publicar — guarda nombre y precio</span>
+                      {includes.length > 0 && (
+                        <ul style={{ margin: '10px 0 0', paddingLeft: 18, color: 'var(--novo-muted)', fontSize: 12, lineHeight: 1.5 }}>
+                          {includes.slice(0, expanded ? includes.length : 3).map((item) => (
+                            <li key={item}>{item}</li>
+                          ))}
+                          {!expanded && includes.length > 3 && (
+                            <li style={{ listStyle: 'none', marginLeft: -18, color: 'var(--novo-purple)' }}>
+                              +{includes.length - 3} más
+                            </li>
+                          )}
+                        </ul>
                       )}
-                    </div>
-                    <div style={{ textAlign: 'right' }}>
-                      <div style={{ color: 'var(--novo-success)', fontWeight: 700, fontSize: 18 }}>
-                        {money(product.retailPrice || draft.retailPrice || 0, product.currency)}
-                      </div>
-                      <div style={{ fontSize: 11, color: 'var(--novo-muted)' }}>
-                        mayorista {money(product.wholesalePrice, product.currency)}
-                      </div>
-                    </div>
-                  </div>
+                      {product.published ? (
+                        <span style={{ display: 'inline-block', marginTop: 10, fontSize: 11, color: 'var(--novo-success)' }}>Publicado en tu landing</span>
+                      ) : (
+                        <span style={{ display: 'inline-block', marginTop: 10, fontSize: 11, color: 'var(--novo-muted)' }}>Sin publicar — guarda nombre y precio</span>
+                      )}
 
-                  <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
-                    {!expanded && (
-                      <button
-                        type="button"
-                        className="novo-btn novo-btn-ghost"
-                        style={{ padding: '4px 10px', fontSize: 11 }}
-                        onClick={() => setExpandedProductId(product.id)}
-                      >
-                        <Edit2 size={12} /> Editar producto
-                      </button>
-                    )}
-                    {product.published && onNavigate && (
-                      <button
-                        type="button"
-                        className="novo-btn novo-btn-secondary"
-                        style={{ padding: '4px 10px', fontSize: 11 }}
-                        onClick={() => goCreateLink(product)}
-                      >
-                        <Link2 size={12} /> Crear link
-                      </button>
-                    )}
+                      <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
+                        {!expanded && (
+                          <button
+                            type="button"
+                            className="novo-btn novo-btn-ghost"
+                            style={{ padding: '4px 10px', fontSize: 11 }}
+                            onClick={() => setExpandedProductId(product.id)}
+                          >
+                            <Edit2 size={12} /> Editar producto
+                          </button>
+                        )}
+                        {product.published && onNavigate && (
+                          <button
+                            type="button"
+                            className="novo-btn novo-btn-secondary"
+                            style={{ padding: '4px 10px', fontSize: 11 }}
+                            onClick={() => goCreateLink(product)}
+                          >
+                            <Link2 size={12} /> Crear link
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    <div
+                      style={{
+                        borderLeft: '1px solid var(--novo-border)',
+                        background: 'var(--novo-card-hover)',
+                        padding: 14,
+                        display: 'grid',
+                        gap: 10,
+                        alignContent: 'start',
+                      }}
+                    >
+                      <ProductFinanceRow
+                        label="Valor para el cliente"
+                        value={money(retail, product.currency)}
+                        hint={product.interval === 'year' ? 'Pago anual' : 'Pago mensual'}
+                        tone="text"
+                      />
+                      <ProductFinanceRow
+                        label="Tu costo partner"
+                        value={money(wholesale, product.currency)}
+                        hint="Mayorista NOVO"
+                        tone="muted"
+                      />
+                      {product.interval === 'year' && (
+                        <ProductFinanceRow
+                          label="Ahorro vs mensual"
+                          value={annualSavings != null ? money(annualSavings, product.currency) : '—'}
+                          hint={annualSavings != null ? 'Cliente ahorra al año' : 'Sin plan mensual comparable'}
+                          tone={annualSavings != null && annualSavings > 0 ? 'success' : 'muted'}
+                        />
+                      )}
+                      <ProductFinanceRow
+                        label="Tu ganancia al vender"
+                        value={money(profit, product.currency)}
+                        hint={profit >= 0 ? 'Margen por venta' : 'Por debajo del mayorista'}
+                        tone={profit >= 0 ? 'success' : 'danger'}
+                        emphasize
+                      />
+                    </div>
                   </div>
 
                   {expanded && (
@@ -4932,6 +4985,58 @@ function SalesLinksTable({ links, loading, admin = false, busy, onStatusChange, 
 function Metric({ label, value, tone }) {
   const color = tone === 'success' ? 'var(--novo-success)' : tone === 'danger' ? 'var(--novo-danger)' : 'var(--novo-text)';
   return <div style={{ padding: 14, border: '1px solid var(--novo-border)', borderRadius: 10, background: 'var(--novo-card-hover)' }}><div style={{ fontSize: 11, color: 'var(--novo-muted)', marginBottom: 5 }}>{label}</div><div style={{ fontSize: 19, fontWeight: 800, color }}>{value}</div></div>;
+}
+
+function productFamilyKey(name = '') {
+  return String(name)
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[—–_-]+/g, ' ')
+    .replace(/\b(anual|mensual|year|month|yearly|monthly)\b/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function annualPlanCustomerSavings(product, products, drafts = {}) {
+  if (product?.interval !== 'year') return null;
+  const family = productFamilyKey(product.catalogName || product.displayName || '');
+  if (!family) return null;
+  const monthly = products.find((row) => (
+    row.interval === 'month'
+    && productFamilyKey(row.catalogName || row.displayName || '') === family
+  ));
+  if (!monthly) return null;
+  const annualRetail = Number(drafts[product.id]?.retailPrice ?? product.retailPrice ?? 0);
+  const monthlyRetail = Number(drafts[monthly.id]?.retailPrice ?? monthly.retailPrice ?? 0);
+  if (!Number.isFinite(annualRetail) || !Number.isFinite(monthlyRetail) || monthlyRetail <= 0) return null;
+  const savings = (monthlyRetail * 12) - annualRetail;
+  return savings > 0 ? savings : null;
+}
+
+function ProductFinanceRow({ label, value, hint, tone = 'text', emphasize = false }) {
+  const color = tone === 'success'
+    ? 'var(--novo-success)'
+    : tone === 'danger'
+      ? 'var(--novo-danger)'
+      : tone === 'muted'
+        ? 'var(--novo-muted)'
+        : 'var(--novo-text)';
+  return (
+    <div>
+      <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase', color: 'var(--novo-muted)', marginBottom: 3 }}>
+        {label}
+      </div>
+      <div style={{ fontSize: emphasize ? 20 : 16, fontWeight: 800, color, lineHeight: 1.15 }}>
+        {value}
+      </div>
+      {hint && (
+        <div style={{ fontSize: 11, color: 'var(--novo-muted)', marginTop: 2 }}>
+          {hint}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function SelectField({ label, value = '', onChange, disabled = false, children }) {
